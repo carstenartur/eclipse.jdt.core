@@ -10,6 +10,8 @@ This is the core part of Eclipse's Java development tools. It contains the non-U
 
 For more information and important links, refer to the [JDT wiki page] [1] or the [JDT project overview page] [2].
 
+[![CodeQL](https://github.com/carstenartur/eclipse.jdt.core/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/carstenartur/eclipse.jdt.core/actions/workflows/codeql-analysis.yml)
+
 License
 -------
 

@@ -72,6 +72,7 @@ public class Java9ElementProcessor extends BaseProcessor {
 	boolean reportSuccessAlready = true;
 	RoundEnvironment roundEnv = null;
 	Messager _messager = null;
+	boolean isJre19;
 	boolean isJre18;
 	boolean isJre17;
 	boolean isJre12;
@@ -101,6 +102,9 @@ public class Java9ElementProcessor extends BaseProcessor {
 						this.isJre17 = true;
 						if (current >= ClassFileConstants.MAJOR_VERSION_18) {
 							this.isJre18 = true;
+							if (current >= ClassFileConstants.MAJOR_VERSION_19) {
+								this.isJre19 = true;
+							}
 						}
 					} else {
 						this.isJre12 = true;

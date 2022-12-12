@@ -1790,4 +1790,71 @@ public class ScannerTest extends AbstractRegressionTest {
 			assertTrue(false);
 		}
 	}
+	public void testWhenOK() {
+		String source = ("public void foo(Object obj) {\n switch(obj) {\n case String s when s.length() > 0 -> {}\n}\n}");
+		IScanner scanner = ToolFactory.createScanner(false, true, false, "19", "19", true);
+		scanner.setSource(source.toCharArray());
+		scanner.resetTo(source.indexOf("when")-1, source.length() - 1); // start directly at "when"
+		try {
+			int token;
+			while ((token = scanner.getNextToken()) != ITerminalSymbols.TokenNameEOF) {
+				switch (token) {
+					case ITerminalSymbols.TokenNameWHITESPACE:
+						break;
+					case ITerminalSymbols.TokenNameRestrictedIdentifierWhen:
+						return; // success
+					default:
+						fail("Unexpected token "+token);
+				}
+			}
+			fail("TokenNameRestrictedIdentifierYield was not detected");
+		} catch (InvalidInputException e) {
+			assertTrue(false);
+		}
+	}
+	@SuppressWarnings("deprecation")
+	public void testWhenKO() {
+		String source = ("public void foo(Object obj) {\n switch(obj) {\n case String s when s.length() > 0 -> {}\n}\n}");
+		IScanner scanner = ToolFactory.createScanner(false, true, false, "19", "19", false);
+		scanner.setSource(source.toCharArray());
+		scanner.resetTo(source.indexOf("when")-1, source.length() - 1); // start directly at "when"
+		try {
+			int token;
+			while ((token = scanner.getNextToken()) != ITerminalSymbols.TokenNameEOF) {
+				switch (token) {
+					case ITerminalSymbols.TokenNameWHITESPACE:
+						break;
+					case ITerminalSymbols.TokenNameIdentifier:
+						return; // success
+					case ITerminalSymbols.TokenNameRestrictedIdentifierWhen:
+					default:
+						fail("Unexpected token "+token);
+				}
+			}
+			fail("TokenNameRestrictedIdentifierYield was not detected");
+		} catch (InvalidInputException e) {
+			assertTrue(false);
+		}
+	}
+
+	public void testWhenAsIdentifier() {
+		String source =
+				"public void when(Object when) {\n" +
+				"	Predicate<Object> condition = o -> when(o);\n" +
+				"	SomeClass.when(condition).when();\n" +
+				"	SomeClass./*comment*/when(condition,/*comment*/when(false)). when(true);\n" +
+				"}";
+		IScanner scanner = ToolFactory.createScanner(true, true, true, "19", "19", true);
+		scanner.setSource(source.toCharArray());
+		try {
+			int token;
+			while ((token = scanner.getNextToken()) != ITerminalSymbols.TokenNameEOF) {
+				if (token == ITerminalSymbols.TokenNameRestrictedIdentifierWhen) {
+					fail("TokenNameRestrictedIdentifierWhen must not be detected");
+				}
+			}
+		} catch (InvalidInputException e) {
+			assertTrue(false);
+		}
+	}
 }

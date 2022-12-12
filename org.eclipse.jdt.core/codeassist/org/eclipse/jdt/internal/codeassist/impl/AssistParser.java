@@ -1750,7 +1750,7 @@ protected int indexOfAssistIdentifier(){
  */
 protected int indexOfAssistIdentifier(boolean useGenericsStack){
 
-	if (this.identifierLengthPtr < 0){
+	if (this.identifierLengthPtr < 0 || this.identifierPtr < 0 ){
 		return -1; // no awaiting identifier
 	}
 

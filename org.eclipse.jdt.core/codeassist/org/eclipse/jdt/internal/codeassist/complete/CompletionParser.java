@@ -8,6 +8,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0
  *
+ *
  * Contributors:
  *		IBM Corporation - initial API and implementation
  *		Stephan Herrmann - Contribution for
@@ -1812,7 +1813,7 @@ private boolean checkInstanceofKeyword() {
 private boolean checkYieldKeyword() {
 	// Clients to ensure that we are already inside a method
 	char[] id = this.scanner.getCurrentIdentifierSource();
-	if(id.length > 0 && CharOperation.prefixEquals(id, Keywords.YIELD)) {
+	if(id.length > 0 && CharOperation.equals(id, Keywords.YIELD)) {
 		return true;
 	}
 	return false;
@@ -4250,6 +4251,9 @@ protected void consumeToken(int token) {
 					// YieldStatement and thus not producing accurate completion, but completion doesn't have
 					// enough information anyway about the LHS anyway.
 					token = this.currentToken = this.getNextToken();
+					if(token == TokenNameIntegerLiteral && this.previousToken == TokenNameIdentifier ) {
+						token = this.currentToken = this.getNextToken();
+					}
 					super.consumeToken(this.currentToken);
 				}
 				if (previous == TokenNameDOT) { // e.g. foo().[fred]()
@@ -5286,6 +5290,9 @@ boolean computeKeywords(int kind, List<char[]> keywords) {
 		keywords.add(Keywords.TRUE);
 		keywords.add(Keywords.FALSE);
 		keywords.add(Keywords.NULL);
+		if (this.options.complianceLevel >= ClassFileConstants.JDK19) {
+			keywords.add(Keywords.WHEN);
+		}
 		if (kind == K_YIELD_KEYWORD) {
 			keywords.add(Keywords.YIELD);
 		}

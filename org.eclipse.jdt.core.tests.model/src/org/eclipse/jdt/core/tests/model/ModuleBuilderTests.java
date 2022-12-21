@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2016, 2020 IBM Corporation and others.
+ * Copyright (c) 2016, 2022 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -711,6 +711,41 @@ public class ModuleBuilderTests extends ModifyingResourceTests {
 			options.put(CompilerOptions.OPTION_Compliance, "10");
 			options.put(CompilerOptions.OPTION_Source, "10");
 			options.put(CompilerOptions.OPTION_TargetPlatform, "10");
+			options.put(CompilerOptions.OPTION_Release, "enabled");
+			project.setOptions(options);
+			project.getProject().build(IncrementalProjectBuilder.FULL_BUILD, null);
+			IPackageFragmentRoot[] roots = project.getPackageFragmentRoots();
+			IPackageFragmentRoot theRoot = null;
+			for (IPackageFragmentRoot root : roots) {
+				if (root.getElementName().equals("jdt.test")) {
+					theRoot = root;
+					break;
+				}
+			}
+			assertNotNull("should not be null", theRoot);
+			String[] modules = JavaCore.getReferencedModules(project);
+			if (isJRE12)
+				assertStringsEqual("incorrect result", new String[]{"java.desktop", "java.rmi", "java.sql"}, modules);
+			else if (isJRE11)
+				assertStringsEqual("incorrect result", new String[]{"java.datatransfer", "java.desktop", "java.net.http", "java.rmi", "java.sql"}, modules);
+			else if (isJRE10)
+				assertStringsEqual("incorrect result", new String[]{"java.datatransfer", "java.desktop", "java.rmi", "java.sql"}, modules);
+			else // 9
+				assertStringsEqual("incorrect result", new String[]{"java.desktop", "java.rmi", "java.sql"}, modules);
+		} finally {
+			this.deleteProject("ConvertToModule");
+			 JavaCore.setOptions(javaCoreOptions);
+		}
+	}
+	public void testConvertToModuleWithRelease9() throws CoreException, IOException {
+		Hashtable<String, String> javaCoreOptions = JavaCore.getOptions();
+		try {
+			IJavaProject project = setUpJavaProject("ConvertToModule");
+			Map<String, String> options = new HashMap<>();
+			// Make sure the new options map doesn't reset.
+			options.put(CompilerOptions.OPTION_Compliance, "9");
+			options.put(CompilerOptions.OPTION_Source, "9");
+			options.put(CompilerOptions.OPTION_TargetPlatform, "9");
 			options.put(CompilerOptions.OPTION_Release, "enabled");
 			project.setOptions(options);
 			project.getProject().build(IncrementalProjectBuilder.FULL_BUILD, null);
@@ -8986,6 +9021,34 @@ public class ModuleBuilderTests extends ModifyingResourceTests {
 
 		} finally {
 			deleteProject("ztest");
+		}
+	}
+	public void testIssue23() throws CoreException {
+		IJavaProject p1 = createJava9Project("Issue23", "18");
+		Map<String, String> options = new HashMap<>();
+		// Make sure the new options map doesn't reset.
+		options.put(CompilerOptions.OPTION_Compliance, "16.8");
+		options.put(CompilerOptions.OPTION_Source, "16.8");
+		options.put(CompilerOptions.OPTION_TargetPlatform, "16.8");
+		options.put(CompilerOptions.OPTION_Release, "enabled");
+		p1.setOptions(options);
+		try {
+			createFolder("/Issue23/src/p1");
+			createFile("/Issue23/src/p1/X.java",
+					"package p1;\n" +
+					"public class X {\n" +
+					"	public java.util.stream.Stream<String> emptyStream() {\n" +
+					"		return null;\n" +
+					"	}\n" +
+					"}");
+
+			waitForManualRefresh();
+			waitForAutoBuild();
+			p1.getProject().build(IncrementalProjectBuilder.FULL_BUILD, null);
+			IMarker[] markers = p1.getProject().findMarkers(null, true, IResource.DEPTH_INFINITE);
+			assertMarkers("Unexpected markers", "The project was not built due to \"Invalid value for --release argument:16.8\". Fix the problem, then try refreshing this project and building it since it may be inconsistent", markers);
+		} finally {
+			deleteProject(p1);
 		}
 	}
 	protected void assertNoErrors() throws CoreException {

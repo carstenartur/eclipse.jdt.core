@@ -7,7 +7,6 @@
  * https://www.eclipse.org/legal/epl-2.0/
  *
  * SPDX-License-Identifier: EPL-2.0
- *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -206,6 +205,10 @@ class DefaultASTVisitor extends ASTVisitor {
 		endVisitNode(node);
 	}
 	@Override
+	public void endVisit(JavaDocTextElement node) {
+		endVisitNode(node);
+	}
+	@Override
 	public void endVisit(LabeledStatement node) {
 		endVisitNode(node);
 	}
@@ -319,6 +322,10 @@ class DefaultASTVisitor extends ASTVisitor {
 	}
 	@Override
 	public void endVisit(RecordDeclaration node) {
+		endVisitNode(node);
+	}
+	@Override
+	public void endVisit(RecordPattern node) {
 		endVisitNode(node);
 	}
 	@Override
@@ -641,6 +648,10 @@ class DefaultASTVisitor extends ASTVisitor {
 		return visitNode(node);
 	}
 	@Override
+	public boolean visit(JavaDocTextElement node) {
+		return visitNode(node);
+	}
+	@Override
 	public boolean visit(LabeledStatement node) {
 		return visitNode(node);
 	}
@@ -755,6 +766,10 @@ class DefaultASTVisitor extends ASTVisitor {
 	}
 	@Override
 	public boolean visit(RecordDeclaration node) {
+		return visitNode(node);
+	}
+	@Override
+	public boolean visit(RecordPattern node) {
 		return visitNode(node);
 	}
 	@Override

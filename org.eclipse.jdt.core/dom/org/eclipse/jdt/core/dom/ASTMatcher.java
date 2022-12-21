@@ -7,6 +7,7 @@
  * https://www.eclipse.org/legal/epl-2.0/
  *
  * SPDX-License-Identifier: EPL-2.0
+ *
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
@@ -1319,6 +1320,29 @@ public class ASTMatcher {
 	}
 
 	/**
+	 * Returns whether the given node and the other object match.
+	 * <p>
+	 * The default implementation provided by this class tests whether the
+	 * other object is a node of the same type with structurally isomorphic
+	 * child subtrees. Subclasses may override this method as needed.
+	 * </p>
+	 *
+	 * @param node the node
+	 * @param other the other object, or <code>null</code>
+	 * @return <code>true</code> if the subtree matches, or
+	 *   <code>false</code> if they do not match or the other object has a
+	 *   different node type or is <code>null</code>
+	 * @since 3.31
+	 */
+	public boolean match(JavaDocTextElement node, Object other) {
+		if (!(other instanceof JavaDocTextElement)) {
+			return false;
+		}
+		JavaDocTextElement o = (JavaDocTextElement) other;
+		return safeEquals(node.getText(), o.getText());
+	}
+
+	/**
 	 * Return whether the deprecated comment strings of the given java doc are equals.
 	 * <p>
 	 * Note the only purpose of this method is to hide deprecated warnings.
@@ -2134,6 +2158,31 @@ public class ASTMatcher {
 				&& safeSubtreeMatch(node.typeParameters(), o.typeParameters())
 				&& safeSubtreeListMatch(node.bodyDeclarations(), o.bodyDeclarations())
 				&& safeSubtreeMatch(node.recordComponents(), o.recordComponents()));
+	}
+
+	/**
+	 * Returns whether the given node and the other object match.
+	 * <p>
+	 * The default implementation provided by this class tests whether the
+	 * other object is a node of the same type with structurally isomorphic
+	 * child subtrees. Subclasses may override this method as needed.
+	 * </p>
+	 *
+	 * @param node the node
+	 * @param other the other object, or <code>null</code>
+	 * @return <code>true</code> if the subtree matches, or
+	 *   <code>false</code> if they do not match or the other object has a
+	 *   different node type or is <code>null</code>
+	 * @since 3.32
+	 */
+	public boolean match(RecordPattern node, Object other) {
+		if (!(other instanceof RecordPattern)) {
+			return false;
+		}
+		RecordPattern o = (RecordPattern) other;
+		return safeSubtreeMatch(node.getPatternType(), o.getPatternType())
+				&& safeSubtreeMatch(node.getPatternName(), o.getPatternName())
+				&& safeSubtreeListMatch(node.patterns(), o.patterns());
 	}
 
 	/**

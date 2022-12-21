@@ -424,7 +424,6 @@ public void test007(){
         "\"" + OUTPUT_DIR +  File.separator + "X.java\""
         + " -1.5 -g -preserveAllLocals"
         + " -bootclasspath " + getLibraryClassesAsQuotedString()
-        + " -cp " + getJCEJarAsQuotedString()
         + " -warn:+deprecation,syntheticAccess,uselessTypeCheck,unsafe,finalBound,unusedLocal"
         + " -verbose -proceedOnError -referenceInfo -d \"" + OUTPUT_DIR + "\"",
         "[parsing    ---OUTPUT_DIR_PLACEHOLDER---/X.java - #1/1]\n" +
@@ -463,7 +462,6 @@ public void test008(){
         "\"" + OUTPUT_DIR +  File.separator + "X.java\""
         + " -1.5 -g -preserveAllLocals"
         + " -bootclasspath " + getLibraryClassesAsQuotedString()
-        + " -cp " + getJCEJarAsQuotedString()
         + " -warn:+deprecation,syntheticAccess,uselessTypeCheck,unsafe,finalBound,unusedLocal"
         + " -proceedOnError -referenceInfo -d \"" + OUTPUT_DIR + "\"",
         "",
@@ -1016,7 +1014,7 @@ public void test012b(){
 		String logContents = Util.fileContent(logFileName);
 		String expectedLogContents =
 			"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
-			"<!DOCTYPE compiler PUBLIC \"-//Eclipse.org//DTD Eclipse JDT 3.2.006 Compiler//EN\" \"http://www.eclipse.org/jdt/core/compiler_32_006.dtd\">\n" +
+			"<!DOCTYPE compiler PUBLIC \"-//Eclipse.org//DTD Eclipse JDT 3.2.006 Compiler//EN\" \"https://www.eclipse.org/jdt/core/compiler_32_006.dtd\">\n" +
 			"<compiler copyright=\"{2}\" name=\"{1}\" version=\"{3}\">\n" +
 			"	<command_line>\n" +
 			"		<argument value=\"---OUTPUT_DIR_PLACEHOLDER---{0}X.java\"/>\n" +
@@ -1050,6 +1048,7 @@ public void test012b(){
 			"		<option key=\"org.eclipse.jdt.core.compiler.doc.comment.support\" value=\"disabled\"/>\n" +
 			"		<option key=\"org.eclipse.jdt.core.compiler.emulateJavacBug8031744\" value=\"enabled\"/>\n" +
 			"		<option key=\"org.eclipse.jdt.core.compiler.generateClassFiles\" value=\"enabled\"/>\n" +
+			"		<option key=\"org.eclipse.jdt.core.compiler.ignoreUnnamedModuleForSplitPackage\" value=\"disabled\"/>\n" +
 			"		<option key=\"org.eclipse.jdt.core.compiler.maxProblemPerUnit\" value=\"100\"/>\n" +
 			"		<option key=\"org.eclipse.jdt.core.compiler.problem.APILeak\" value=\"warning\"/>\n" +
 			"		<option key=\"org.eclipse.jdt.core.compiler.problem.annotatedTypeArgumentToUnannotated\" value=\"info\"/>\n" +
@@ -2777,7 +2776,6 @@ public void test044(){
         "\"" + OUTPUT_DIR +  File.separator + "X.java\""
         + " -1.5 -g -preserveAllLocals"
         + " -bootclasspath " + getLibraryClassesAsQuotedString()
-        + " -cp " + getJCEJarAsQuotedString()
         + " -warn:+null"
         + " -proceedOnError -referenceInfo -d \"" + OUTPUT_DIR + "\"",
         "",
@@ -2805,7 +2803,6 @@ public void test045(){
         "\"" + OUTPUT_DIR +  File.separator + "X.java\""
         + " -1.5 -g -preserveAllLocals"
         + " -bootclasspath " + getLibraryClassesAsQuotedString()
-        + " -cp " + getJCEJarAsQuotedString()
         + " -warn:-null" // contrast with test036
         + " -proceedOnError -referenceInfo -d \"" + OUTPUT_DIR + "\"",
         "",
@@ -5197,7 +5194,6 @@ public void test141_null_ref_option(){
      "\"" + OUTPUT_DIR +  File.separator + "X.java\""
      + " -1.5 -g -preserveAllLocals"
      + " -bootclasspath " + getLibraryClassesAsQuotedString()
-     + " -cp " + getJCEJarAsQuotedString()
      + " -warn:+nullDereference"
      + " -proceedOnError -referenceInfo -d \"" + OUTPUT_DIR + "\"",
      "",
@@ -5226,7 +5222,6 @@ public void test142_null_ref_option(){
   "\"" + OUTPUT_DIR +  File.separator + "X.java\""
   + " -1.5 -g -preserveAllLocals"
   + " -bootclasspath " + getLibraryClassesAsQuotedString()
-  + " -cp " + getJCEJarAsQuotedString()
   + " -warn:+null"
   + " -proceedOnError -referenceInfo -d \"" + OUTPUT_DIR + "\"",
   "",
@@ -5255,7 +5250,6 @@ public void test143_null_ref_option(){
 "\"" + OUTPUT_DIR +  File.separator + "X.java\""
 + " -1.5 -g -preserveAllLocals"
 + " -bootclasspath " + getLibraryClassesAsQuotedString()
-+ " -cp " + getJCEJarAsQuotedString()
 + " -warn:+nullDereference"
 + " -proceedOnError -referenceInfo -d \"" + OUTPUT_DIR + "\"",
 "",
@@ -5296,7 +5290,6 @@ public void test145_declared_thrown_checked_exceptions(){
   "\"" + OUTPUT_DIR +  File.separator + "X.java\""
   + " -1.5 -g -preserveAllLocals"
   + " -bootclasspath " + getLibraryClassesAsQuotedString()
-  + " -cp " + getJCEJarAsQuotedString()
   + " -proceedOnError -referenceInfo -d \"" + OUTPUT_DIR + "\"",
   "",
   "",
@@ -5315,7 +5308,6 @@ public void test146_declared_thrown_checked_exceptions(){
   "\"" + OUTPUT_DIR +  File.separator + "X.java\""
   + " -1.5 -g -preserveAllLocals"
   + " -bootclasspath " + getLibraryClassesAsQuotedString()
-  + " -cp " + getJCEJarAsQuotedString()
   + " -warn:+unusedThrown"
   + " -proceedOnError -referenceInfo -d \"" + OUTPUT_DIR + "\"",
   "",

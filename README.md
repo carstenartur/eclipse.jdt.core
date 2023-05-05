@@ -7,12 +7,15 @@ This is the core part of Eclipse's Java development tools. It contains the non-U
 * a Java source code formatter
 * APIs for code assist, access to the AST and structured manipulation of Java source.
 
-For more information and important links, refer to the [JDT wiki page](http://wiki.eclipse.org/JDT_Core) or the [JDT project overview page](https://projects.eclipse.org/projects/eclipse.jdt).
+For more information and important links, refer to the [JDT wiki page](https://github.com/eclipse-jdt/eclipse.jdt.core/wiki) or the [JDT project overview page](https://projects.eclipse.org/projects/eclipse.jdt).
 
 [![CodeQL](https://github.com/carstenartur/eclipse.jdt.core/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/carstenartur/eclipse.jdt.core/actions/workflows/codeql-analysis.yml)
 
-License
--------
+
+## Snapshot builds
+
+- Latest nightly, milestone and release SDK and ECJ builds are available at https://download.eclipse.org/eclipse/downloads/
+- Weekly maven snapshot builds are available at https://repo.eclipse.org/content/repositories/eclipse-snapshots/
 
 ## Contributing
 
@@ -26,6 +29,6 @@ Please bear in mind that this project is almost entirely developed by volunteers
 
 ## Links
 
-- http://wiki.eclipse.org/JDT_Core
+- https://github.com/eclipse-jdt/eclipse.jdt.core/wiki
 - https://github.com/eclipse-jdt/.github/blob/main/CONTRIBUTING.md
 - http://www.eclipse.org/projects/project.php?id=eclipse.jdt

@@ -13,6 +13,7 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.codeassist.impl;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 
 /*
@@ -21,8 +22,10 @@ import java.util.Arrays;
  */
 
 import java.util.HashSet;
+import java.util.List;
 
 import org.eclipse.jdt.core.compiler.InvalidInputException;
+import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.CompilationResult;
 import org.eclipse.jdt.internal.compiler.ast.ASTNode;
 import org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration;
@@ -46,13 +49,16 @@ import org.eclipse.jdt.internal.compiler.ast.MethodDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.ModuleDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.ModuleReference;
 import org.eclipse.jdt.internal.compiler.ast.NameReference;
+import org.eclipse.jdt.internal.compiler.ast.RecordPattern;
 import org.eclipse.jdt.internal.compiler.ast.RequiresStatement;
 import org.eclipse.jdt.internal.compiler.ast.Statement;
 import org.eclipse.jdt.internal.compiler.ast.SuperReference;
 import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.TypePattern;
 import org.eclipse.jdt.internal.compiler.ast.TypeReference;
 import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.lookup.Binding;
+import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
 import org.eclipse.jdt.internal.compiler.lookup.ExtraCompilerModifiers;
 import org.eclipse.jdt.internal.compiler.parser.Parser;
 import org.eclipse.jdt.internal.compiler.parser.RecoveredBlock;
@@ -136,7 +142,7 @@ public abstract class AssistParser extends Parser {
 
 	public int cursorLocation = Integer.MAX_VALUE;
 
-	protected static final int[] RECOVERY_TOKENS = { TokenNameSEMICOLON, TokenNameRPAREN, TokenNameRBRACE, TokenNameRBRACKET};
+	protected static final int[] RECOVERY_TOKENS = { TokenNameSEMICOLON, TokenNameRPAREN, TokenNameRBRACE, TokenNameRBRACKET, TokenNameCOLON};
 
 
 public AssistParser(ProblemReporter problemReporter) {
@@ -355,11 +361,36 @@ public RecoveredElement buildInitialRecoveryState(){
 					element = element.add(stmt, 0);
 					this.lastCheckPoint = stmt.sourceEnd + 1;
 				} else if (stmt.containsPatternVariable()) {
-					LocalDeclaration localDeclaration = null;
 					if(stmt instanceof CaseStatement) {
-						localDeclaration = ((CaseStatement)stmt).getLocalDeclaration();
-						if(localDeclaration !=null)
-							element.add(localDeclaration, 0);
+						// Kludge, for the unfortunate case where recovery can't
+						// construct a switch expression but simply creates a case statement (with type patterns)
+						// and leaves it in the astStack
+						final List<LocalDeclaration> locals = new ArrayList<>();
+						node.traverse(new ASTVisitor() {
+							@SuppressWarnings("synthetic-access")
+							@Override
+							public boolean visit(RecordPattern pattern, BlockScope scope) {
+								LocalDeclaration local = pattern.local;
+								if (local == null)
+									return true;
+								locals.add(local);
+								AssistParser.this.lastCheckPoint = local.declarationSourceEnd + 1;
+								return true;
+							}
+							@SuppressWarnings("synthetic-access")
+							@Override
+							public boolean visit(TypePattern pattern, BlockScope scope) {
+								LocalDeclaration local = pattern.local;
+								if (local == null)
+									return true;
+								locals.add(local);
+								AssistParser.this.lastCheckPoint = local.declarationSourceEnd + 1;
+								return true;
+							}
+						}, null);
+						for (LocalDeclaration local : locals) {
+							element.add(local, 0);
+						}
 					}
 					element.add(stmt, 0);
 					this.lastCheckPoint = stmt.sourceEnd + 1;
@@ -593,7 +624,7 @@ protected boolean triggerRecoveryUponLambdaClosure(Statement statement, boolean 
 							stackLength);
 				}
 				this.stack[this.stateStackTop] = this.unstackedAct;
-				commit(false);
+				commit();
 				this.stateStackTop --;
 			}
 			return false;
@@ -932,7 +963,7 @@ protected void consumeOpenBlock() {
 			}
 			this.stack[this.stateStackTop++] = this.unstackedAct; // transition to Block ::= OpenBlock  .LBRACE BlockStatementsopt RBRACE
 			this.stack[this.stateStackTop] = tAction(this.unstackedAct, this.currentToken); // transition to Block ::= OpenBlock LBRACE  .BlockStatementsopt RBRACE
-			commit(true);
+			commit();
 			this.stateStackTop -= 2;
 		}
 	}
@@ -2308,16 +2339,11 @@ public void reset(){
 	flushAssistState();
 }
 
-void commit(boolean isStart) {
-	int newSnapShotPosition = this.scanner.startPosition;
-	if (this.snapShotPtr == -1) {
-		// first commit:
+void commit() {
+	int newSnapShotPosition = this.blockStarts[this.realBlockPtr];
+	if (this.snapShotPtr == -1 || newSnapShotPosition != this.snapShotPositions[this.snapShotPtr]) {
+		// first commit, or existing snapshot doesn't match
 		addNewSnapShot(newSnapShotPosition);
-	} else {
-		// already have a snapshot, does it match the current position and can thus be reused?
-		int currentStartPosition = isStart ? newSnapShotPosition : this.blockStarts[this.realBlockPtr];
-		if (currentStartPosition != this.snapShotPositions[this.snapShotPtr])
-			addNewSnapShot(newSnapShotPosition); // no match, create a new one
 	}
 	this.snapShotStack[this.snapShotPtr].copyState(this);
 }

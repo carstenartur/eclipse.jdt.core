@@ -3,12 +3,12 @@ Main-Class: org.eclipse.jdt.internal.compiler.batch.Main
 Bundle-ManifestVersion: 2
 Bundle-Name: Eclipse Compiler for Java(TM)
 Bundle-SymbolicName: org.eclipse.jdt.core.compiler.batch
-Bundle-Version: 3.33.100.qualifier
+Bundle-Version: 3.34.0.qualifier
 Bundle-ClassPath: .
 Bundle-Vendor: Eclipse.org
 Automatic-Module-Name: org.eclipse.jdt.core.compiler.batch
 Bundle-ActivationPolicy: lazy
-Bundle-RequiredExecutionEnvironment: JavaSE-11
+Bundle-RequiredExecutionEnvironment: JavaSE-17
 Export-Package: META-INF.services,
  org.eclipse.jdt.core.compiler,
  org.eclipse.jdt.core.compiler.batch,

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2020, 2022 IBM Corporation and others.
+ * Copyright (c) 2020, 2023 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -34,6 +34,7 @@ import org.eclipse.jdt.core.dom.PatternInstanceofExpression;
 import org.eclipse.jdt.core.dom.RecordPattern;
 import org.eclipse.jdt.core.dom.SimpleName;
 import org.eclipse.jdt.core.dom.SingleVariableDeclaration;
+import org.eclipse.jdt.core.dom.Statement;
 import org.eclipse.jdt.core.dom.SwitchCase;
 import org.eclipse.jdt.core.dom.SwitchExpression;
 import org.eclipse.jdt.core.dom.SwitchStatement;
@@ -53,13 +54,31 @@ public class ASTConverter_RecordPattern_Test extends ConverterTestSetup {
 		super.setUpSuite();
 		this.ast = AST.newAST(getASTLatest(), false);
 		this.currentProject = getJavaProject("Converter_19");
-		if (this.ast.apiLevel() == AST.JLS19) {
-			this.currentProject.setOption(JavaCore.COMPILER_COMPLIANCE, JavaCore.VERSION_19);
-			this.currentProject.setOption(JavaCore.COMPILER_SOURCE, JavaCore.VERSION_19);
-			this.currentProject.setOption(JavaCore.COMPILER_CODEGEN_TARGET_PLATFORM, JavaCore.VERSION_19);
+		if (this.ast.apiLevel() == AST.JLS20) {
+			this.currentProject.setOption(JavaCore.COMPILER_COMPLIANCE, JavaCore.VERSION_20);
+			this.currentProject.setOption(JavaCore.COMPILER_SOURCE, JavaCore.VERSION_20);
+			this.currentProject.setOption(JavaCore.COMPILER_CODEGEN_TARGET_PLATFORM, JavaCore.VERSION_20);
 			this.currentProject.setOption(JavaCore.COMPILER_PB_ENABLE_PREVIEW_FEATURES, JavaCore.ENABLED);
 			this.currentProject.setOption(JavaCore.COMPILER_PB_REPORT_PREVIEW_FEATURES, JavaCore.IGNORE);
-
+		}
+	}
+	protected void disablePreview() {
+		this.currentProject = getJavaProject("Converter_19");
+		if (this.ast.apiLevel() == AST.JLS20) {
+			this.currentProject.setOption(JavaCore.COMPILER_COMPLIANCE, JavaCore.VERSION_20);
+			this.currentProject.setOption(JavaCore.COMPILER_SOURCE, JavaCore.VERSION_20);
+			this.currentProject.setOption(JavaCore.COMPILER_CODEGEN_TARGET_PLATFORM, JavaCore.VERSION_20);
+			this.currentProject.setOption(JavaCore.COMPILER_PB_ENABLE_PREVIEW_FEATURES, JavaCore.DISABLED);
+		}
+	}
+	protected void enabledPreview() {
+		this.currentProject = getJavaProject("Converter_19");
+		if (this.ast.apiLevel() == AST.JLS20) {
+			this.currentProject.setOption(JavaCore.COMPILER_COMPLIANCE, JavaCore.VERSION_20);
+			this.currentProject.setOption(JavaCore.COMPILER_SOURCE, JavaCore.VERSION_20);
+			this.currentProject.setOption(JavaCore.COMPILER_CODEGEN_TARGET_PLATFORM, JavaCore.VERSION_20);
+			this.currentProject.setOption(JavaCore.COMPILER_PB_ENABLE_PREVIEW_FEATURES, JavaCore.ENABLED);
+			this.currentProject.setOption(JavaCore.COMPILER_PB_REPORT_PREVIEW_FEATURES, JavaCore.IGNORE);
 		}
 	}
 
@@ -83,12 +102,12 @@ public class ASTConverter_RecordPattern_Test extends ConverterTestSetup {
 	}
 
 	private void printJREError() {
-		System.err.println("Test "+getName()+" requires a JRE 19");
+		System.err.println("Test "+getName()+" requires a JRE 20");
 	}
 
 	@SuppressWarnings("rawtypes")
 	public void testTypePattern() throws CoreException {
-		if (!isJRE19) {
+		if (!isJRE20) {
 			printJREError();
 			return;
 		}
@@ -134,18 +153,17 @@ public class ASTConverter_RecordPattern_Test extends ConverterTestSetup {
 
 	}
 
-	// This was valid for Java 18 but not in Java 19
 	@SuppressWarnings("rawtypes")
-	public void _testGuardedPattern() throws CoreException {
-		if (!isJRE19) {
+	public void testGuardedPattern() throws CoreException {
+		if (!isJRE20) {
 			printJREError();
 			return;
 		}
 		String contents = "public class X {\n" +
 				"void foo(Object o) {\n" +
 				"	switch (o) {\n" +
-			    "		case Integer i  && (i.intValue() > 10)   -> System.out.println(\"Greater than 10 \");\n" +
-			    "		case String s && s.equals(\"ff\")   -> System.out.println(s);\n" +
+			    "		case Integer i when (i.intValue() > 10)   -> System.out.println(\"Greater than 10 \");\n" +
+			    "		case String s when s.equals(\"ff\")   -> System.out.println(s);\n" +
 			    "		default       	-> System.out.println(o.toString());\n" +
 			    "	}\n" +
 			    "}\n" +
@@ -193,7 +211,7 @@ public class ASTConverter_RecordPattern_Test extends ConverterTestSetup {
 
 	@SuppressWarnings("rawtypes")
 	public void testParenthesizedExpressionPattern() throws CoreException {
-		if (!isJRE19) {
+		if (!isJRE20) {
 			printJREError();
 			return;
 		}
@@ -234,7 +252,7 @@ public class ASTConverter_RecordPattern_Test extends ConverterTestSetup {
 
 	@SuppressWarnings("rawtypes")
 	public void testNullPattern() throws CoreException {
-		if (!isJRE19) {
+		if (!isJRE20) {
 			printJREError();
 			return;
 		}
@@ -267,7 +285,7 @@ public class ASTConverter_RecordPattern_Test extends ConverterTestSetup {
 
 	@SuppressWarnings("rawtypes")
 	public void testCaseDefaultExpressionPattern() throws CoreException {
-		if (!isJRE19) {
+		if (!isJRE20) {
 			printJREError();
 			return;
 		}
@@ -275,7 +293,7 @@ public class ASTConverter_RecordPattern_Test extends ConverterTestSetup {
 				"void foo(Object o) {\n" +
 				"	switch (o) {\n" +
 			    "		case Integer i  : System.out.println(i.toString());\n" +
-			    "		case default    : System.out.println(o.toString());\n" +
+			    "		case null, default    : System.out.println(o.toString());\n" +
 			    "	}\n" +
 			    "}\n" +
 				"\n" +
@@ -292,15 +310,15 @@ public class ASTConverter_RecordPattern_Test extends ConverterTestSetup {
 		List statements = ((SwitchStatement)node).statements();
 		assertEquals("incorrect no of statements", 4, statements.size());
 		SwitchCase caseDefault = (SwitchCase) statements.get(2);
-		Expression caseDefaultExpression = (Expression) caseDefault.expressions().get(0);
-		assertEquals("Case Default Expression",caseDefaultExpression.getNodeType() , ASTNode.CASE_DEFAULT_EXPRESSION);
-
-
+		Expression exp = (Expression) caseDefault.expressions().get(0);
+		assertEquals("Case Default Expression",exp.getNodeType() , ASTNode.NULL_LITERAL);
+		exp = (Expression) caseDefault.expressions().get(1);
+		assertEquals("Case Default Expression",exp.getNodeType() , ASTNode.CASE_DEFAULT_EXPRESSION);
 	}
 
 	public void testBug575250() throws CoreException {
-		if (!isJRE19) {
-			System.err.println("Test "+getName()+" requires a JRE 18");
+		if (!isJRE20) {
+			System.err.println("Test "+getName()+" requires a JRE 20");
 			return;
 		}
 		String contents = "public class X {\n" +
@@ -353,16 +371,16 @@ public class ASTConverter_RecordPattern_Test extends ConverterTestSetup {
 	}
 
 	public void testRecordPattern001() throws CoreException {
-		if (!isJRE19) {
+		if (!isJRE20) {
 			printJREError();
 			return;
 		}
 		String contents = "public class X {\n"
 						+ "  static void print(Rectangle r) {\n"
 						+ "    if (r instanceof (Rectangle(ColoredPoint(Point(int x, int y), Color c),\n"
-						+ "                               ColoredPoint lr) r1)) {\n"
+						+ "                               ColoredPoint lr))) {\n"
 						+ "        System.out.println(\"Upper-left corner: \");\n"
-						+ "        System.out.println(r1.toString());\n"
+						+ "        System.out.println(lr.toString());\n"
 						+ "    }\n"
 						+ "  }\n"
 						+ "  public static void main(String[] obj) {\n"
@@ -390,23 +408,36 @@ public class ASTConverter_RecordPattern_Test extends ConverterTestSetup {
 		assertEquals("Method name is not print", "print", printMethod.getName().toString());
 		List<ASTNode> statements = printMethod.getBody().statements();
 		IfStatement ifStatement = (IfStatement)statements.get(0);
-		assertEquals("Not a PatternInstanceOf Expression", true, ifStatement.getExpression() instanceof PatternInstanceofExpression);
+		assertEquals("Not a PatternInstanceOf Expression", "org.eclipse.jdt.core.dom.PatternInstanceofExpression", ifStatement.getExpression().getClass().getName());
 		PatternInstanceofExpression patternExpression = (PatternInstanceofExpression)ifStatement.getExpression();
-		assertEquals("Name of right Operand is not r1", "r1", patternExpression.getRightOperand().getName().toString());
-
-
+		Pattern pattern = patternExpression.getPattern();
+		assertNotNull("Pattern should not be null", pattern);
+		assertEquals("Should be a record pattern", "org.eclipse.jdt.core.dom.RecordPattern", pattern.getClass().getName());
+		RecordPattern recPattern = (RecordPattern) pattern;
+		assertNull("Pattern name should be null", recPattern.getPatternName());
+		List<Pattern> patterns = recPattern.patterns();
+		assertEquals("Incorrect nested pattern size", 2, patterns.size());
+		pattern = patterns.get(0);
+		assertEquals("Should be a type pattern", "org.eclipse.jdt.core.dom.RecordPattern", pattern.getClass().getName());
+		recPattern = (RecordPattern) pattern;
+		assertNull("Pattern name should be null", recPattern.getPatternName());
+		pattern = patterns.get(1);
+		assertEquals("Should be a type pattern", "org.eclipse.jdt.core.dom.TypePattern", pattern.getClass().getName());
+		TypePattern tPattern = (TypePattern) pattern;
+		assertNotNull("Pattern name should not be null", tPattern.getPatternVariable());
+		assertEquals("Incorrect pattern variable name", "lr", tPattern.getPatternVariable().getName().toString());
 	}
 
 	@SuppressWarnings("rawtypes")
 	public void testRecordPattern002() throws CoreException {
-		if (!isJRE19) {
-			System.err.println("Test "+getName()+" requires a JRE 19");
+		if (!isJRE20) {
+			System.err.println("Test "+getName()+" requires a JRE 20");
 			return;
 		}
 		String contents =  "public class X {\n"
 				+ "  public static void print(Record r) {\n"
 				+ "    int res = switch(r) {\n"
-				+ "       case Record(int x) r1 -> x ;\n"
+				+ "       case Record(int x) -> x ;\n"
 				+ "        default -> 0;\n"
 				+ "    }; \n"
 				+ "    System.out.println(\"Returns: \");\n"
@@ -447,27 +478,25 @@ public class ASTConverter_RecordPattern_Test extends ConverterTestSetup {
 		assertEquals("incorrect type", ASTNode.RECORD_PATTERN, ((Expression)caseStmt.expressions().get(0)).getNodeType());
 		RecordPattern recordPattern = (RecordPattern)caseStmt.expressions().get(0);
 		assertEquals("StartPosition of Record Pattern is not 94",94 , recordPattern.getStartPosition());
-		assertEquals("Length of Record Pattern is not 16",16 , recordPattern.getLength());
+		assertEquals("Length of Record Pattern is not 13",13 , recordPattern.getLength());
 		assertEquals("Type of RecordPattern variable is not Record","Record" , recordPattern.getPatternType().toString());
 		assertEquals("StartPosition of Type variable is not 94",94 , recordPattern.getPatternType().getStartPosition());
 		assertEquals("Length of Record Pattern is not 6",6 , recordPattern.getPatternType().getLength());
-		assertEquals("Name of RecordPattern variableis not r1","r1" , recordPattern.getPatternName().toString());
-		assertEquals("StartPosition of Record Pattern is not 108",108 , recordPattern.getPatternName().getStartPosition());
-		assertEquals("Length of Record Pattern is not 2",2 , recordPattern.getPatternName().getLength());
+		assertNull("Name of RecordPattern variableis not null", recordPattern.getPatternName());
 		assertEquals("Type of Nested pattern in RecordPattern is not TypePattern",ASTNode.TYPE_PATTERN , recordPattern.patterns().get(0).getNodeType());
 	}
 
 	@SuppressWarnings("rawtypes")
 	public void testRecordPattern003() throws CoreException {
-		if (!isJRE19) {
-			System.err.println("Test "+getName()+" requires a JRE 19");
+		if (!isJRE20) {
+			System.err.println("Test "+getName()+" requires a JRE 20");
 			return;
 		}
 		String contents =  "public class X {\n"
 				+ "  public static void printLowerRight(Rectangle r) {\n"
 				+ "    int res = switch(r) {\n"
 				+ "       case Rectangle(ColoredPoint(Point(int x, int y), Color c),\n"
-				+ "                               ColoredPoint lr) r1  -> {\n"
+				+ "                               ColoredPoint lr) -> {\n"
 				+ "        		yield 1;  \n"
 				+ "        } \n"
 				+ "        default -> 0;\n"
@@ -513,7 +542,7 @@ public class ASTConverter_RecordPattern_Test extends ConverterTestSetup {
 		assertEquals("incorrect type", ASTNode.RECORD_PATTERN, ((Expression)caseStmt.expressions().get(0)).getNodeType());
 		RecordPattern recordPattern = (RecordPattern)caseStmt.expressions().get(0);
 		assertEquals("Type of RecordPattern variable is not Rectangle","Rectangle" , recordPattern.getPatternType().toString());
-		assertEquals("Name of RecordPattern variable is not r1","r1" , recordPattern.getPatternName().toString());
+		assertNull("Name of RecordPattern variable is not null", recordPattern.getPatternName());
 		assertEquals("There should be 2 nested Patterns in Rectangle", 2 , recordPattern.patterns().size());
 		assertEquals("Type of Nested pattern in Rectangle is not RecordPattern",ASTNode.RECORD_PATTERN , recordPattern.patterns().get(0).getNodeType());
 		assertEquals("Type of Nested pattern in Rectangle is not TypePattern",ASTNode.TYPE_PATTERN , recordPattern.patterns().get(1).getNodeType());
@@ -534,15 +563,15 @@ public class ASTConverter_RecordPattern_Test extends ConverterTestSetup {
 
 	@SuppressWarnings("rawtypes")
 	public void testRecordPattern004() throws CoreException {
-		if (!isJRE19) {
-			System.err.println("Test "+getName()+" requires a JRE 19");
+		if (!isJRE20) {
+			System.err.println("Test "+getName()+" requires a JRE 20");
 			return;
 		}
 		String contents =  "public class X {\n"
 				+ "  public static void printLowerRight(Rectangle r) {\n"
 				+ "    int res = switch(r) {\n"
 				+ "       case Rectangle(ColoredPoint(Point(int x, int y), Color c),\n"
-				+ "                               ColoredPoint lr) r1 when x > 0 -> {\n"
+				+ "                               ColoredPoint lr) when x > 0 -> {\n"
 				+ "        		yield 1;  \n"
 				+ "        } \n"
 				+ "        default -> 0;\n"
@@ -588,6 +617,89 @@ public class ASTConverter_RecordPattern_Test extends ConverterTestSetup {
 		assertEquals("incorrect type", ASTNode.GUARDED_PATTERN, ((Expression)caseStmt.expressions().get(0)).getNodeType());
 		GuardedPattern guardedPattern = (GuardedPattern)caseStmt.expressions().get(0);
 		assertEquals("There should be 1 Record Pattern", ASTNode.RECORD_PATTERN , guardedPattern.getPattern().getNodeType());
+	}
+	public void testIssue882_1() throws Exception {
+		if (!isJRE20) {
+			System.err.println("Test "+getName()+" requires a JRE 20");
+			return;
+		}
+		try {
+			disablePreview();
+			String contents =  "import java.util.List;\n"
+					+ "public class X {\n"
+					+ "	public static void foo(List<R> rList) {\n"
+					+ "		for(R(Integer abcs):rList) {\n"
+					+ "			System.out.println(abcs);\n"
+					+ "		}\n"
+					+ "	}\n"
+					+ "	record R(int i) {}\n"
+					+ "}";
 
+		this.workingCopy = getWorkingCopy("/Converter_19/src/X.java", true/*resolve*/);
+			ASTNode node = buildAST(
+				contents,
+				this.workingCopy,
+				false);
+			assertEquals("Not a compilation unit", ASTNode.COMPILATION_UNIT, node.getNodeType());
+			CompilationUnit compilationUnit = (CompilationUnit) node;
+			assertProblemsSize(compilationUnit, 1, "Record Pattern is a preview feature and disabled by default. Use --enable-preview to enable");
+			node = ((AbstractTypeDeclaration)compilationUnit.types().get(0));
+			assertEquals("Not a Type Declaration", ASTNode.TYPE_DECLARATION, node.getNodeType());
+			TypeDeclaration type = (TypeDeclaration)node;
+			MethodDeclaration[] methods = type.getMethods();
+			assertEquals("Method size incorrect", 1, methods.length);
+			MethodDeclaration printMethod = methods[0];
+			assertEquals("Method name is not foo", "foo", printMethod.getName().toString());
+			List<ASTNode> statements = printMethod.getBody().statements();
+			assertEquals("statement count incorrect", 1, statements.size());
+			Statement stmt = (Statement) statements.get(0);
+			assertEquals("Should be an empty statement", ASTNode.EMPTY_STATEMENT, stmt.getNodeType());
+		} finally {
+			enabledPreview();
+		}
+	}
+	public void testIssue882_2() throws Exception {
+		if (!isJRE20) {
+			System.err.println("Test "+getName()+" requires a JRE 20");
+			return;
+		}
+		try {
+			disablePreview();
+			String contents =  "public class X {\n"
+					+ "	public static void foo(Object o) {\n"
+					+ "		if(o instanceof R(Integer abcs)) {\n"
+					+ "			System.out.println(\"\");\n"
+					+ "		}\n"
+					+ "	}\n"
+					+ "	record R(int i) {}\n"
+					+ "}";
+
+		this.workingCopy = getWorkingCopy("/Converter_19/src/X.java", true/*resolve*/);
+			ASTNode node = buildAST(
+				contents,
+				this.workingCopy,
+				false);
+			assertEquals("Not a compilation unit", ASTNode.COMPILATION_UNIT, node.getNodeType());
+			CompilationUnit compilationUnit = (CompilationUnit) node;
+			assertProblemsSize(compilationUnit, 1, "Record Pattern is a preview feature and disabled by default. Use --enable-preview to enable");
+			node = ((AbstractTypeDeclaration)compilationUnit.types().get(0));
+			assertEquals("Not a Type Declaration", ASTNode.TYPE_DECLARATION, node.getNodeType());
+			TypeDeclaration type = (TypeDeclaration)node;
+			MethodDeclaration[] methods = type.getMethods();
+			assertEquals("Method size incorrect", 1, methods.length);
+			MethodDeclaration printMethod = methods[0];
+			assertEquals("Method name is not foo", "foo", printMethod.getName().toString());
+			List<ASTNode> statements = printMethod.getBody().statements();
+			assertEquals("statement count incorrect", 1, statements.size());
+			Statement stmt = (Statement) statements.get(0);
+			assertEquals("Should be an IF statement", ASTNode.IF_STATEMENT, stmt.getNodeType());
+			IfStatement ifStmt = (IfStatement) stmt;
+			Expression expression = ifStmt.getExpression();
+			assertEquals("Should be an instanceof expression", ASTNode.PATTERN_INSTANCEOF_EXPRESSION, expression.getNodeType());
+			// Doesn't matter what else goes inside the PatternInstanceofExpression, because it's broken code and
+			// nothing is promised
+		} finally {
+			enabledPreview();
+		}
 	}
 }

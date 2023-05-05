@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2022 IBM Corporation and others.
+ * Copyright (c) 2000, 2023 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -2160,18 +2160,36 @@ class ASTConverter {
 			case AST.JLS2_INTERNAL :
 				return createFakeEmptyStatement(statement);
 			default :
-				EnhancedForStatement enhancedForStatement = new EnhancedForStatement(this.ast);
-				enhancedForStatement.setParameter(convertToSingleVariableDeclaration(statement.elementVariable));
-				org.eclipse.jdt.internal.compiler.ast.Expression collection = statement.collection;
-				if (collection == null) return null;
-				enhancedForStatement.setExpression(convert(collection));
-				final Statement action = convert(statement.action);
-				if (action == null) return null;
-				enhancedForStatement.setBody(action);
-				int start = statement.sourceStart;
-				int end = statement.sourceEnd;
-				enhancedForStatement.setSourceRange(start, end - start + 1);
-				return enhancedForStatement;
+				if (statement.pattern != null) {
+					if (!this.ast.isPreviewEnabled()) {
+						return createFakeEmptyStatement(statement);
+					}
+					EnhancedForWithRecordPattern enhancedFor = new EnhancedForWithRecordPattern(this.ast);
+					enhancedFor.setPattern((RecordPattern) convert(statement.pattern));
+					org.eclipse.jdt.internal.compiler.ast.Expression collection = statement.collection;
+					if (collection == null) return null;
+					enhancedFor.setExpression(convert(collection));
+					final Statement action = convert(statement.originalAction);
+					if (action == null) return null;
+					enhancedFor.setBody(action);
+					int start = statement.sourceStart;
+					int end = statement.sourceEnd;
+					enhancedFor.setSourceRange(start, end - start + 1);
+					return enhancedFor;
+				} else {
+					EnhancedForStatement enhancedForStatement = new EnhancedForStatement(this.ast);
+					enhancedForStatement.setParameter(convertToSingleVariableDeclaration(statement.elementVariable));
+					org.eclipse.jdt.internal.compiler.ast.Expression collection = statement.collection;
+					if (collection == null) return null;
+					enhancedForStatement.setExpression(convert(collection));
+					final Statement action = convert(statement.action);
+					if (action == null) return null;
+					enhancedForStatement.setBody(action);
+					int start = statement.sourceStart;
+					int end = statement.sourceEnd;
+					enhancedForStatement.setSourceRange(start, end - start + 1);
+					return enhancedForStatement;
+				}
 		}
 	}
 
@@ -2236,7 +2254,7 @@ class ASTConverter {
 		guardedPattern.setRestrictedIdentifierStartPosition(pattern.restrictedIdentifierStart);
 		return guardedPattern;
 	}
-	// TODO: Implement this. What we have here is just a dummy implementation
+
 	public Pattern convert(org.eclipse.jdt.internal.compiler.ast.RecordPattern pattern) {
 		RecordPattern recordPattern = new RecordPattern(this.ast);
 		if (this.resolveBindings) {
@@ -2279,7 +2297,7 @@ class ASTConverter {
 	}
 
 	public Expression convert(org.eclipse.jdt.internal.compiler.ast.InstanceOfExpression expression) {
-		if (DOMASTUtil.isPatternInstanceofExpressionSupported(this.ast) && expression.elementVariable != null) {
+		if (DOMASTUtil.isPatternInstanceofExpressionSupported(this.ast) && expression.pattern != null) {
 			return convertToPatternInstanceOfExpression(expression);
 		}
 		InstanceofExpression instanceOfExpression = new InstanceofExpression(this.ast);
@@ -2297,6 +2315,7 @@ class ASTConverter {
 		return instanceOfExpression;
 	}
 
+	@SuppressWarnings("deprecation")
 	public PatternInstanceofExpression convertToPatternInstanceOfExpression(org.eclipse.jdt.internal.compiler.ast.InstanceOfExpression expression) {
 		PatternInstanceofExpression patternInstanceOfExpression = new PatternInstanceofExpression(this.ast);
 		if (this.resolveBindings) {
@@ -2304,9 +2323,29 @@ class ASTConverter {
 		}
 		Expression leftExpression = convert(expression.expression);
 		patternInstanceOfExpression.setLeftOperand(leftExpression);
-		patternInstanceOfExpression.setRightOperand(convertToSingleVariableDeclaration(expression.elementVariable));
+		if (this.ast.apiLevel == AST.JLS20 && this.ast.isPreviewEnabled()) {
+			patternInstanceOfExpression.setPattern(convert(expression.pattern));
+		} else {
+			if (expression.elementVariable != null) {
+				patternInstanceOfExpression.setRightOperand(convertToSingleVariableDeclaration(expression.elementVariable));
+			} else if (expression.pattern != null){
+				// Let's recover a bit and create a SVD, even though what we have is a record pattern.
+				SingleVariableDeclaration rightOperand = patternInstanceOfExpression.getRightOperand();
+				if (rightOperand != null) { // Most certainly not null
+					TypeReference type = expression.pattern.getType();
+					Type convertType = convertType(type);
+					rightOperand.setType(convertType);
+					int startPosition = expression.pattern.sourceStart;
+					int sourceEnd = expression.pattern.sourceEnd;
+					rightOperand.setSourceRange(startPosition, sourceEnd - startPosition + 1);
+					SimpleName name = rightOperand.getName();
+					startPosition = type.sourceStart + 1;
+					name.setSourceRange(startPosition, sourceEnd - startPosition + 1);
+				}
+			}
+		}
 		int startPosition = leftExpression.getStartPosition();
-		int sourceEnd= expression.elementVariable.sourceEnd;
+		int sourceEnd= expression.pattern.sourceEnd;
 
 		patternInstanceOfExpression.setSourceRange(startPosition, sourceEnd - startPosition + 1);
 		return patternInstanceOfExpression;
@@ -2804,8 +2843,6 @@ class ASTConverter {
 			if (pattern instanceof org.eclipse.jdt.internal.compiler.ast.TypePattern) {
 				return convert((org.eclipse.jdt.internal.compiler.ast.TypePattern) pattern);
 			}
-
-
 			return null;
 	}
 

@@ -30,6 +30,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
 import org.eclipse.core.runtime.CoreException;
@@ -3334,19 +3335,7 @@ public final class CompletionEngine
 	}
 
 	private void findCompletionsForArgumentPosition(ObjectVector methodsFound, int completedArgumentLength, Scope scope) {
-		if(methodsFound.size == 0) {
-			return;
-		}
-
-		for(int i = 0; i < methodsFound.size; i++) {
-			MethodBinding method = (MethodBinding) ((Object[])methodsFound.elementAt(i))[0];
-			if(method.parameters.length <= completedArgumentLength) {
-				continue;
-			}
-
-			TypeBinding paramType = method.parameters[completedArgumentLength];
-			addExpectedType(paramType, scope);
-		}
+		pushExpectedTypesForArgumentPosition(methodsFound, completedArgumentLength, scope);
 		this.strictMatchForExtepectedType = true;
 		int filter = this.expectedTypesFilter;
 		this.expectedTypesFilter = SUBTYPE;
@@ -3362,6 +3351,30 @@ public final class CompletionEngine
 			this.tokenEnd = tEnd;
 			this.strictMatchForExtepectedType = false;
 			this.expectedTypesFilter = filter;
+		}
+	}
+
+	private void pushExpectedTypesForArgumentPosition(ObjectVector methodsToSearchOn, int completedArgumentLength,
+			Scope scope) {
+		if (methodsToSearchOn.size == 0) {
+			return;
+		}
+		for (int i = 0; i < methodsToSearchOn.size; i++) {
+			MethodBinding method = (MethodBinding) ((Object[]) methodsToSearchOn.elementAt(i))[0];
+			boolean onOrAfterLastParam = method.parameters.length <= completedArgumentLength;
+			if (onOrAfterLastParam && !method.isVarargs()) {
+				continue;
+			}
+
+			int index = onOrAfterLastParam
+					? method.parameters.length - 1
+					: completedArgumentLength;
+
+			TypeBinding paramType = method.parameters[index];
+			addExpectedType(paramType, scope);
+			if (method.isVarargs() && paramType.isArrayType() && index == (method.parameters.length - 1)) {
+				addExpectedType(((ArrayBinding) paramType).elementsType(), scope);
+			}
 		}
 	}
 
@@ -3931,7 +3944,7 @@ public final class CompletionEngine
 			if(resolvedType.isEnum()) {
 				if (!this.requestor.isIgnored(CompletionProposal.FIELD_REF)) {
 					this.assistNodeIsEnum = true;
-					findEnumConstantsFromSwithStatement(this.completionToken, (SwitchStatement) astNodeParent);
+					findEnumConstantsFromSwithStatement(this.completionToken, switchStatement);
 				}
 			}
 			else {
@@ -3983,13 +3996,10 @@ public final class CompletionEngine
 
 			checkCancel();
 
-			findVariablesAndMethods(
-				this.completionToken,
-				scope,
-				singleNameReference,
-				scope,
-				insideTypeAnnotation,
-				singleNameReference.isInsideAnnotationAttribute);
+			// see if we can find argument type at position in case if we are at a vararg.
+			checkForVarargExpectedTypes(astNodeParent, scope);
+			findVariablesAndMethods(this.completionToken, scope, singleNameReference, scope, insideTypeAnnotation,
+					singleNameReference.isInsideAnnotationAttribute, true, new ObjectVector());
 
 			checkCancel();
 
@@ -4011,6 +4021,31 @@ public final class CompletionEngine
 					findExplicitConstructors(Keywords.SUPER, ref.superclass(), (MethodScope)scope, singleNameReference);
 				}
 			}
+		}
+	}
+
+	private void checkForVarargExpectedTypes(ASTNode astNodeParent, Scope scope) {
+		if (astNodeParent instanceof MessageSend m && this.expectedTypesPtr == -1) {
+			final ObjectVector methodsToSearchOn = new ObjectVector();
+			final CompletionRequestor actual = this.requestor;
+			this.requestor = new CompletionRequestor(true) {
+
+				@Override
+				public void accept(CompletionProposal proposal) {
+					// do nothing
+				}
+			};
+			this.requestor.setIgnored(CompletionProposal.METHOD_REF, false);
+			try {
+				// this will help to find the actual resolved method we are at since current MessageSend is not
+				// properly resolved. We use the same strategy we have at completionOnMessageSend
+				findVariablesAndMethods(m.selector, scope, m, scope, false, false, true, methodsToSearchOn);
+			} finally {
+				this.requestor = actual;
+			}
+
+			pushExpectedTypesForArgumentPosition(methodsToSearchOn,
+					(int) Stream.of(m.argumentTypes).filter(Objects::nonNull).count(), scope);
 		}
 	}
 
@@ -6050,7 +6085,9 @@ public final class CompletionEngine
 						continue next;
 					for (int a = minArgLength; --a >= 0;)
 						if (argTypes[a] != null) { // can be null if it could not be resolved properly
-							if (!argTypes[a].isCompatibleWith(constructor.parameters[a]))
+							if (!argTypes[a].isCompatibleWith(constructor.parameters[a])
+								// check if this type pair is parameterized types and their erasure types matches
+									&& !argTypes[a].erasure().isCompatibleWith(constructor.parameters[a].erasure()))
 								continue next;
 						}
 
@@ -12187,8 +12224,17 @@ public final class CompletionEngine
 
 				checkCancel();
 
-				if(this.expectedTypes[i] instanceof ReferenceBinding) {
-					ReferenceBinding refBinding = (ReferenceBinding)this.expectedTypes[i];
+				TypeBinding expectedType = this.expectedTypes[i];
+				TypeBinding originalExpectedType = expectedType;
+				int dimensions = 0;
+				if (expectedType instanceof ArrayBinding) {
+					ArrayBinding arrayBinding = (ArrayBinding) expectedType;
+					expectedType = arrayBinding.leafComponentType();
+					dimensions = arrayBinding.dimensions();
+				}
+
+				if (expectedType instanceof ReferenceBinding) {
+					ReferenceBinding refBinding = (ReferenceBinding) expectedType;
 
 					if (typeLength > 0) {
 						if (typeLength > refBinding.sourceName.length) continue next;
@@ -12270,7 +12316,9 @@ public final class CompletionEngine
 						relevance += computeRelevanceForResolution();
 						relevance += computeRelevanceForInterestingProposal(refBinding);
 						relevance += computeRelevanceForCaseMatching(token, typeName);
-						relevance += computeRelevanceForExpectingType(refBinding);
+						// if an array, then we need to use the original expected type.
+						relevance += computeRelevanceForExpectingType(
+								dimensions > 0 ? originalExpectedType : refBinding);
 						relevance += computeRelevanceForQualification(isQualified);
 						relevance += computeRelevanceForRestrictions(accessibility);
 
@@ -12284,7 +12332,7 @@ public final class CompletionEngine
 						}
 
 						if (proposeType &&
-								(!this.assistNodeIsConstructor ||
+								(!this.assistNodeIsConstructor || dimensions > 0 ||
 										!allowingLongComputationProposals ||
 										hasStaticMemberTypes(refBinding, scope.enclosingSourceType() ,this.unitScope)) ||
 										hasArrayTypeAsExpectedSuperTypes()) {
@@ -12301,6 +12349,7 @@ public final class CompletionEngine
 								proposal.setTokenRange(this.tokenStart - this.offset, this.tokenEnd - this.offset);
 								proposal.setRelevance(relevance);
 								proposal.setAccessibility(accessibility);
+								proposal.setArrayDimensions(dimensions);
 								this.requestor.accept(proposal);
 								if(DEBUG) {
 									this.printDebug(proposal);
@@ -12308,7 +12357,7 @@ public final class CompletionEngine
 							}
 						}
 
-						if (proposeConstructor) {
+						if (proposeConstructor && dimensions == 0) {
 							findConstructorsOrAnonymousTypes(
 									refBinding,
 									scope,
@@ -12317,6 +12366,42 @@ public final class CompletionEngine
 									relevance);
 						}
 					}
+				} else if (expectedType instanceof BaseTypeBinding) {
+					BaseTypeBinding baseType = (BaseTypeBinding) expectedType;
+					// only go further if we are completing on an array.
+					if (dimensions > 0 && proposeType &&
+							(!this.assistNodeIsConstructor || !allowingLongComputationProposals)
+							&& baseType.isPrimitiveType()) {
+						this.noProposal = false;
+						if (!this.requestor.isIgnored(CompletionProposal.TYPE_REF)) {
+							InternalCompletionProposal proposal = createProposal(CompletionProposal.TYPE_REF,
+									this.actualCompletionPosition);
+
+							char[] typeName = baseType.sourceName();
+							char[] completionName = typeName;
+							int relevance = computeBaseRelevance();
+							relevance += computeRelevanceForResolution();
+							relevance += computeRelevanceForInterestingProposal(baseType);
+							relevance += computeRelevanceForCaseMatching(token, typeName);
+							relevance += computeRelevanceForExpectingType(originalExpectedType); // use array type here
+							relevance += computeRelevanceForQualification(true);
+							relevance += computeRelevanceForRestrictions(IAccessRule.K_ACCESSIBLE);
+
+							proposal.setSignature(getSignature(baseType));
+							proposal.setTypeName(typeName);
+							proposal.setCompletion(completionName);
+							proposal.setReplaceRange(this.startPosition - this.offset, this.endPosition - this.offset);
+							proposal.setTokenRange(this.tokenStart - this.offset, this.tokenEnd - this.offset);
+							proposal.setRelevance(relevance);
+							proposal.setAccessibility(IAccessRule.K_ACCESSIBLE);
+							proposal.setArrayDimensions(dimensions);
+							this.requestor.accept(proposal);
+							if (DEBUG) {
+								this.printDebug(proposal);
+							}
+						}
+					}
+
 				}
 			}
 		}

@@ -2041,6 +2041,10 @@ public final class CompletionEngine
 			completionOnExplicitConstructorCall(astNode, qualifiedBinding, scope);
 		} else if (astNode instanceof CompletionOnQualifiedAllocationExpression) {
 			completionOnQualifiedAllocationExpression(astNode, qualifiedBinding, scope);
+			// rebuild the context with newly found expected types so other completion computers can benefit from it.
+			if(this.expectedTypesPtr > -1) {
+				buildContext(astNode, astNodeParent, compilationUnitDeclaration, qualifiedBinding, scope);
+			}
 		} else if (astNode instanceof CompletionOnClassLiteralAccess) {
 			completionOnClassLiteralAccess(astNode, qualifiedBinding, scope);
 		} else if (astNode instanceof CompletionOnMethodName) {
@@ -3335,6 +3339,9 @@ public final class CompletionEngine
 	}
 
 	private void findCompletionsForArgumentPosition(ObjectVector methodsFound, int completedArgumentLength, Scope scope) {
+		if (methodsFound.size() == 0) {
+			return;
+		}
 		pushExpectedTypesForArgumentPosition(methodsFound, completedArgumentLength, scope);
 		this.strictMatchForExtepectedType = true;
 		int filter = this.expectedTypesFilter;
@@ -3641,6 +3648,7 @@ public final class CompletionEngine
 		TypeBinding[] argTypes = computeTypes(allocExpression.arguments);
 
 		ReferenceBinding ref = (ReferenceBinding) qualifiedBinding;
+		ObjectVector constructorsFound = new ObjectVector();
 
 		if (ref.problemId() == ProblemReasons.NotFound) {
 			findConstructorsFromMissingType(
@@ -3661,7 +3669,8 @@ public final class CompletionEngine
 						null,
 						null,
 						null,
-						false);
+						false, 
+						constructorsFound);
 			}
 
 			checkCancel();
@@ -3680,6 +3689,7 @@ public final class CompletionEngine
 					false);
 			}
 		}
+		findCompletionsForArgumentPosition(constructorsFound, argTypes != null ? argTypes.length : 0, scope);
 	}
 
 	private void completionOnQualifiedNameReference(ASTNode astNode, ASTNode enclosingNode, Binding qualifiedBinding,
@@ -5940,6 +5950,13 @@ public final class CompletionEngine
 		}
 	}
 
+	void findConstructors(ReferenceBinding currentType, TypeBinding[] argTypes, Scope scope,
+			InvocationSite invocationSite, boolean forAnonymousType, Binding[] missingElements,
+			int[] missingElementsStarts, int[] missingElementsEnds, boolean missingElementsHaveProblems) {
+		findConstructors(currentType, argTypes, scope, invocationSite, forAnonymousType, missingElements,
+				missingElementsStarts, missingElementsEnds, missingElementsHaveProblems, new ObjectVector());
+	}
+
 	void findConstructors(
 		ReferenceBinding currentType,
 		TypeBinding[] argTypes,
@@ -5949,7 +5966,8 @@ public final class CompletionEngine
 		Binding[] missingElements,
 		int[] missingElementsStarts,
 		int[] missingElementsEnds,
-		boolean missingElementsHaveProblems) {
+		boolean missingElementsHaveProblems, 
+		ObjectVector foundConstructors) {
 
 		int relevance = computeBaseRelevance();
 		relevance += computeRelevanceForResolution();
@@ -5972,7 +5990,8 @@ public final class CompletionEngine
 				missingElementsHaveProblems,
 				true,
 				false,
-				relevance);
+				relevance, 
+				foundConstructors);
 	}
 
 
@@ -6029,6 +6048,15 @@ public final class CompletionEngine
 		missingTypesConverter.guess(typeRef, scope, substitutionRequestor);
 	}
 
+	private void findConstructors(ReferenceBinding currentType, TypeBinding[] argTypes, Scope scope,
+			InvocationSite invocationSite, boolean forAnonymousType, Binding[] missingElements,
+			int[] missingElementsStarts, int[] missingElementsEnds, boolean missingElementsHaveProblems,
+			boolean exactMatch, boolean isQualified, int relevance) {
+		findConstructors(currentType, argTypes, scope, invocationSite, forAnonymousType, missingElements,
+				missingElementsStarts, missingElementsEnds, missingElementsHaveProblems, exactMatch, isQualified,
+				relevance, new ObjectVector());
+	}
+
 	private void findConstructors(
 		ReferenceBinding currentType,
 		TypeBinding[] argTypes,
@@ -6041,7 +6069,8 @@ public final class CompletionEngine
 		boolean missingElementsHaveProblems,
 		boolean exactMatch,
 		boolean isQualified,
-		int relevance) {
+		int relevance, 
+		ObjectVector constructorsFound) {
 
 		// No visibility checks can be performed without the scope & invocationSite
 		MethodBinding[] methods = null;
@@ -6091,6 +6120,7 @@ public final class CompletionEngine
 								continue next;
 						}
 
+					constructorsFound.add(new Object[]{constructor, currentType});
 					char[][] parameterPackageNames = new char[paramLength][];
 					char[][] parameterTypeNames = new char[paramLength][];
 					for (int i = 0; i < paramLength; i++) {
@@ -11637,6 +11667,15 @@ public final class CompletionEngine
 					!isIgnored(CompletionProposal.ANONYMOUS_CLASS_CONSTRUCTOR_INVOCATION, CompletionProposal.TYPE_REF));
 
 
+		boolean isEmptyPrefix = token.length == 0;
+
+		checkCancel();
+		if (proposeConstructor) {
+			findTypesFromExpectedTypes(token, scope, typesFound, proposeType, true);
+		} else if(isEmptyPrefix && !this.assistNodeIsAnnotation) {
+			findTypesFromExpectedTypes(token, scope, typesFound, proposeType, false);
+		}
+
 		if ((proposeType || proposeConstructor) && scope.enclosingSourceType() != null) {
 
 			checkCancel();
@@ -11653,8 +11692,6 @@ public final class CompletionEngine
 				findTypeParameters(token, scope);
 			}
 		}
-
-		boolean isEmptyPrefix = token.length == 0;
 
 		if ((proposeType || proposeConstructor) && this.unitScope != null) {
 
@@ -11790,17 +11827,8 @@ public final class CompletionEngine
 			findTypesFromStaticImports(token, scope, proposeAllMemberTypes, typesFound);
 		}
 
-		if (proposeConstructor) {
-
-			checkCancel();
-
-			findTypesFromExpectedTypes(token, scope, typesFound, proposeType, proposeConstructor);
-		}
-
 		if (isEmptyPrefix && !this.assistNodeIsAnnotation) {
-			if (!proposeConstructor) {
-				findTypesFromExpectedTypes(token, scope, typesFound, proposeType, proposeConstructor);
-			} else {
+			if (proposeConstructor) {
 				findConstructorsFromSubTypes(scope, typesFound);
 			}
 		} else {
@@ -12232,6 +12260,7 @@ public final class CompletionEngine
 					expectedType = arrayBinding.leafComponentType();
 					dimensions = arrayBinding.dimensions();
 				}
+				final boolean isArrayCompletion = dimensions > 0;
 
 				if (expectedType instanceof ReferenceBinding) {
 					ReferenceBinding refBinding = (ReferenceBinding) expectedType;
@@ -12281,12 +12310,12 @@ public final class CompletionEngine
 						}
 					}
 
-					typesFound.add(refBinding);
-
 					boolean inSameUnit = this.unitScope.isDefinedInSameUnit(refBinding);
 
-					// top level types of the current unit are already proposed.
-					if(!inSameUnit || (inSameUnit && refBinding.isMemberType())) {
+					// top level types of the current unit will be proposed by the caller unless expected type is an array.
+					if(!inSameUnit || (inSameUnit && refBinding.isMemberType()) || (inSameUnit && isArrayCompletion)) {
+						typesFound.add(refBinding);
+
 						char[] packageName = refBinding.qualifiedPackageName();
 						char[] typeName = refBinding.sourceName();
 						char[] completionName = typeName;
@@ -12318,7 +12347,7 @@ public final class CompletionEngine
 						relevance += computeRelevanceForCaseMatching(token, typeName);
 						// if an array, then we need to use the original expected type.
 						relevance += computeRelevanceForExpectingType(
-								dimensions > 0 ? originalExpectedType : refBinding);
+							isArrayCompletion ? originalExpectedType : refBinding);
 						relevance += computeRelevanceForQualification(isQualified);
 						relevance += computeRelevanceForRestrictions(accessibility);
 
@@ -12332,7 +12361,7 @@ public final class CompletionEngine
 						}
 
 						if (proposeType &&
-								(!this.assistNodeIsConstructor || dimensions > 0 ||
+								(!this.assistNodeIsConstructor || isArrayCompletion ||
 										!allowingLongComputationProposals ||
 										hasStaticMemberTypes(refBinding, scope.enclosingSourceType() ,this.unitScope)) ||
 										hasArrayTypeAsExpectedSuperTypes()) {
@@ -12357,7 +12386,7 @@ public final class CompletionEngine
 							}
 						}
 
-						if (proposeConstructor && dimensions == 0) {
+						if (proposeConstructor && !isArrayCompletion) {
 							findConstructorsOrAnonymousTypes(
 									refBinding,
 									scope,
@@ -12369,9 +12398,7 @@ public final class CompletionEngine
 				} else if (expectedType instanceof BaseTypeBinding) {
 					BaseTypeBinding baseType = (BaseTypeBinding) expectedType;
 					// only go further if we are completing on an array.
-					if (dimensions > 0 && proposeType &&
-							(!this.assistNodeIsConstructor || !allowingLongComputationProposals)
-							&& baseType.isPrimitiveType()) {
+					if (isArrayCompletion && proposeType && baseType.isPrimitiveType()) {
 						this.noProposal = false;
 						if (!this.requestor.isIgnored(CompletionProposal.TYPE_REF)) {
 							InternalCompletionProposal proposal = createProposal(CompletionProposal.TYPE_REF,

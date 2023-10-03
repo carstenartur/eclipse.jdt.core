@@ -91,6 +91,11 @@ public class AllocationExpression extends Expression implements IPolyExpression,
 	public boolean argsContainCast;
 	public TypeBinding[] argumentTypes = Binding.NO_PARAMETERS;
 	public boolean argumentsHaveErrors = false;
+	/**
+	 * This flag avoids "Redundant specification of type arguments" if the target type was inferred in an outer context,
+	 * possibly based on the provided type arguments of this allocation:
+	 */
+	public boolean expectedTypeWasInferred;
 
 @Override
 public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, FlowInfo flowInfo) {
@@ -589,7 +594,7 @@ public MethodBinding inferConstructorOfElidedParameterizedType(final Scope scope
 			return cached;
 	}
 	boolean[] inferredReturnTypeOut = new boolean[1];
-	MethodBinding constructor = inferDiamondConstructor(scope, this, this.resolvedType, this.argumentTypes, inferredReturnTypeOut);
+	MethodBinding constructor = inferDiamondConstructor(scope, this, this.type.resolvedType, this.argumentTypes, inferredReturnTypeOut);
 	if (constructor != null) {
 		this.inferredReturnType = inferredReturnTypeOut[0];
 		if (constructor instanceof ParameterizedGenericMethodBinding && scope.compilerOptions().sourceLevel >= ClassFileConstants.JDK1_8) {

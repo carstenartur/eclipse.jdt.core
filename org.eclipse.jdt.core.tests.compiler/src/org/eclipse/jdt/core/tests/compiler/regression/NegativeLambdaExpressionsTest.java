@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2011, 2021 IBM Corporation and others.
+ * Copyright (c) 2011, 2023 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -8601,12 +8601,12 @@ public void test428177() {
 		"4. ERROR in X.java (at line 36)\n" +
 		"	if(\"1\" == \"\") { return stream.collect(Collectors.toList()).stream(); // ERROR\n" +
 		"	                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n" +
-		"Type mismatch: cannot convert from Stream<capture#24-of ? extends String> to Stream<String>\n" +
+		"Type mismatch: cannot convert from Stream<capture#14-of ? extends String> to Stream<String>\n" +
 		"----------\n" +
 		"5. ERROR in X.java (at line 38)\n" +
 		"	return stream.collect(Collectors.toList()); // NO ERROR\n" +
 		"	       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n" +
-		"Type mismatch: cannot convert from List<capture#27-of ? extends String> to Stream<String>\n" +
+		"Type mismatch: cannot convert from List<capture#17-of ? extends String> to Stream<String>\n" +
 		"----------\n");
 }
 // https://bugs.eclipse.org/bugs/show_bug.cgi?id=428795, - [1.8]Internal compiler error: java.lang.NullPointerException at org.eclipse.jdt.internal.compiler.ast.MessageSend.analyseCode
@@ -9884,7 +9884,7 @@ public void testGroundTargetTypeWithWithWildcards() {
 		"1. ERROR in X.java (at line 10)\n" +
 		"	return m((X x1, X x2) -> { return new Y(); });\n" +
 		"	         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n" +
-		"Type mismatch: cannot convert from I<X,X,? extends C> to I<? extends A,? extends B,? extends C>\n" +
+		"Type mismatch: cannot convert from I<X,X,C> to I<? extends A,? extends B,? extends C>\n" +
 		"----------\n");
 }
 // https://bugs.eclipse.org/bugs/show_bug.cgi?id=474522, [1.8][compiler] ecj doesn't handle captured final fields correctly in lambdas
@@ -10235,6 +10235,38 @@ public void test553601() {
 		"	                                                           ^\n" +
 		"Syntax error on token(s), misplaced construct(s)\n" +
 		"----------\n");
+}
+
+public void testIssue810() {
+	this.runNegativeTest(
+			new String[] {
+				"X.java",
+				"class Foo {\n"+
+				"static void foo() { \n"+
+				"run(Bar::privateMethod); // <-- warning: Access to enclosing method ... emulated by a synthetic accessor\n"+// method
+				"}\n" +
+				"public static void main(String[] args) {\n"+
+				"Zork z; \n"+
+				"}\n" +
+				"static class Bar { \n"+
+				"private static void privateMethod() { \n" +
+				/**/" }\n" +
+				"}\n" +
+				"static void run(Runnable r) { \n"+
+				"r.run(); \n"+
+				"} \n"+
+			    "}\n"},
+				"----------\n" +
+				"1. WARNING in X.java (at line 3)\n" +
+				"	run(Bar::privateMethod); // <-- warning: Access to enclosing method ... emulated by a synthetic accessor\n" +
+				"	    ^^^^^^^^^^^^^^^^^^\n" +
+				"Access to privateMethod() from the type Foo.Bar is emulated by a synthetic accessor method\n" +
+				"----------\n" +
+				"2. ERROR in X.java (at line 6)\n" +
+				"	Zork z; \n" +
+				"	^^^^\n" +
+				"Zork cannot be resolved to a type\n" +
+				"----------\n");
 }
 
 public static Class testClass() {

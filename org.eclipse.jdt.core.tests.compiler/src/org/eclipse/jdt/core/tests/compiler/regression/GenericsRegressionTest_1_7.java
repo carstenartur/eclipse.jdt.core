@@ -3116,6 +3116,71 @@ public void testBug488649_JDK6791481_ex1() {
 		"Class is a raw type. References to generic type Class<T> should be parameterized\n" +
 		"----------\n");
 }
+public void testGH1326() {
+	Runner runner = new Runner();
+	runner.customOptions = getCompilerOptions();
+	runner.customOptions.put(CompilerOptions.OPTION_ReportRedundantSpecificationOfTypeArguments, CompilerOptions.ERROR);
+	runner.testFiles = new String[] {
+		"Foo.java",
+		"""
+		class Inner<T> {}
+		class Outer<T> {
+			Outer(T t) {}
+			Outer<T> self() { return this; }
+		}
+		public class Foo {
+			Outer<Inner<String>> x = new Outer<>(new Inner<String>()).self();
+		}
+		"""
+	};
+	runner.runConformTest();
+}
+public void testGH1326_alt() {
+	Runner runner = new Runner();
+	runner.customOptions = getCompilerOptions();
+	runner.customOptions.put(CompilerOptions.OPTION_ReportRedundantSpecificationOfTypeArguments, CompilerOptions.ERROR);
+	runner.testFiles = new String[] {
+		"Foo.java",
+		"""
+		class Inner<T> {}
+		class Outer<T> {
+			Outer(Inner<String> t1, T t2) {}
+			Outer<T> self() { return this; }
+		}
+		public class Foo {
+			Inner<String> inner = new Inner<>();
+			Outer<Inner<String>> x = new Outer<>(new Inner<String>(), inner).self();
+			Outer<Inner<String>> xok = new Outer<>(new Inner<>(), inner).self();
+		}
+		"""
+	};
+	runner.expectedCompilerLog =
+			this.complianceLevel >= ClassFileConstants.JDK1_8
+			?
+			"""
+			----------
+			1. ERROR in Foo.java (at line 8)
+				Outer<Inner<String>> x = new Outer<>(new Inner<String>(), inner).self();
+				                                         ^^^^^
+			Redundant specification of type arguments <String>
+			----------
+			"""
+			: // 1.7 inference is less capable:
+			"""
+			----------
+			1. ERROR in Foo.java (at line 8)
+				Outer<Inner<String>> x = new Outer<>(new Inner<String>(), inner).self();
+				                                         ^^^^^
+			Redundant specification of type arguments <String>
+			----------
+			2. ERROR in Foo.java (at line 9)
+				Outer<Inner<String>> xok = new Outer<>(new Inner<>(), inner).self();
+				                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+			Cannot infer type arguments for Outer<>
+			----------
+			""";
+	runner.runNegativeTest();
+}
 public static Class testClass() {
 	return GenericsRegressionTest_1_7.class;
 }

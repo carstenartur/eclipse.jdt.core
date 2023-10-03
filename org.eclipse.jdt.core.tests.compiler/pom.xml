@@ -15,11 +15,11 @@
   <parent>
     <artifactId>tests-pom</artifactId>
     <groupId>org.eclipse.jdt</groupId>
-    <version>4.28.0-SNAPSHOT</version>
+    <version>4.30.0-SNAPSHOT</version>
     <relativePath>../tests-pom/</relativePath>
   </parent>
   <artifactId>org.eclipse.jdt.core.tests.compiler</artifactId>
-  <version>3.13.0-SNAPSHOT</version>
+  <version>3.13.200-SNAPSHOT</version>
   <packaging>eclipse-test-plugin</packaging>
 
   <properties>
@@ -128,6 +128,27 @@
 			<tycho.surefire.argLine>--add-modules ALL-SYSTEM -Dcompliance=1.4,1.7,1.8,17,20</tycho.surefire.argLine>
 		</properties>
 	</profile>
-  </profiles>
+	<profile>
+		<id>test-on-javase-21</id>
+		<build>
+			<plugins>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-toolchains-plugin</artifactId>
+					<configuration>
+						<toolchains>
+							<jdk>
+								<id>JavaSE-21</id>
+							</jdk>
+						</toolchains>
+					</configuration>
+				</plugin>
+			</plugins>
+		</build>
+		<properties>
+			<tycho.surefire.argLine>--add-modules ALL-SYSTEM -Dcompliance=1.4,1.8,17,19,21</tycho.surefire.argLine>
+		</properties>
+	</profile>
+	</profiles>
 
 </project>

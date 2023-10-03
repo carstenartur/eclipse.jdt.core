@@ -129,12 +129,23 @@ public class SourceTypeConverter extends TypeConverter {
 
 		if (sourceTypes.length == 0) return this.unit;
 		SourceTypeElementInfo topLevelTypeInfo = (SourceTypeElementInfo) sourceTypes[0];
+		// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/342
+		boolean couldBeVarargs = false;
+		if (topLevelTypeInfo.getHandle().isRecord()) {
+			for (IField field: topLevelTypeInfo.getHandle().getRecordComponents()) {
+				if (Signature.getTypeSignatureKind(field.getTypeSignature()) == Signature.ARRAY_TYPE_SIGNATURE) {
+					couldBeVarargs = true;
+					break;
+				}
+			}
+		}
 		org.eclipse.jdt.core.ICompilationUnit cuHandle = topLevelTypeInfo.getHandle().getCompilationUnit();
 		this.cu = (ICompilationUnit) cuHandle;
 		final CompilationUnitElementInfo compilationUnitElementInfo = (CompilationUnitElementInfo) ((JavaElement) this.cu).getElementInfo();
 		if (this.has1_5Compliance &&
 				(compilationUnitElementInfo.annotationNumber >= CompilationUnitElementInfo.ANNOTATION_THRESHOLD_FOR_DIET_PARSE ||
-				(compilationUnitElementInfo.hasFunctionalTypes && (this.flags & LOCAL_TYPE) != 0))) {
+				(compilationUnitElementInfo.hasFunctionalTypes && (this.flags & LOCAL_TYPE) != 0) ||
+				couldBeVarargs)) {
 			// If more than 10 annotations, diet parse as this is faster, but not if
 			// the client wants local and anonymous types to be converted (https://bugs.eclipse.org/bugs/show_bug.cgi?id=254738)
 			// Also see bug https://bugs.eclipse.org/bugs/show_bug.cgi?id=405843
@@ -633,7 +644,8 @@ public class SourceTypeConverter extends TypeConverter {
 				for (int i = 0; i < sourceMethodCount; i++) {
 					if (sourceMethods[i].isConstructor()) {
 						if (needConstructor) {
-							extraConstructor = 0; // Does not need the extra constructor since one constructor already exists.
+							if (!type.isRecord())     // Records need a canonical constructor - clashes with express ones handled elsewhere
+								extraConstructor = 0; // Does not need the extra constructor since one constructor already exists.
 							methodCount++;
 						}
 					} else if (needMethod) {

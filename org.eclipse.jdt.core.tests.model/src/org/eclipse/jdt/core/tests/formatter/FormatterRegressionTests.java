@@ -15948,7 +15948,7 @@ public void testBug567016() {
  * https://bugs.eclipse.org/573949 - [17][switch pattern][formatter] JEP 406 changes
  */
 public void testBug573949() {
-	setComplianceLevel(CompilerOptions.VERSION_19);
+	setComplianceLevel(CompilerOptions.VERSION_21);
 	this.formatterOptions.put(JavaCore.COMPILER_PB_ENABLE_PREVIEW_FEATURES, JavaCore.ENABLED);
 	String source =
 		"public class X {\n" +
@@ -16168,7 +16168,7 @@ public void testBug578361f() throws JavaModelException {
  * https://github.com/eclipse-jdt/eclipse.jdt.core/issues/264 - [19] Formatter support for JEP 405: Record Patterns
  */
 public void testIssue264a() {
-	setComplianceLevel(CompilerOptions.VERSION_19);
+	setComplianceLevel(CompilerOptions.VERSION_21);
 	this.formatterOptions.put(JavaCore.COMPILER_PB_ENABLE_PREVIEW_FEATURES, JavaCore.ENABLED);
 	String source =
 		"public class X{int baz(Bar bar){return switch(bar){\n" +
@@ -16187,7 +16187,7 @@ public void testIssue264a() {
  * https://github.com/eclipse-jdt/eclipse.jdt.core/issues/264 - [19] Formatter support for JEP 405: Record Patterns
  */
 public void testIssue264b() {
-	setComplianceLevel(CompilerOptions.VERSION_19);
+	setComplianceLevel(CompilerOptions.VERSION_21);
 	this.formatterOptions.put(JavaCore.COMPILER_PB_ENABLE_PREVIEW_FEATURES, JavaCore.ENABLED);
 	this.formatterPrefs.insert_space_before_comma_in_record_components = false;
 	this.formatterPrefs.insert_space_after_comma_in_record_components = false;
@@ -16223,4 +16223,46 @@ public void testBug564052() {
 		"		C3 {\n" +
 		"}");
 }
+
+/**
+ * https://github.com/eclipse-jdt/eclipse.jdt/issues/59 - Formatter support for guard expressions
+ */
+public void testGH59() {
+	setComplianceLevel(CompilerOptions.VERSION_21);
+
+	String source =
+		"""
+		public class JunkClass {
+		    Object myObj;
+
+		    void foo() {
+		            when(myObj);
+		        foo(myObj);
+		        foo(myObj);
+		    }
+
+		    void foo( Object stuff ) {}
+		    void when( Object methodCall ) {}
+		}
+		""";
+	formatSource(source,
+		"""
+		public class JunkClass {
+			Object myObj;
+
+			void foo() {
+				when(myObj);
+				foo(myObj);
+				foo(myObj);
+			}
+
+			void foo(Object stuff) {
+			}
+
+			void when(Object methodCall) {
+			}
+		}
+		""");
+}
+
 }

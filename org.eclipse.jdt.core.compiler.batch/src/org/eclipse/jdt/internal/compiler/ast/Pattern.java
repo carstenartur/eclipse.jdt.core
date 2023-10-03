@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2021, 2022 IBM Corporation and others.
+ * Copyright (c) 2021, 2023 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -15,6 +15,7 @@ package org.eclipse.jdt.internal.compiler.ast;
 
 import java.util.function.Supplier;
 
+import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.codegen.BranchLabel;
 import org.eclipse.jdt.internal.compiler.codegen.CodeStream;
 import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
@@ -25,16 +26,60 @@ import org.eclipse.jdt.internal.compiler.lookup.TypeBinding;
 public abstract class Pattern extends Expression {
 
 	/* package */ boolean isTotalTypeNode = false;
-	static final char[] SECRET_PATTERN_VARIABLE_NAME = "secretPatternVariable".toCharArray(); //$NON-NLS-1$
+	static final String SECRET_PATTERN_VARIABLE_NAME = " secretPatternVariable"; //$NON-NLS-1$
 
 	public LocalVariableBinding secretPatternVariable = null;
 
+	public Boolean containsTypeElidedPatternVar = null;
+
+	private Pattern enclosingPattern;
 	protected MethodBinding accessorMethod;
 	/* package */ BranchLabel elseTarget;
 	/* package */ BranchLabel thenTarget;
 
+	public int nestingLevel = 0;
 
-	public boolean isTotalForType(TypeBinding type) {
+	@Override
+	public boolean containsPatternVariable() {
+		class PatternVariablesVisitor extends ASTVisitor {
+			public boolean hasPatternVar = false;
+			public boolean typeElidedVar =  false;
+
+			@Override
+			public boolean visit(TypePattern typePattern, BlockScope blockScope) {
+				 this.hasPatternVar = typePattern.local != null;
+				 this.typeElidedVar |= typePattern.getType().isTypeNameVar(blockScope);
+				 return !(this.hasPatternVar && this.typeElidedVar);
+			}
+ 		}
+
+		PatternVariablesVisitor pvv = new PatternVariablesVisitor();
+		this.traverse(pvv, (BlockScope) null);
+		this.containsTypeElidedPatternVar = pvv.typeElidedVar;
+		return pvv.hasPatternVar;
+	}
+
+	/**
+	 * @return the enclosingPattern
+	 */
+	public Pattern getEnclosingPattern() {
+		return this.enclosingPattern;
+	}
+
+	/**
+	 * @param enclosingPattern the enclosingPattern to set
+	 */
+	public void setEnclosingPattern(Pattern enclosingPattern) {
+		this.enclosingPattern = enclosingPattern;
+		this.nestingLevel = enclosingPattern.nestingLevel+1;
+	}
+	/**
+	 * Implement the rules in the spec under 14.11.1.1 Exhaustive Switch Blocks
+	 *
+	 * @param type
+	 * @return whether pattern covers the given type or not
+	 */
+	public boolean coversType(TypeBinding type) {
 		return false;
 	}
 	public TypeBinding resolveAtType(BlockScope scope, TypeBinding type) {
@@ -52,11 +97,14 @@ public abstract class Pattern extends Expression {
 	}
 	@Override
 	public void generateCode(BlockScope currentScope, CodeStream codeStream) {
+		setTargets(codeStream);
+		generateOptimizedBoolean(currentScope, codeStream, this.thenTarget, this.elseTarget);
+	}
+	/* package */ void setTargets(CodeStream codeStream) {
 		if (this.elseTarget == null)
 			this.elseTarget = new BranchLabel(codeStream);
 		if (this.thenTarget == null)
 			this.thenTarget = new BranchLabel(codeStream);
-		generateOptimizedBoolean(currentScope, codeStream, this.thenTarget, this.elseTarget);
 	}
 	public void suspendVariables(CodeStream codeStream, BlockScope scope) {
 		// nothing by default

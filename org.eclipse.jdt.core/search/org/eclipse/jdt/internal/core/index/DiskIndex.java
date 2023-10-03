@@ -53,7 +53,7 @@ private int bufferIndex, bufferEnd; // used when reading from the file into the 
 private int streamEnd; // used when writing data from the streamBuffer to the file
 char separator = Index.DEFAULT_SEPARATOR;
 
-public static final String INDEX_VERSION = "1.132"; //$NON-NLS-1$
+public static final String INDEX_VERSION = "1.134"; //$NON-NLS-1$
 public static final String SIGNATURE = "INDEX VERSION " + INDEX_VERSION; //$NON-NLS-1$
 private static final char[] SIGNATURE_CHARS = SIGNATURE.toCharArray();
 public static boolean DEBUG = false;
@@ -403,11 +403,11 @@ void initialize(boolean reuseExistingFile) throws IOException {
 			}
 			this.streamBuffer = new byte[BUFFER_READ_SIZE];
 			this.bufferIndex = 0;
-			this.bufferEnd = stream.read(this.streamBuffer, 0, 128);
 			try {
+				this.bufferEnd = stream.read(this.streamBuffer, 0, 128);
 				char[] signature = readStreamChars(stream);
 				if (!CharOperation.equals(signature, SIGNATURE_CHARS)) {
-					throw new IOException(Messages.exception_wrongFormat);
+					throw new IOException(NLS.bind(Messages.exception_wrongFormat, String.valueOf(signature), SIGNATURE));
 				}
 				this.headerInfoOffset = readStreamInt(stream);
 				if (this.headerInfoOffset > 0) { // file is empty if its not set

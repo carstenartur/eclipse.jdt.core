@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2016 IBM Corporation and others.
+ * Copyright (c) 2000, 2022 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -17,6 +17,8 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Predicate;
 
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.IStatus;
@@ -24,37 +26,62 @@ import org.eclipse.core.runtime.OperationCanceledException;
 import org.eclipse.core.runtime.Status;
 import org.eclipse.core.runtime.SubMonitor;
 import org.eclipse.core.runtime.jobs.Job;
+import org.eclipse.jdt.internal.core.JavaModelManager;
 import org.eclipse.jdt.internal.core.util.Messages;
 import org.eclipse.jdt.internal.core.util.Util;
 
-public abstract class JobManager implements Runnable {
+public abstract class JobManager {
 
-	/* queue of jobs to execute */
-	protected List<IJob> awaitingJobs = new LinkedList<>();
+	/**
+	 * queue of jobs to execute
+	 * <br>
+	 * synchronized by JobManager.this
+	 */
+	private List<IJob> awaitingJobs = new LinkedList<>();
 
-	protected volatile boolean executing;
+	private volatile boolean executing;
 
-	/* background processing */
-	protected volatile Thread processingThread;
-	protected volatile Job progressJob;
+	/**
+	 * background processing
+	 * <br>
+	 * synchronized by JobManager.this
+	 */
+	private Thread processingThread;
 
-	/* counter indicating whether job execution is enabled or not, disabled if <= 0
-	    it cannot go beyond 1 */
+	private volatile Job progressJob;
+
+	/**
+	 * counter indicating whether job execution is enabled or not, disabled if <= 0
+	 * it cannot go beyond 1
+	 * <br>
+	 * synchronized by JobManager.this
+	 */
 	private int enableCount = 1;
 
 	public static boolean VERBOSE = false;
-	/* flag indicating that the activation has completed */
-	public boolean activated = false;
 
-	private int awaitingClients = 0;
+	/**
+	 * flag indicating that the activation has completed
+	 * <br>
+	 * synchronized by JobManager.this
+	 */
+	private boolean activated;
+
+	private AtomicInteger awaitingClients = new AtomicInteger();
 
 	private final Object idleMonitor = new Object();
 
+	private synchronized Thread getProcessingThread() {
+		return this.processingThread;
+	}
 	/**
 	 * Invoked exactly once, in background, before starting processing any job
 	 */
-	public void activateProcessing() {
+	synchronized void activateProcessing() {
 		this.activated = true;
+		// someone may wait for awaitingJobsCount() that returned dummy job count
+		// before indexer was started
+		notifyAll();
 	}
 	/**
 	 * Answer the amount of awaiting jobs.
@@ -120,20 +147,23 @@ public abstract class JobManager implements Runnable {
 			if (currentJob != null && (jobFamily == null || currentJob.belongsTo(jobFamily))) {
 				currentJob.cancel();
 
-				// wait until current active job has finished
-				while (this.processingThread != null && this.executing){
-					try {
-						if (VERBOSE)
-							Util.verbose("-> waiting end of current background job - " + currentJob); //$NON-NLS-1$
-						Thread.sleep(50);
-					} catch(InterruptedException e){
-						// ignore
+				synchronized (this) {
+					// wait until current active job has finished
+					while (getProcessingThread() != null && this.executing){
+						try {
+							if (VERBOSE)
+								Util.verbose("-> waiting end of current background job - " + currentJob); //$NON-NLS-1$
+							this.wait(50);
+						} catch(InterruptedException e){
+							// ignore
+						}
 					}
 				}
 			}
 
 			synchronized(this) {
 				Iterator<IJob> it = this.awaitingJobs.iterator();
+				boolean notify = false;
 				while (it.hasNext()) {
 					currentJob = it.next();
 					if (jobFamily == null || currentJob.belongsTo(jobFamily)) {
@@ -142,7 +172,11 @@ public abstract class JobManager implements Runnable {
 						}
 						currentJob.cancel();
 						it.remove();
+						notify = true;
 					}
+				}
+				if (notify){
+					notifyAll(); // notify waiters for awaitingJobsCount()
 				}
 			}
 		} finally {
@@ -161,8 +195,16 @@ public abstract class JobManager implements Runnable {
 		if(this.awaitingJobs.size() <= 1) {
 			return false;
 		}
+		return hasPendingJobMatching(request::equals);
+	}
+
+	protected synchronized boolean hasPendingJobMatching(Predicate<IJob> request) {
+		int awaitingJobsCount = awaitingJobsCount();
+		if (awaitingJobsCount <= 1) {
+			return false;
+		}
 		// Start at the end and go backwards
-		ListIterator<IJob> iterator = this.awaitingJobs.listIterator(this.awaitingJobs.size());
+		ListIterator<IJob> iterator = this.awaitingJobs.listIterator(awaitingJobsCount);
 		IJob first = this.awaitingJobs.get(0);
 		while (iterator.hasPrevious()) {
 			IJob job = iterator.previous();
@@ -170,12 +212,13 @@ public abstract class JobManager implements Runnable {
 			if(job == first) {
 				break;
 			}
-			if (request.equals(job)) {
+			if (request.test(job)) {
 				return true;
 			}
 		}
 		return false;
 	}
+
 	/**
 	 * Advance to the next available job, once the current one has been completed.
 	 * Note: clients awaiting until the job count is zero are still waiting at this point.
@@ -195,9 +238,8 @@ public abstract class JobManager implements Runnable {
 	/**
 	 * When idle, give chance to do something
 	 */
-	protected void notifyIdle(long idlingTime) {
-		// do nothing
-	}
+	protected abstract void notifyIdle(long idlingMilliSeconds);
+
 	/**
 	 * This API is allowing to run one job in concurrence with background processing.
 	 * Indeed since other jobs are performed in background, resource sharing might be
@@ -253,21 +295,19 @@ public abstract class JobManager implements Runnable {
 						SubMonitor waitMonitor = subMonitor.setWorkRemaining(10).split(8).setWorkRemaining(totalWork);
 						// use local variable to avoid potential NPE (see bug 20435 NPE when searching java method
 						// and bug 42760 NullPointerException in JobManager when searching)
-						Thread t = this.processingThread;
+						Thread t = getProcessingThread();
 						int originalPriority = t == null ? -1 : t.getPriority();
 						try {
 							if (t != null)
 								t.setPriority(Thread.currentThread().getPriority());
-							synchronized(this) {
-								this.awaitingClients++;
-							}
+							this.awaitingClients.incrementAndGet();
 							IJob previousJob = null;
 							int awaitingJobsCount;
 							int lastJobsCount = totalWork;
 							float lastWorked = 0;
 							float totalWorked = 0;
 							while ((awaitingJobsCount = awaitingJobsCount()) > 0) {
-								if (waitMonitor.isCanceled() || this.processingThread == null)
+								if (waitMonitor.isCanceled() || getProcessingThread() == null)
 									throw new OperationCanceledException();
 
 								boolean shouldDisable = false;
@@ -322,9 +362,7 @@ public abstract class JobManager implements Runnable {
 								}
 							}
 						} finally {
-							synchronized(this) {
-								this.awaitingClients--;
-							}
+							this.awaitingClients.decrementAndGet();
 							if (t != null && originalPriority > -1 && t.isAlive())
 								t.setPriority(originalPriority);
 						}
@@ -371,34 +409,33 @@ public abstract class JobManager implements Runnable {
 		if (VERBOSE)
 			Util.verbose("Reset"); //$NON-NLS-1$
 
-		Thread thread;
-		synchronized (this) {
-			thread = this.processingThread;
-		}
+		Thread thread = getProcessingThread();
 
 		if (thread != null) {
 			discardJobs(null); // discard all jobs
 		} else {
 			synchronized (this) {
 				/* initiate background processing */
-				this.processingThread = new Thread(this, processName());
-				this.processingThread.setDaemon(true);
+				Thread t = new Thread(this::indexerLoop, processName());
+				t.setDaemon(true);
 				// less prioritary by default, priority is raised if clients are actively waiting on it
-				this.processingThread.setPriority(Thread.NORM_PRIORITY-1);
+				t.setPriority(Thread.NORM_PRIORITY-1);
 				// https://bugs.eclipse.org/bugs/show_bug.cgi?id=296343
 				// set the context loader to avoid leaking the current context loader
-				this.processingThread.setContextClassLoader(this.getClass().getClassLoader());
-				this.processingThread.start();
+				t.setContextClassLoader(this.getClass().getClassLoader());
+				t.start();
+				this.processingThread = t;
 			}
 		}
 	}
+
 	/**
 	 * Infinite loop performing resource indexing
 	 */
-	@Override
-	public void run() {
+	void indexerLoop() {
 
-		long idlingStart = -1;
+		boolean cacheZipFiles = false;
+		Long idlingStart = null;
 		activateProcessing();
 		try {
 			class ProgressJob extends Job {
@@ -431,12 +468,12 @@ public abstract class JobManager implements Runnable {
 				}
 			}
 			this.progressJob = null;
-			while (this.processingThread != null) {
+			while (getProcessingThread() != null) {
 				try {
 					IJob job;
 					synchronized (this) {
 						// handle shutdown case when notifyAll came before the wait but after the while loop was entered
-						if (this.processingThread == null) continue;
+						if (getProcessingThread() == null) continue;
 
 						// must check for new job inside this sync block to avoid timing hole
 						if ((job = currentJob()) == null) {
@@ -445,23 +482,31 @@ public abstract class JobManager implements Runnable {
 								pJob.cancel();
 								this.progressJob = null;
 							}
-							if (idlingStart < 0)
-								idlingStart = System.currentTimeMillis();
-							else
-								notifyIdle(System.currentTimeMillis() - idlingStart);
-							this.wait(); // wait until a new job is posted (or reenabled:38901)
-						} else {
-							idlingStart = -1;
+							if (idlingStart == null) {
+								idlingStart = System.nanoTime();
+							} else {
+								this.wait(); // wait until a new job is posted or disabled indexer is enabled again
+							}
 						}
 					}
 					if (job == null) {
-						notifyIdle(System.currentTimeMillis() - idlingStart);
+						// don't call notifyIdle() within synchronized block or it may deadlock:
+						notifyIdle((System.nanoTime() - idlingStart) / 1_000_000);
+						if (currentJob() != null) {
+							// notifyIdle() may have requested new job
+							continue;
+						}
+						if (cacheZipFiles) {
+							JavaModelManager.getJavaModelManager().flushZipFiles(this);
+							cacheZipFiles = false;
+						}
 						// just woke up, delay before processing any new jobs, allow some time for the active thread to finish
 						synchronized (this.idleMonitor) {
 							this.idleMonitor.wait(500); // avoid sleep fixed time
 						}
 						continue;
 					}
+					idlingStart = null;
 					if (VERBOSE) {
 						Util.verbose(awaitingJobsCount() + " awaiting jobs"); //$NON-NLS-1$
 						Util.verbose("STARTING background job - " + job); //$NON-NLS-1$
@@ -475,14 +520,17 @@ public abstract class JobManager implements Runnable {
 							pJob.schedule();
 							this.progressJob = pJob;
 						}
-						/*boolean status = */job.execute(null);
-						//if (status == FAILED) request(job);
+						if (!cacheZipFiles) {
+							JavaModelManager.getJavaModelManager().cacheZipFiles(this);
+							cacheZipFiles = true;
+						}
+						job.execute(null); // may enqueue a new job
 					} finally {
 						this.executing = false;
 						if (VERBOSE)
 							Util.verbose("FINISHED background job - " + job); //$NON-NLS-1$
 						moveToNextJob();
-						if (this.awaitingClients == 0 && job.waitNeeded()) {
+						if (this.awaitingClients.get() == 0 && job.waitNeeded()) {
 							if (VERBOSE) {
 								Util.verbose("WAITING after job - " + job); //$NON-NLS-1$
 							}
@@ -494,28 +542,27 @@ public abstract class JobManager implements Runnable {
 				} catch (InterruptedException e) { // background indexing was interrupted
 				}
 			}
-		} catch (RuntimeException e) {
-			if (this.processingThread != null) { // if not shutting down
+		} catch (ThreadDeath e) {
+			// do not restart
+			throw e;
+		} catch (RuntimeException|Error e) {
+			if (getProcessingThread() != null) { // if not shutting down
 				// log exception
 				Util.log(e, "Background Indexer Crash Recovery"); //$NON-NLS-1$
 
 				// keep job manager alive
 				discardJobs(null);
-				this.processingThread = null;
+				synchronized (this) {
+					this.processingThread = null;
+				}
 				reset(); // this will fork a new thread with no waiting jobs, some indexes will be inconsistent
 			}
 			throw e;
-		} catch (Error e) {
-			if (this.processingThread != null && !(e instanceof ThreadDeath)) {
-				// log exception
-				Util.log(e, "Background Indexer Crash Recovery"); //$NON-NLS-1$
-
-				// keep job manager alive
-				discardJobs(null);
-				this.processingThread = null;
-				reset(); // this will fork a new thread with no waiting jobs, some indexes will be inconsistent
+		} finally {
+			if (cacheZipFiles) {
+				JavaModelManager.getJavaModelManager().flushZipFiles(this);
+				cacheZipFiles = false;
 			}
-			throw e;
 		}
 	}
 	/**
@@ -528,7 +575,7 @@ public abstract class JobManager implements Runnable {
 
 		disable();
 		discardJobs(null); // will wait until current executing job has completed
-		Thread thread = this.processingThread;
+		Thread thread = getProcessingThread();
 		try {
 			if (thread != null) { // see http://bugs.eclipse.org/bugs/show_bug.cgi?id=31858
 				synchronized (this) {
@@ -548,7 +595,7 @@ public abstract class JobManager implements Runnable {
 		}
 	}
 	@Override
-	public String toString() {
+	public synchronized String toString() {
 		StringBuilder buffer = new StringBuilder(10);
 		buffer.append("Enable count:").append(this.enableCount).append('\n'); //$NON-NLS-1$
 		int numJobs = this.awaitingJobs.size();

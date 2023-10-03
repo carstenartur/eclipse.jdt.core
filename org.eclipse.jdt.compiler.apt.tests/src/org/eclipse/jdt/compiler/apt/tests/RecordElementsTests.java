@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2020, 2021 IBM Corporation.
+ * Copyright (c) 2020, 2023 IBM Corporation.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -32,7 +32,7 @@ public class RecordElementsTests extends TestCase {
 	private static final String MODULE_PROC = "org.eclipse.jdt.compiler.apt.tests.processors.elements.RecordElementProcessor";
 
 	public void testPreviewFlagTrue() throws IOException {
-		if (!isRunning17()) {
+		if (!isRunning21()) {
 			return;
 		}
 		JavaCompiler compiler = BatchTestUtils.getEclipseCompiler();
@@ -142,7 +142,28 @@ public class RecordElementsTests extends TestCase {
 		JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
 		internalTestWithPreview(compiler, MODULE_PROC, "16", "testRecords10", null, "records", false);
 	}
-
+	public void testRecordsConstructorsJavac() throws IOException {
+		if (!canRunJava21()) {
+			return;
+		}
+		JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+		internalTestWithPreview(compiler, MODULE_PROC, "21", "testRecordsConstructors", null, "records", true, true);
+	}
+	public void testRecordsConstructors() throws IOException {
+		if (!canRunJava21()) {
+			return;
+		}
+		JavaCompiler compiler = BatchTestUtils.getEclipseCompiler();
+		internalTestWithPreview(compiler, MODULE_PROC, "21", "testRecordsConstructors", null, "records", true, true);
+	}
+	public boolean canRunJava21() {
+		try {
+			SourceVersion.valueOf("RELEASE_21");
+		} catch(IllegalArgumentException iae) {
+			return false;
+		}
+		return true;
+	}
 	protected void internalTestWithPreview(JavaCompiler compiler, String processor, String compliance,
 			String testMethod, String testClass, String resourceArea, boolean preview) throws IOException {
 		internalTestWithPreview(compiler, processor, compliance, testMethod, testClass, resourceArea, preview, false);
@@ -177,6 +198,14 @@ public class RecordElementsTests extends TestCase {
 		// If it succeeded, the processor will have set this property to "succeeded";
 		// if not, it will set it to an error value.
 		assertEquals("succeeded", System.getProperty(processor));
+	}
+	public boolean isRunning21() {
+		try {
+			SourceVersion.valueOf("RELEASE_21");
+		} catch(IllegalArgumentException iae) {
+			return false;
+		}
+		return true;
 	}
 	public boolean isRunning17() {
 		try {

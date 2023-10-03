@@ -130,6 +130,20 @@ public class InternalCompletionProposal extends CompletionProposal {
 	 */
 	private char[] declarationKey = null;
 
+ 	/**
+	 * Type variable names of the relevant type declaration
+	 * in the context.
+	 *
+	 * Defaults to null if not set.
+	 *
+	 */
+	private char[][] declarationTypeVariables = null;
+
+	/**
+	 * Indicates whether the proposal is a context-compatible proposal.
+	 */
+	private boolean isCompatibleProposal = true;
+
 	/**
 	 * Simple name of the method, field,
 	 * member, or variable relevant in the context, or
@@ -191,6 +205,11 @@ public class InternalCompletionProposal extends CompletionProposal {
 	 * Indicates whether parameter names have been computed.
 	 */
 	private boolean parameterNamesComputed = false;
+
+	/**
+	 * If represents the array type completion, this holds the receivers array dimensions.
+	 */
+	private int arrayDimensions = 0;
 
 	protected char[][] findConstructorParameterNames(char[] declaringTypePackageName, char[] declaringTypeName, char[] selector, char[][] paramTypeNames){
 		if(paramTypeNames == null || declaringTypeName == null) return null;
@@ -1083,6 +1102,9 @@ public class InternalCompletionProposal extends CompletionProposal {
 				break;
 			case CompletionProposal.TYPE_REF :
 				buffer.append("TYPE_REF"); //$NON-NLS-1$
+				if (this.arrayDimensions > 0) {
+					buffer.append("<ARRAY>"); //$NON-NLS-1$
+				}
 				break;
 			case CompletionProposal.VARIABLE_DECLARATION :
 				buffer.append("VARIABLE_DECLARATION"); //$NON-NLS-1$
@@ -1194,10 +1216,48 @@ public class InternalCompletionProposal extends CompletionProposal {
 			for (int i= 0; i < types.length; i++) {
 				paramTypeNames[i]= new String(Signature.toCharArray(types[i]));
 			}
+			if (this.declarationTypeVariables != null) {
+				return internalCompletionContext.extendedContext.canUseDiamond(paramTypeNames, this.declarationTypeVariables);
+			}
 			return internalCompletionContext.extendedContext.canUseDiamond(paramTypeNames,declarationType);
 		}
 		else {
 			return false;
 		}
+	}
+
+	@Override
+	public int getArrayDimensions() {
+		return this.arrayDimensions;
+	}
+
+	public void setArrayDimensions(int dimensions) {
+		this.arrayDimensions = dimensions;
+	}
+
+	/**
+	 * Returns the type variables of the declaring type corresponding to this proposal.
+	 *
+	 * If not set, defaults to null.
+	 *
+	 * @return the type variable names
+	 */
+	public char[][] getDeclarationTypeVariables() {
+		return this.declarationTypeVariables;
+	}
+
+	public void setDeclarationTypeVariables(char[][] declarationTypeVariables) {
+		this.declarationTypeVariables = declarationTypeVariables;
+	}
+
+	/**
+	 * Returns whether the completion proposal is a context-compatible proposal.
+	 */
+	public boolean isCompatibleProposal() {
+		return this.isCompatibleProposal;
+	}
+
+	public void setCompatibleProposal(boolean isCompatibleProposal) {
+		this.isCompatibleProposal = isCompatibleProposal;
 	}
 }

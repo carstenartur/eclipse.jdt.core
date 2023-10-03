@@ -897,6 +897,7 @@ public class NaiveASTFlattener extends ASTVisitor {
 	}
 
 
+	@SuppressWarnings("deprecation")
 	@Override
 	public boolean visit(PatternInstanceofExpression node) {
 		node.getLeftOperand().accept(this);
@@ -1450,10 +1451,6 @@ public class NaiveASTFlattener extends ASTVisitor {
 			}
 			if (addBraces) {
 				this.buffer.append(")");//$NON-NLS-1$
-			}
-			if (node.getPatternName() != null) {
-				this.buffer.append(" ");//$NON-NLS-1$
-				node.getPatternName().accept(this);
 			}
 		}
 		return false;

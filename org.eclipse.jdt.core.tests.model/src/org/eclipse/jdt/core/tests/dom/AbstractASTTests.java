@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004, 2022 IBM Corporation and others.
+ * Copyright (c) 2004, 2023 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -494,7 +494,11 @@ public class AbstractASTTests extends ModifyingResourceTests implements DefaultM
 		String option = cu.getJavaProject().getOption(JavaCore.COMPILER_COMPLIANCE, true);
 		long jdkLevel = CompilerOptions.versionToJdkLevel(option);
 		int JLSLevel = AST_INTERNAL_JLS3;
-		if (jdkLevel >= ClassFileConstants.getComplianceLevelForJavaVersion(ClassFileConstants.MAJOR_VERSION_19)) {
+		if (jdkLevel >= ClassFileConstants.getComplianceLevelForJavaVersion(ClassFileConstants.MAJOR_VERSION_21)) {
+			JLSLevel = AST_INTERNAL_JLS21;
+		} else if (jdkLevel >= ClassFileConstants.getComplianceLevelForJavaVersion(ClassFileConstants.MAJOR_VERSION_20)) {
+			JLSLevel = AST_INTERNAL_JLS20;
+		} else if (jdkLevel >= ClassFileConstants.getComplianceLevelForJavaVersion(ClassFileConstants.MAJOR_VERSION_19)) {
 			JLSLevel = AST_INTERNAL_JLS19;
 		} else if (jdkLevel >= ClassFileConstants.getComplianceLevelForJavaVersion(ClassFileConstants.MAJOR_VERSION_18)) {
 			JLSLevel = AST_INTERNAL_JLS18;

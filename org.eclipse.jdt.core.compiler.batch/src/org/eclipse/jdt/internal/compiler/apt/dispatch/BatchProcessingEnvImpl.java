@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2015 BEA Systems, Inc.
+ * Copyright (c) 2006, 2023 BEA Systems, Inc.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -47,9 +47,9 @@ public class BatchProcessingEnvImpl extends BaseProcessingEnvImpl {
 			String[] commandLineArguments)
 	{
 		super();
-		_compilerOwner = batchCompiler;
-		_compiler = batchCompiler.batchCompiler;
-		_dispatchManager = dispatchManager;
+		this._compilerOwner = batchCompiler;
+		this._compiler = batchCompiler.batchCompiler;
+		this._dispatchManager = dispatchManager;
 		Class<?> c = null;
 		try {
 			c = Class.forName("org.eclipse.jdt.internal.compiler.tool.EclipseCompilerImpl"); //$NON-NLS-1$
@@ -79,9 +79,9 @@ public class BatchProcessingEnvImpl extends BaseProcessingEnvImpl {
 			}
 		}
 		if (javaFileManager != null) {
-			_fileManager = javaFileManager;
+			this._fileManager = javaFileManager;
 		} else {
-			String encoding = (String) batchCompiler.options.get(CompilerOptions.OPTION_Encoding);
+			String encoding = batchCompiler.options.get(CompilerOptions.OPTION_Encoding);
 			Charset charset = encoding != null ? Charset.forName(encoding) : null;
 			JavaFileManager manager = new EclipseFileManager(batchCompiler.compilerLocale, charset);
 			ArrayList<String> options = new ArrayList<>();
@@ -89,11 +89,11 @@ public class BatchProcessingEnvImpl extends BaseProcessingEnvImpl {
 			for (Iterator<String> iterator = options.iterator(); iterator.hasNext(); ) {
 				manager.handleOption(iterator.next(), iterator);
 			}
-			_fileManager = manager;
+			this._fileManager = manager;
 		}
-		_processorOptions = Collections.unmodifiableMap(parseProcessorOptions(commandLineArguments));
-		_filer = new BatchFilerImpl(_dispatchManager, this);
-		_messager = new BatchMessagerImpl(this, _compilerOwner);
+		this._processorOptions = Collections.unmodifiableMap(parseProcessorOptions(commandLineArguments));
+		this._filer = new BatchFilerImpl(this._dispatchManager, this);
+		this._messager = new BatchMessagerImpl(this, this._compilerOwner);
 	}
 
 	/**
@@ -133,14 +133,14 @@ public class BatchProcessingEnvImpl extends BaseProcessingEnvImpl {
 		}
 		return options;
 	}
-
+	@Override
 	public JavaFileManager getFileManager() {
-		return _fileManager;
+		return this._fileManager;
 	}
 
 	@Override
 	public Locale getLocale() {
-		return _compilerOwner.compilerLocale;
+		return this._compilerOwner.compilerLocale;
 	}
 
 	public boolean shouldIgnoreOptionalProblems(char[] fileName) {

@@ -162,9 +162,9 @@ public class ClasspathEntry implements IClasspathEntry {
 	 * Patterns allowing to include/exclude portions of the resource tree denoted by this entry path.
 	 */
 	private IPath[] inclusionPatterns;
-	private char[][] fullInclusionPatternChars;
+	private volatile char[][] fullInclusionPatternChars;
 	private IPath[] exclusionPatterns;
-	private char[][] fullExclusionPatternChars;
+	private volatile char[][] fullExclusionPatternChars;
 	private final static char[][] UNINIT_PATTERNS = new char[][] { "Non-initialized yet".toCharArray() }; //$NON-NLS-1$
 	public final static ClasspathEntry[] NO_ENTRIES = new ClasspathEntry[0];
 	private final static IPath[] NO_PATHS = new IPath[0];
@@ -552,12 +552,12 @@ public class ClasspathEntry implements IClasspathEntry {
 
 		if (this.fullExclusionPatternChars == UNINIT_PATTERNS) {
 			int length = this.exclusionPatterns.length;
-			this.fullExclusionPatternChars = new char[length][];
+			char[][] chars = new char[length][];
 			IPath prefixPath = this.path.removeTrailingSeparator();
 			for (int i = 0; i < length; i++) {
-				this.fullExclusionPatternChars[i] =
-					prefixPath.append(this.exclusionPatterns[i]).toString().toCharArray();
+				chars[i] = prefixPath.append(this.exclusionPatterns[i]).toString().toCharArray();
 			}
+			this.fullExclusionPatternChars = chars;
 		}
 		return this.fullExclusionPatternChars;
 	}
@@ -569,12 +569,12 @@ public class ClasspathEntry implements IClasspathEntry {
 
 		if (this.fullInclusionPatternChars == UNINIT_PATTERNS) {
 			int length = this.inclusionPatterns.length;
-			this.fullInclusionPatternChars = new char[length][];
+			char[][] chars = new char[length][];
 			IPath prefixPath = this.path.removeTrailingSeparator();
 			for (int i = 0; i < length; i++) {
-				this.fullInclusionPatternChars[i] =
-					prefixPath.append(this.inclusionPatterns[i]).toString().toCharArray();
+				chars[i] = prefixPath.append(this.inclusionPatterns[i]).toString().toCharArray();
 			}
+			this.fullInclusionPatternChars = chars;
 		}
 		return this.fullInclusionPatternChars;
 	}
@@ -1503,12 +1503,7 @@ public class ClasspathEntry implements IClasspathEntry {
 		return false;
 	}
 	public boolean isModular() {
-		for (int i = 0, length = this.extraAttributes.length; i < length; i++) {
-			IClasspathAttribute attribute = this.extraAttributes[i];
-			if (IClasspathAttribute.MODULE.equals(attribute.getName()) && "true".equals(attribute.getValue())) //$NON-NLS-1$
-				return true;
-		}
-		return false;
+		return isModular(this);
 	}
 
 	public String getSourceAttachmentEncoding() {
@@ -2586,5 +2581,20 @@ public class ClasspathEntry implements IClasspathEntry {
 		} else {
 			throw new IllegalArgumentException("Cannot set index location for specified test class"); //$NON-NLS-1$
 		}
+	}
+
+	/**
+	 * Checks if the specified classpath entry is on the module path for compilation.
+	 * @param classpathEntry The entry for which to check.
+	 * @return {@code true} if this classpath entry is on the compile module path, {@code false} otherwise.
+	 */
+	public static boolean isModular(IClasspathEntry classpathEntry) {
+		IClasspathAttribute[] extraAttributes = classpathEntry.getExtraAttributes();
+		for (int i = 0, length = extraAttributes.length; i < length; i++) {
+			IClasspathAttribute attribute = extraAttributes[i];
+			if (IClasspathAttribute.MODULE.equals(attribute.getName()) && "true".equals(attribute.getValue())) //$NON-NLS-1$
+				return true;
+		}
+		return false;
 	}
 }

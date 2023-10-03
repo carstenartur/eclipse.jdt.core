@@ -39,6 +39,8 @@ import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
  */
 public class IntersectionTypeBinding18 extends ReferenceBinding {
 
+	private static final char[] INTERSECTION_PACKAGE_NAME = "<package intersection>".toCharArray(); //$NON-NLS-1$
+
 	public ReferenceBinding [] intersectingTypes;
 	private ReferenceBinding javaLangObject;
 	int length;
@@ -256,6 +258,11 @@ public class IntersectionTypeBinding18 extends ReferenceBinding {
 	}
 
 	@Override
+	public char[] qualifiedPackageName() {
+		return INTERSECTION_PACKAGE_NAME;
+	}
+
+	@Override
 	public char[] qualifiedSourceName() {
 		StringBuilder qualifiedSourceName = new StringBuilder(16);
 		for (int i = 0; i < this.length; i++) {
@@ -372,5 +379,10 @@ public class IntersectionTypeBinding18 extends ReferenceBinding {
 		for (TypeBinding intersectingType : this.intersectingTypes)
 			this.tagBits |= intersectingType.updateTagBits();
 		return super.updateTagBits();
+	}
+
+	@Override
+	public boolean isNonDenotable() {
+		return true;
 	}
 }

@@ -121,6 +121,7 @@ $Terminals
 	RestrictedIdentifierpermits
 	BeginCaseElement
 	RestrictedIdentifierWhen
+	BeginRecordPattern
 
 --    BodyMarker
 
@@ -234,6 +235,8 @@ Goal ::= RestrictedIdentifierpermits PermittedSubclasses
 Goal ::= BeginCaseElement Pattern
 Goal ::= RestrictedIdentifierWhen Expression
 /:$readableName Goal:/
+
+Goal ::= '?' '(' RecordPattern
 
 Literal -> IntegerLiteral
 Literal -> LongLiteral
@@ -1250,14 +1253,9 @@ InstanceofPattern ::=  'instanceof' Pattern
 
 
 Pattern -> TypePattern
-Pattern -> ParenthesizedPattern
 Pattern -> RecordPattern
 /.$putCase consumePattern(); $break ./
 /:$readableName Pattern:/
-
-ParenthesizedPattern ::= PushLPAREN Pattern PushRPAREN
-/.$putCase consumeParenthesizedPattern(); $break ./
-/:$readableName ParenthesizedPattern:/
 
 TypePattern ::= Modifiersopt Type 'Identifier'
 /.$putCase consumeTypePattern(); $break ./
@@ -1268,39 +1266,31 @@ TypePattern ::= Modifiersopt Type 'Identifier'
 -----------------------------------------------
 
 -----------------------------------------------
--- 19 preview feature : record patterns
+-- 20 preview feature : record patterns
 -----------------------------------------------
 
-RecordPattern ::= Modifiersopt Type RecordStructurePattern
+RecordPattern ::= Modifiersopt ReferenceType PushLPAREN PatternListopt PushRPAREN
 /.$putCase consumeRecordPattern(); $break ./
 /:$readableName RecordPattern:/
-/:$compliance 19:/
+/:$compliance 20:/
 
-RecordPattern ::= Modifiersopt Type RecordStructurePattern 'Identifier'
-/.$putCase consumeRecordPatternWithId(); $break ./
-/:$readableName RecordPatternWithId:/
-/:$compliance 19:/
+PatternListopt ::=  $empty
+/.$putCase consumePatternListopt(); $break ./
+/:$readableName PatternListopt:/
+/:$compliance 20:/
 
-RecordStructurePattern ::= PushLPAREN RecordComponentPatternsopt PushRPAREN
-RecordStructurePattern ::= PushLPAREN RecordComponentPatternList PushRPAREN
-/.$putCase consumeRecordStructure(); $break ./
-/:$readableName RecordStructurePattern:/
-/:$compliance 19:/
+PatternListopt -> PatternList
+/:$readableName PatternListopt:/
+/:$compliance 20:/
 
-RecordComponentPatternsopt ::= $empty
-/.$putCase consumeRecordComponentPatternsopt(); $break ./
-/:$readableName RecordComponentsopt:/
-/:$compliance 19:/
-
-
-RecordComponentPatternList ::=  'Pattern'
-RecordComponentPatternList ::=  RecordComponentPatternList ',' 'Pattern'
-/.$putCase consumeRecordComponentPatternList();  $break ./
-/:$readableName RecordComponentPatternList:/
-/:$compliance 19:/
+PatternList -> Pattern
+PatternList ::= PatternList ',' Pattern
+/.$putCase consumePatternList();  $break ./
+/:$readableName PatternList:/
+/:$compliance 20:/
 
 -----------------------------------------------
--- 19 preview feature : end of record patterns
+-- 20 preview feature : end of record patterns
 -----------------------------------------------
 
 ConstantDeclaration -> FieldDeclaration
@@ -1457,19 +1447,31 @@ StatementExpression ::= MethodInvocation
 StatementExpression ::= ClassInstanceCreationExpression
 /:$readableName Expression:/
 
-IfThenStatement ::= 'if' '(' Expression ')' Statement
+PostExpressionInSwitchStatement ::= $empty
+/.$putCase consumePostExpressionInSwitch(true); $break ./
+
+PostExpressionInSwitchExpression ::= $empty
+/.$putCase consumePostExpressionInSwitch(false); $break ./
+
+PostExpressionInIf ::= $empty
+/.$putCase consumePostExpressionInIf(); $break ./
+
+PostExpressionInWhile ::= $empty
+/.$putCase consumePostExpressionInWhile(); $break ./
+
+IfThenStatement ::= 'if' '(' Expression ')' PostExpressionInIf Statement
 /.$putCase consumeStatementIfNoElse(); $break ./
 /:$readableName IfStatement:/
 
-IfThenElseStatement ::= 'if' '(' Expression ')' StatementNoShortIf 'else' Statement
+IfThenElseStatement ::= 'if' '(' Expression ')' PostExpressionInIf StatementNoShortIf 'else' Statement
 /.$putCase consumeStatementIfWithElse(); $break ./
 /:$readableName IfStatement:/
 
-IfThenElseStatementNoShortIf ::= 'if' '(' Expression ')' StatementNoShortIf 'else' StatementNoShortIf
+IfThenElseStatementNoShortIf ::= 'if' '(' Expression ')' PostExpressionInIf StatementNoShortIf 'else' StatementNoShortIf
 /.$putCase consumeStatementIfWithElse(); $break ./
 /:$readableName IfStatement:/
 
-SwitchStatement ::= 'switch' '(' Expression ')' OpenBlock SwitchBlock
+SwitchStatement ::= 'switch' '(' Expression ')' PostExpressionInSwitchStatement OpenBlock SwitchBlock
 /.$putCase consumeStatementSwitch() ; $break ./
 /:$readableName SwitchStatement:/
 
@@ -1509,7 +1511,7 @@ SwitchLabel ::= 'default' ':'
 UnaryExpressionNotPlusMinus -> SwitchExpression
 UnaryExpressionNotPlusMinus_NotName -> SwitchExpression
 
-SwitchExpression ::= 'switch' '(' Expression ')' OpenBlock SwitchBlock
+SwitchExpression ::= 'switch' '(' Expression ')' PostExpressionInSwitchExpression OpenBlock SwitchBlock
 /.$putCase consumeSwitchExpression() ; $break ./
 /:$readableName SwitchExpression:/
 
@@ -1583,11 +1585,11 @@ YieldStatement ::= RestrictedIdentifierYield Expression ;
 /.$putCase consumeStatementYield() ; $break ./
 /:$readableName YieldStatement:/
 
-WhileStatement ::= 'while' '(' Expression ')' Statement
+WhileStatement ::= 'while' '(' Expression ')' PostExpressionInWhile Statement
 /.$putCase consumeStatementWhile() ; $break ./
 /:$readableName WhileStatement:/
 
-WhileStatementNoShortIf ::= 'while' '(' Expression ')' StatementNoShortIf
+WhileStatementNoShortIf ::= 'while' '(' Expression ')' PostExpressionInWhile StatementNoShortIf
 /.$putCase consumeStatementWhile() ; $break ./
 /:$readableName WhileStatement:/
 
@@ -2495,6 +2497,21 @@ EnhancedForStatementHeader ::= EnhancedForStatementHeaderInit ':' Expression ')'
 /.$putCase consumeEnhancedForStatementHeader(); $break ./
 /:$readableName EnhancedForStatementHeader:/
 /:$compliance 1.5:/
+
+EnhancedForStatementHeaderInitRecord ::= 'for' '(' BeginRecordPattern RecordPattern
+/.$putCase consumeEnhancedForStatementHeaderInitRecord(false); $break ./
+/:$readableName EnhancedForStatementHeaderInitRecord:/
+/:$compliance 20:/
+
+EnhancedForStatementHeaderInitRecord ::= 'for' '(' Modifiers BeginRecordPattern RecordPattern
+/.$putCase consumeEnhancedForStatementHeaderInitRecord(true); $break ./
+/:$readableName EnhancedForStatementHeaderInitRecord:/
+/:$compliance 20:/
+
+EnhancedForStatementHeader ::= EnhancedForStatementHeaderInitRecord ':' Expression ')'
+/.$putCase consumeEnhancedForStatementHeader(); $break ./
+/:$readableName EnhancedForStatementHeader:/
+/:$compliance 20:/
 
 -----------------------------------------------
 -- 1.5 features : static imports

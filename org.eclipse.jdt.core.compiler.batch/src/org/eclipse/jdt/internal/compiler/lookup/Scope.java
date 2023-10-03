@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2022 IBM Corporation and others.
+ * Copyright (c) 2000, 2023 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -1158,6 +1158,18 @@ public abstract class Scope {
 		Scope scope = this;
 		while ((scope = scope.parent) != null) {
 			if (scope instanceof MethodScope) return (MethodScope) scope;
+		}
+		return null; // may answer null if no method around
+	}
+
+	public final MethodScope lexicallyEnclosingMethodScope() {
+		Scope scope = this;
+		while ((scope = scope.parent) != null) {
+			if (scope instanceof MethodScope) {
+				MethodScope methodScope = (MethodScope) scope;
+				if (methodScope.referenceContext instanceof AbstractMethodDeclaration)
+					return (MethodScope) scope;
+			}
 		}
 		return null; // may answer null if no method around
 	}
@@ -2921,6 +2933,26 @@ public abstract class Scope {
 		unitScope.recordQualifiedReference(TypeConstants.JAVA_LANG_RUNTIME_SWITCHBOOTSTRAPS);
 		return unitScope.environment.getResolvedJavaBaseType(TypeConstants.JAVA_LANG_RUNTIME_SWITCHBOOTSTRAPS, this);
 	}
+	public final ReferenceBinding getJavaLangInvokeConstantBootstraps() {
+		CompilationUnitScope unitScope = compilationUnitScope();
+		unitScope.recordQualifiedReference(TypeConstants.JAVA_LANG_INVOKE_CONSTANTBOOTSTRAP);
+		return unitScope.environment.getResolvedJavaBaseType(TypeConstants.JAVA_LANG_INVOKE_CONSTANTBOOTSTRAP, this);
+	}
+	public final ReferenceBinding getJavaLangEnumDesc() {
+		CompilationUnitScope unitScope = compilationUnitScope();
+		unitScope.recordQualifiedReference(TypeConstants.JAVA_LANG_ENUM_ENUMDESC);
+		return unitScope.environment.getResolvedJavaBaseType(TypeConstants.JAVA_LANG_ENUM_ENUMDESC, this);
+	}
+	public final ReferenceBinding getJavaLangClassDesc() {
+		CompilationUnitScope unitScope = compilationUnitScope();
+		unitScope.recordQualifiedReference(TypeConstants.JAVA_LANG_CONSTANT_CLASSDESC);
+		return unitScope.environment.getResolvedJavaBaseType(TypeConstants.JAVA_LANG_CONSTANT_CLASSDESC, this);
+	}
+	public final ReferenceBinding getJavaLangInvokeStringConcatFactory() {
+		CompilationUnitScope unitScope = compilationUnitScope();
+		unitScope.recordQualifiedReference(TypeConstants.JAVA_LANG_INVOKE_STRING_CONCAT_FACTORY);
+		return unitScope.environment.getResolvedJavaBaseType(TypeConstants.JAVA_LANG_INVOKE_STRING_CONCAT_FACTORY, this);
+	}
 	public final ReferenceBinding getJavaLangInvokeLambdaMetafactory() {
 		CompilationUnitScope unitScope = compilationUnitScope();
 		unitScope.recordQualifiedReference(TypeConstants.JAVA_LANG_INVOKE_LAMBDAMETAFACTORY);
@@ -3027,6 +3059,25 @@ public abstract class Scope {
 	*/
 	public final ReferenceBinding getMemberType(char[] typeName, ReferenceBinding enclosingType) {
 		ReferenceBinding memberType = findMemberType(typeName, enclosingType);
+		if (enclosingType.isHierarchyBeingConnected() && memberType == null && this.kind == CLASS_SCOPE) {
+			ClassScope scope = (ClassScope) this;
+			TypeReference superTypeReference = scope.referenceContext.superclass;
+			if (superTypeReference != null && superTypeReference.resolvedType instanceof ReferenceBinding) {
+				memberType = findMemberType(typeName, (ReferenceBinding) superTypeReference.resolvedType);
+			}
+			if (memberType == null && scope.referenceContext.superInterfaces != null
+					&& scope.referenceContext.superInterfaces.length > 0) {
+				TypeReference[] interfaces = scope.referenceContext.superInterfaces;
+				for (TypeReference reference : interfaces) {
+					if (reference != null && reference.resolvedType instanceof ReferenceBinding) {
+						memberType = findMemberType(typeName, (ReferenceBinding) reference.resolvedType);
+						if (memberType != null) {
+							break;
+						}
+					}
+				}
+			}
+		}
 		if (memberType != null) return memberType;
 		char[][] compoundName = new char[][] { typeName };
 		return new ProblemReferenceBinding(compoundName, null, ProblemReasons.NotFound);
@@ -4638,6 +4689,16 @@ public abstract class Scope {
 				return new ProblemMethodBinding(visible[0], visible[0].selector, visible[0].parameters, ProblemReasons.Ambiguous);
 			} else if (count == 1) {
 				MethodBinding candidate = moreSpecific[0];
+				if (visibleSize > 1 && candidate instanceof ParameterizedMethodBinding && invocationSite instanceof MessageSend) {
+					for (TypeBinding typeBinding : argumentTypes) {
+						if (!typeBinding.isProperType(true)) {
+							InferenceContext18 ic18 = ((MessageSend) invocationSite).getInferenceContext((ParameterizedMethodBinding) candidate);
+							if (ic18 != null)
+								ic18.prematureOverloadResolution = true;
+							break;
+						}
+					}
+				}
 				if (candidate != null)
 					compilationUnitScope().recordTypeReferences(candidate.thrownExceptions);
 				return candidate;
@@ -5149,12 +5210,6 @@ public abstract class Scope {
 		return null;
 	}
 
-	public boolean deferCheck(Runnable check) {
-		if (this.parent != null)
-			return this.parent.deferCheck(check); // only ClassScope potentially records this
-		return false;
-	}
-
 	public void deferBoundCheck(TypeReference typeRef) {
 		// TODO: use dynamic binding rather than explicit type check
 		if (this.kind == CLASS_SCOPE) {
@@ -5402,6 +5457,15 @@ public abstract class Scope {
 			return (nonNullByDefaultValue & location) != 0;
 		}
 		return this.parent.hasDefaultNullnessFor(location, sourceStart);
+	}
+
+	public boolean hasDefaultNullnessForType(TypeBinding type, int location, int sourceStart) {
+		TypeBinding enclosingType = enclosingReceiverType();
+		if (enclosingType != null && (enclosingType.original().tagBits & TagBits.EndHierarchyCheck) == 0)
+			return false;
+		if (environment().usesNullTypeAnnotations() && type != null && !type.acceptsNonNullDefault())
+			return false;
+		return hasDefaultNullnessFor(location, sourceStart);
 	}
 
 	/*

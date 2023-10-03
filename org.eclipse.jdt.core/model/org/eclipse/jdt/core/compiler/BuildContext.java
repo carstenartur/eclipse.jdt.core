@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2018 IBM Corporation and others.
+ * Copyright (c) 2006, 2023 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -10,17 +10,20 @@
  *
  * Contributors:
  *    IBM Corporation - initial API and implementation
- *
+ *    Christoph Läubrich -  Enhance the BuildContext with the discovered annotations #674
  *******************************************************************************/
 
 package org.eclipse.jdt.core.compiler;
+
+import java.io.ByteArrayInputStream;
 
 import org.eclipse.core.resources.IFile;
 
 /**
  * The context of a build event that is notified to interested compilation
  * participants when {@link CompilationParticipant#buildStarting(BuildContext[], boolean) a build is starting},
- * or to annotations processors when {@link CompilationParticipant#processAnnotations(BuildContext[]) a source file has annotations}.
+ * to annotations processors when {@link CompilationParticipant#processAnnotations(BuildContext[]) a source file has annotations},
+ * or to post processors when {@link CompilationParticipant#postProcess(BuildContext, ByteArrayInputStream) a class has finished compiling}.
  *
  * @since 3.2
  * @noinstantiate This class is not intended to be instantiated by clients.
@@ -54,6 +57,18 @@ public IFile getFile() {
  * @return whether the compilation unit contained any annotations when it was compiled
  */
 public boolean hasAnnotations() {
+	return false; // default overridden by concrete implementation
+}
+
+/**
+ * Returns whether the compilation unit contained any annotations with a given type when it was compiled.
+ *
+ * NOTE: This is only valid during {@link CompilationParticipant#processAnnotations(BuildContext[])}.
+ * @param fqn the fully qualified name of the annotation to check for presence
+ * @return whether the compilation unit contained any annotations of the given type when it was compiled
+ * @since 3.35
+ */
+public boolean hasAnnotations(String fqn) {
 	return false; // default overridden by concrete implementation
 }
 

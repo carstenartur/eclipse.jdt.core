@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2022 IBM Corporation and others.
+ * Copyright (c) 2022, 2023 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -53,23 +53,23 @@ public class ASTRewritingRecordPatternTest extends ASTRewritingTest {
 	}
 
 	public static Test suite() {
-		return createSuite(ASTRewritingRecordPatternTest.class, 19);
+		return createSuite(ASTRewritingRecordPatternTest.class, 21);
 	}
 
 	@Override
 	protected void setUp() throws Exception {
 		super.setUp();
-		if (this.apiLevel == AST.JLS19 ) { // Remove this after it is a standard feature
-			this.project1.setOption(JavaCore.COMPILER_COMPLIANCE, JavaCore.VERSION_19);
-			this.project1.setOption(JavaCore.COMPILER_SOURCE, JavaCore.VERSION_19);
-			this.project1.setOption(JavaCore.COMPILER_CODEGEN_TARGET_PLATFORM, JavaCore.VERSION_19);
+		if (this.apiLevel == AST.JLS21 ) { // Remove this after it is a standard feature
+			this.project1.setOption(JavaCore.COMPILER_COMPLIANCE, JavaCore.VERSION_21);
+			this.project1.setOption(JavaCore.COMPILER_SOURCE, JavaCore.VERSION_21);
+			this.project1.setOption(JavaCore.COMPILER_CODEGEN_TARGET_PLATFORM, JavaCore.VERSION_21);
 			this.project1.setOption(JavaCore.COMPILER_PB_ENABLE_PREVIEW_FEATURES, JavaCore.ENABLED);
 		}
 	}
 
 	private boolean checkAPILevel() {
-		if (this.apiLevel < 19) {
-			System.err.println("Test "+getName()+" requires a JRE 19");
+		if (this.apiLevel < 21) {
+			System.err.println("Test "+getName()+" requires a JRE 21");
 			return true;
 		}
 		return false;
@@ -120,10 +120,12 @@ public class ASTRewritingRecordPatternTest extends ASTRewritingTest {
 
 			SwitchCase caseStatement= ast.newSwitchCase();
 			caseStatement.setSwitchLabeledRule(true);
-			RecordPattern recordPattern = ast.newRecordPattern();
-			recordPattern.setPatternName(ast.newSimpleName("r1"));
-			recordPattern.setPatternType(ast.newSimpleType(ast.newSimpleName("Rectangle")));
-			caseStatement.expressions().add(recordPattern);
+			TypePattern tPattern = ast.newTypePattern();
+			SingleVariableDeclaration patternVariable = ast.newSingleVariableDeclaration();
+			patternVariable.setType(ast.newSimpleType(ast.newSimpleName("Rectangle")));
+			patternVariable.setName(ast.newSimpleName("r1"));
+			tPattern.setPatternVariable(patternVariable);
+			caseStatement.expressions().add(tPattern);
 			ListRewrite listRewrite= rewrite.getListRewrite(switchExpression, SwitchExpression.STATEMENTS_PROPERTY);
 			listRewrite.insertAt(caseStatement, 0, null);
 			Block block1 = ast.newBlock();
@@ -131,7 +133,6 @@ public class ASTRewritingRecordPatternTest extends ASTRewritingTest {
 			yieldStatement.setExpression(ast.newNumberLiteral("1"));
 			block1.statements().add(yieldStatement);
 			listRewrite.insertAt(block1, 1, null);
-
 		}
 
 		String preview= evaluateRewrite(cu, rewrite);
@@ -157,6 +158,7 @@ public class ASTRewritingRecordPatternTest extends ASTRewritingTest {
 		assertEqualString(preview, buf.toString());
 	}
 
+
 	public void testModifyRecordSwitchPattern() throws Exception {
 		if (checkAPILevel()) {
 			return;
@@ -165,7 +167,7 @@ public class ASTRewritingRecordPatternTest extends ASTRewritingTest {
 		String buf =  "public class X {\n"
 				+ "  public static void printLowerRight(Rectangle r) {\n"
 				+ "    int res = switch(r) {\n"
-				+ "        case Rectangle(ColoredPoint clr) r1 -> {\n"
+				+ "        case Rectangle(ColoredPoint clr) -> {\n"
 				+ "				yield 1;\n"
 				+ "			}\n"
 				+ "        default -> 0;\n"
@@ -192,7 +194,7 @@ public class ASTRewritingRecordPatternTest extends ASTRewritingTest {
 		MethodDeclaration methodDecl= findMethodDeclaration(type, "printLowerRight");
 		Block block= methodDecl.getBody();
 		List blockStatements= block.statements();
-		assertTrue("Number of statements not 1", blockStatements.size() == 1);
+		assertEquals("Incorrect number of statements",1, blockStatements.size());
 		{ // Modify Record pattern
 			VariableDeclarationStatement variableDeclarationStatement = (VariableDeclarationStatement)blockStatements.get(0);
 
@@ -201,20 +203,20 @@ public class ASTRewritingRecordPatternTest extends ASTRewritingTest {
 			List statements= switchExpression.statements();
 			SwitchCase caseStatement = (SwitchCase)statements.get(0);
 			RecordPattern recordPatternR = (RecordPattern)(caseStatement.expressions().get(0));
-			RecordPattern recordPatternC = ast.newRecordPattern();
-			recordPatternC.setPatternName(ast.newSimpleName("clr1"));
-			recordPatternC.setPatternType(ast.newSimpleType(ast.newSimpleName("ColoredPoint")));
+			TypePattern typePattern = ast.newTypePattern();
+			SingleVariableDeclaration variableDeclaration = ast.newSingleVariableDeclaration();
+			variableDeclaration.setType(ast.newSimpleType(ast.newSimpleName("ColoredPoint")));
+			variableDeclaration.setName(ast.newSimpleName("clr1"));
+			typePattern.setPatternVariable(variableDeclaration);
 			ListRewrite listRewrite= rewrite.getListRewrite(recordPatternR, RecordPattern.PATTERNS_PROPERTY);
-			listRewrite.insertAt(recordPatternC, 0, null);
-
+			listRewrite.insertAt(typePattern, 0, null);
 		}
 
 		String preview= evaluateRewrite(cu, rewrite);
-
 		buf =  "public class X {\n"
 				+ "  public static void printLowerRight(Rectangle r) {\n"
 				+ "    int res = switch(r) {\n"
-				+ "        case Rectangle(ColoredPoint clr1, ColoredPoint clr) r1 -> {\n"
+				+ "        case Rectangle(ColoredPoint clr1, ColoredPoint clr) -> {\n"
 				+ "				yield 1;\n"
 				+ "			}\n"
 				+ "        default -> 0;\n"
@@ -302,7 +304,7 @@ public class ASTRewritingRecordPatternTest extends ASTRewritingTest {
 	}
 
 
-	public void _testAddRecordInstanceOfPattern() throws Exception {
+	public void testAddRecordInstanceOfPattern() throws Exception {
 		if (checkAPILevel()) {
 			return;
 		}
@@ -385,7 +387,7 @@ public class ASTRewritingRecordPatternTest extends ASTRewritingTest {
 		assertEqualString(preview, buf.toString());
 	}
 
-	public void _testModifyGuardedPattern() throws Exception {
+	public void testModifyGuardedPattern() throws Exception {
 		if (checkAPILevel()) {
 			return;
 		}
@@ -452,7 +454,7 @@ public class ASTRewritingRecordPatternTest extends ASTRewritingTest {
 		assertEqualString(preview, buf.toString());
 	}
 
-	public void _testRemoveRecordInstanceOfPattern() throws Exception {
+	public void testRemoveRecordInstanceOfPattern() throws Exception {
 		if (checkAPILevel()) {
 			return;
 		}
@@ -510,7 +512,7 @@ public class ASTRewritingRecordPatternTest extends ASTRewritingTest {
 		assertEqualString(preview, buf.toString());
 	}
 
-	public void _testModifyRecordInstanceOfPattern() throws Exception {
+	public void testModifyRecordInstanceOfPattern() throws Exception {
 		if (checkAPILevel()) {
 			return;
 		}

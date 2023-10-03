@@ -40,8 +40,10 @@ import org.eclipse.core.resources.IMarker;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IPath;
+import org.eclipse.core.runtime.Path;
 import org.eclipse.core.runtime.Platform;
 import org.eclipse.jdt.core.IAccessRule;
+import org.eclipse.jdt.core.IClasspathAttribute;
 import org.eclipse.jdt.core.IClasspathEntry;
 import org.eclipse.jdt.core.ICompilationUnit;
 import org.eclipse.jdt.core.IField;
@@ -2832,6 +2834,201 @@ public class JavaSearchBugsTests2 extends AbstractJavaSearchTests {
 			"lib491656_001.jar void p2.MyLinkedHashMap$Entry.recordAccess(java.util.HashMap<K,V>) EXACT_MATCH");
 		} finally {
 			deleteProject("P");
+		}
+	}
+
+	/**
+	 * Test that a diamond in a type name doesn't result in an AIOOBE during a search.
+	 * See: https://github.com/eclipse-jdt/eclipse.jdt.core/issues/825
+	 */
+	public void testOutOfBoundsIndexExceptionDuringSearchGh825() throws Exception {
+		String projectName = "testGh825";
+		try {
+			IJavaProject project = createJavaProject(projectName, new String[] {"src"}, new String[] {"JCL11_LIB"}, "bin", "11");
+			String srcFolder = "/" + projectName + "/src/";
+			String packageFolder = srcFolder + "test";
+			createFolder(packageFolder);
+			String snippet = String.join(System.lineSeparator(), new String[] {
+					"package test;",
+					"public class Test {",
+					"    public interface TestInterface<T> {",
+					"        void testMethod(T t);",
+					"    }",
+					"    TestInterface<String> SUP = new TestInterface<>() {",
+					"        public void testMethod(String s) {}",
+					"    };",
+					"    static void shouldFail() {}",
+					"}",
+			});
+			createFile(packageFolder + "/Test.java", snippet);
+
+			String module = "module tester {}";
+			createFile(srcFolder + "/module-info.java", module);
+
+			String testFolder = "/" + projectName + "/test";
+			createFolder(testFolder);
+			IClasspathAttribute[] testAttrs = { JavaCore.newClasspathAttribute(IClasspathAttribute.TEST, Boolean.toString(true)) };
+			addClasspathEntry(project, JavaCore.newSourceEntry(
+					new Path(testFolder),
+					null,
+					null,
+					new Path("/" + projectName + "/bin-test"),
+					testAttrs));
+
+			addLibrary(project,
+					"libGh825.jar",
+					"libGh825.src.zip",
+					new String[] {
+							"testpackage/TestClass.java",
+							"package testpackage;\n" +
+							"public class TestClass {}"
+					},
+					JavaCore.VERSION_11);
+
+			buildAndExpectNoProblems(project);
+			IType type = project.findType("test.Test");
+			IMethod method = type.getMethod("shouldFail", new String[0]);
+			search(method, REFERENCES, EXACT_RULE, SearchEngine.createWorkspaceScope(), this.resultCollector);
+			// we expect no matches and no exceptions
+			assertSearchResults("");
+		} finally {
+			deleteProject(projectName);
+		}
+	}
+
+	/**
+	 * Test that an inner class constructor with first argument of the outer type
+	 * doesn't result in no search matches.
+	 * See: https://github.com/eclipse-jdt/eclipse.jdt.core/issues/401
+	 */
+	public void testInnerConstructorWithOuterTypeArgumentGh401() throws Exception {
+		String projectName = "testGh401";
+		try {
+			IJavaProject project = createJavaProject(projectName, new String[] {"src"}, new String[] {"JCL11_LIB"}, "bin", "11");
+			String srcFolder = "/" + projectName + "/src/";
+			String packageFolder = srcFolder + "test1";
+			createFolder(packageFolder);
+			String snippet1 =
+					"""
+					package test1;
+					public final class Outer1 {
+						public void staticConstructorCaller() {
+							new StaticInner1(this);
+						}
+						public void constructorCaller() {
+							new Inner1(this);
+						}
+						private static final class StaticInner1 {
+							StaticInner1(Outer1 o) {}
+						}
+						private final class Inner1 {
+							Inner1(Outer1 o) {}
+						}
+					}
+					""";
+			createFile(packageFolder + "/Outer1.java", snippet1);
+
+			addLibrary(project,
+					"libGh401.jar",
+					"libGh401.src.zip",
+					new String[] {
+							"test2/Outer2.java",
+							"""
+							package test2;
+							public final class Outer2 {
+								public void staticConstructorCaller() {
+									new StaticInner2(this);
+								}
+								public void constructorCaller() {
+									new Inner2(this);
+								}
+								private static final class StaticInner2 {
+									StaticInner2(Outer2 o) {}
+								}
+								private final class Inner2 {
+									Inner2(Outer2 o) {}
+								}
+							}
+							""",
+					},
+					JavaCore.VERSION_11);
+
+			buildAndExpectNoProblems(project);
+
+			String[] typesAndExpcetedMatches = {
+				"test1.Outer1.StaticInner1",
+				"src/test1/Outer1.java void test1.Outer1.staticConstructorCaller() [new StaticInner1(this)] EXACT_MATCH",
+				"test1.Outer1.Inner1",
+				"src/test1/Outer1.java void test1.Outer1.constructorCaller() [new Inner1(this)] EXACT_MATCH",
+				"test2.Outer2.StaticInner2",
+				"libGh401.jar void test2.Outer2.staticConstructorCaller() EXACT_MATCH",
+				"test2.Outer2.Inner2",
+				"libGh401.jar void test2.Outer2.constructorCaller() EXACT_MATCH",
+
+			};
+
+			for (int i = 0; i < typesAndExpcetedMatches.length; i += 2) {
+				String type =          typesAndExpcetedMatches[i + 0];
+				String expectedMatch = typesAndExpcetedMatches[i + 1];
+				IType staticInnerType = project.findType(type);
+				IMethod staticInnerConstructor = staticInnerType.getMethods()[0];
+				search(staticInnerConstructor, REFERENCES, EXACT_RULE, SearchEngine.createWorkspaceScope(), this.resultCollector);
+				assertSearchResults(expectedMatch);
+				this.resultCollector.clear();
+			}
+		} finally {
+			deleteProject(projectName);
+		}
+	}
+
+	/**
+	 * <br>For the following scenario, no call hierarchy is found:</br>
+	 * A nested private class implements a public nested interface.
+	 * The overridden method from the interface also has an argument of the interface type.
+	 * No call hierarchy is found for the overridden method, when searching from within the nested class.
+	 * See: https://github.com/eclipse-jdt/eclipse.jdt.core/issues/821
+	 */
+	public void testCallHierarchyWithNestedInterfacesGh821() throws Exception {
+		String projectName = "TestCallHierarchyWithNestedInterfacesGh821";
+		try {
+			IJavaProject project = createJavaProject(projectName, new String[] { "src" }, new String[] { "JCL15_LIB" }, "bin", "1.5");
+			String packageFolder = "/" + projectName + "/src/test";
+			createFolder(packageFolder);
+			String snippet1 =
+					"""
+					package test;
+					public class TestNestedPrivateClass {
+						public NestedInterface nm = new NC();
+						public interface NestedInterface {
+							public void foo(NestedInterface arg);
+						}
+						private final class NC implements NestedInterface {
+							public void foo(NestedInterface arg) {}
+						}
+					}
+					""";
+			createFile(packageFolder + "/TestNestedPrivateClass.java", snippet1);
+			String snippet2 =
+					"""
+					package test;
+					public class TestReferencingClass {
+						public static void bar() {
+							TestNestedPrivateClass c = new TestNestedPrivateClass();
+							TestNestedPrivateClass.NestedInterface nestedMember = c.nm;
+							nestedMember.foo(nestedMember);
+						}
+					}
+					""";
+			createFile(packageFolder + "/TestReferencingClass.java", snippet2);
+			buildAndExpectNoProblems(project);
+			IType type = project.findType("test.TestNestedPrivateClass.NC");
+			IMethod[] methods = type.getMethods();
+			assertEquals("Expected one method in: " + Arrays.asList(methods), 1, methods.length);
+			search(methods[0], REFERENCES, EXACT_RULE, SearchEngine.createWorkspaceScope(), this.resultCollector);
+			assertSearchResults(
+					"src/test/TestReferencingClass.java void test.TestReferencingClass.bar() [foo(nestedMember)] EXACT_MATCH");
+		} finally {
+			deleteProject(projectName);
 		}
 	}
 

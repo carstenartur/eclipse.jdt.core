@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2022 IBM Corporation and others.
+ * Copyright (c) 2000, 2023 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -1272,7 +1272,7 @@ public class Main implements ProblemSeverities, SuffixConstants {
 			try {
 				int index = logFileName.lastIndexOf('.');
 				if (index != -1) {
-					if (logFileName.substring(index).toLowerCase().equals(".xml")) { //$NON-NLS-1$
+					if (logFileName.substring(index).equalsIgnoreCase(".xml")) { //$NON-NLS-1$
 						this.log = new GenericXMLWriter(new OutputStreamWriter(new FileOutputStream(logFileName, false), Util.UTF_8), Util.LINE_SEPARATOR, true);
 						this.tagBits |= Logger.XML;
 						// insert time stamp as comment
@@ -3173,6 +3173,12 @@ private String optionStringToVersion(String currentArg) {
 		case "19": //$NON-NLS-1$
 		case "19.0": //$NON-NLS-1$
 			return CompilerOptions.VERSION_19;
+		case "20": //$NON-NLS-1$
+		case "20.0": //$NON-NLS-1$
+			return CompilerOptions.VERSION_20;
+		case "21": //$NON-NLS-1$
+		case "21.0": //$NON-NLS-1$
+			return CompilerOptions.VERSION_21;
 		default:
 			return null;
 	}

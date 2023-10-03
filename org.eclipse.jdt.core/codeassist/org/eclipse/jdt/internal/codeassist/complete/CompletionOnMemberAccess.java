@@ -38,7 +38,7 @@ package org.eclipse.jdt.internal.codeassist.complete;
 import org.eclipse.jdt.internal.compiler.ast.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
 
-public class CompletionOnMemberAccess extends FieldReference {
+public class CompletionOnMemberAccess extends FieldReference implements CompletionNode {
 
 	public boolean isInsideAnnotation;
 
@@ -75,6 +75,9 @@ public class CompletionOnMemberAccess extends FieldReference {
 
 				ProblemMethodBinding problemMethodBinding = new ProblemMethodBinding(messageSend.selector, argBindings, ProblemReasons.NotFound);
 				throw new CompletionNodeFound(this, problemMethodBinding, scope);
+			}
+			if (messageSend.binding != null) {
+				throw new CompletionNodeFound(this, messageSend.binding.declaringClass, scope);
 			}
 		}
 

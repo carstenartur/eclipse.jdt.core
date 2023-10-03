@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2014, 2022 IBM Corporation and others.
+ * Copyright (c) 2014, 2023 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -536,9 +536,112 @@ public void test014() throws JavaModelException { // ensure higher relevance for
 	assertResults("arrayOfStrings[LOCAL_VARIABLE_REF]{arrayOfStrings, null, [Ljava.lang.String;, null, null, arrayOfStrings, null, [168, 174], " + (R_DEFAULT + 22) + "}\n" +
 					"arrayOfInts[LOCAL_VARIABLE_REF]{arrayOfInts, null, [I, null, null, arrayOfInts, null, [168, 174], " + relevance + "}", requestor.getResults());
 }
+//https://github.com/eclipse-jdt/eclipse.jdt.core/issues/650, Templates not working in Lambda internal block.
+public void test015a() throws JavaModelException {
+	this.workingCopies = new ICompilationUnit[1];
+	this.workingCopies[0] = getWorkingCopy(
+			"/Completion/src/X.java",
+			"interface I {\n" +
+			"	void foo();\n" +
+			"}\n" +
+			"public class X {\n" +
+			"	public static void main(String[] args) {\n" +
+			"       {\n" +
+			"		I i = () -> {\n" +
+			"           {\n" +
+			"               syso\n" +
+			"           }\n" +
+			"		};\n" +
+			"       }\n" +
+			"	}\n" +
+			"}\n");
 
-// test015() removed due to bogus expectation.
+	CompletionTestsRequestor2 requestor = new CompletionTestsRequestor2(true, true, true, false);
+	requestor.allowAllRequiredProposals();
+	String str = this.workingCopies[0].getSource();
+	String completeBehind = "syso";
+	int cursorLocation = str.lastIndexOf(completeBehind) + completeBehind.length();
+	this.workingCopies[0].codeComplete(cursorLocation, requestor, this.wcOwner);
+	assertResults("", requestor.getResults());
+	assertEquals("completion offset=145\n" +
+			"completion range=[141, 144]\n" +
+			"completion token=\"syso\"\n" +
+			"completion token kind=TOKEN_KIND_NAME\n" +
+			"expectedTypesSignatures=null\n" +
+			"expectedTypesKeys=null\n" +
+			"completion token location={STATEMENT_START}", requestor.getContext());
+}
+//https://github.com/eclipse-jdt/eclipse.jdt.core/issues/650, Templates not working in Lambda internal block.
+public void test015b() throws JavaModelException {
+	this.workingCopies = new ICompilationUnit[1];
+	this.workingCopies[0] = getWorkingCopy(
+			"/Completion/src/X.java",
+			"interface I {\n" +
+			"	void foo();\n" +
+			"}\n" +
+			"public class X {\n" +
+			"	public static void main(String[] args) {\n" +
+			"       {\n" +
+			"		I i = () -> {\n" +
+			"           if (args.length > 3) {\n" +
+			"               syso\n" +
+			"           }\n" +
+			"		};\n" +
+			"       }\n" +
+			"	}\n" +
+			"}\n");
 
+	CompletionTestsRequestor2 requestor = new CompletionTestsRequestor2(true, true, true, false);
+	requestor.allowAllRequiredProposals();
+	String str = this.workingCopies[0].getSource();
+	String completeBehind = "syso";
+	int cursorLocation = str.lastIndexOf(completeBehind) + completeBehind.length();
+	this.workingCopies[0].codeComplete(cursorLocation, requestor, this.wcOwner);
+	assertResults("", requestor.getResults());
+	assertEquals("completion offset=166\n" +
+			"completion range=[162, 165]\n" +
+			"completion token=\"syso\"\n" +
+			"completion token kind=TOKEN_KIND_NAME\n" +
+			"expectedTypesSignatures=null\n" +
+			"expectedTypesKeys=null\n" +
+			"completion token location={STATEMENT_START}", requestor.getContext());
+}
+//https://github.com/eclipse-jdt/eclipse.jdt.core/issues/650, Templates not working in Lambda internal block.
+public void test015c() throws JavaModelException {
+	this.workingCopies = new ICompilationUnit[1];
+	this.workingCopies[0] = getWorkingCopy(
+			"/Completion/src/X.java",
+			"interface I {\n" +
+			"	void foo();\n" +
+			"}\n" +
+			"public class X {\n" +
+			"	public static void main(String[] args) {\n" +
+			"       {\n" +
+			"		I i = () -> {\n" +
+			"           {\n" +
+			"               if (args.length > 3)\n" +
+			"                   syso\n" +
+			"           }\n" +
+			"		};\n" +
+			"       }\n" +
+			"	}\n" +
+			"}\n");
+
+	CompletionTestsRequestor2 requestor = new CompletionTestsRequestor2(true, true, true, false);
+	requestor.allowAllRequiredProposals();
+	String str = this.workingCopies[0].getSource();
+	String completeBehind = "syso";
+	int cursorLocation = str.lastIndexOf(completeBehind) + completeBehind.length();
+	this.workingCopies[0].codeComplete(cursorLocation, requestor, this.wcOwner);
+	assertResults("", requestor.getResults());
+	assertEquals("completion offset=185\n" +
+			"completion range=[181, 184]\n" +
+			"completion token=\"syso\"\n" +
+			"completion token kind=TOKEN_KIND_NAME\n" +
+			"expectedTypesSignatures=null\n" +
+			"expectedTypesKeys=null\n" +
+			"completion token location={STATEMENT_START}", requestor.getContext());
+}
 // https://bugs.eclipse.org/bugs/show_bug.cgi?id=422901, [1.8][code assist] Code assistant sensitive to scope.referenceContext type identity.
 public void test016() throws JavaModelException { // ensure higher relevance for matching return type.
 	this.workingCopies = new ICompilationUnit[1];
@@ -6524,7 +6627,7 @@ public void testBug578817() throws JavaModelException {
 				+ "getClass[METHOD_REF]{getClass(), Ljava.lang.Object;, ()Ljava.lang.Class<*>;, null, null, getClass, null, [229, 232], "+(R_DEFAULT+R_PACKAGE_EXPECTED_TYPE+30)+"}\n"
 				+ "getLastName[METHOD_REF]{getLastName(), LPerson;, ()Ljava.lang.String;, null, null, getLastName, null, [229, 232], "+(R_DEFAULT+R_EXACT_EXPECTED_TYPE+30)+"}", requestor.getResults());
 	}
-  
+
 public void testGH109_expectCompletions_insideLambdaNestedBlocks() throws JavaModelException {
 	this.workingCopies = new ICompilationUnit[1];
 	this.workingCopies[0] = getWorkingCopy(
@@ -6649,5 +6752,291 @@ public void testGH583_onArrayCreationSupplier_expectNewMethodRefCompletions() th
 	String result = requestor.getResults();
 	assertTrue(String.format("Result doesn't contain expected methods (%s)", result),
 			result.contains("new[KEYWORD]{new, null, null, new, null, 49}"));
+}
+// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/767
+public void testGH767() throws JavaModelException {
+	this.workingCopies = new ICompilationUnit[1];
+	this.workingCopies[0] = getWorkingCopy(
+			"/Completion/src/Foo.java",
+					"public class Foo {\n"
+					+ "    public void foo() {\n"
+					+ "			\"abc\".substring(i)."
+					+ "    }\n"
+					+ "}");
+
+	CompletionTestsRequestor2 requestor = new CompletionTestsRequestor2(true);
+	requestor.allowAllRequiredProposals();
+
+	String str = this.workingCopies[0].getSource();
+	String completeBehind = "substring(i).";
+	int cursorLocation = str.lastIndexOf(completeBehind) + completeBehind.length();
+	this.workingCopies[0].codeComplete(cursorLocation, requestor, this.wcOwner, new NullProgressMonitor());
+
+	String result = requestor.getResults();
+	assertTrue(String.format("Result doesn't contain expected method (%s)", result),
+			result.contains("length[METHOD_REF]{length(), Ljava.lang.String;, ()I, length, null, 60}\n"));
+}
+// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/831
+public void testIntersection18GH831() throws Exception {
+	this.workingCopies = new ICompilationUnit[1];
+	this.workingCopies[0] = getWorkingCopy(
+			"/Completion/src/Foo.java",
+			"public class Foo {\n"
+			+ "    public void foo() {\n"
+			+ "			java.util.Optional.of(true ? 0 : \"\")."
+			+ "    }\n"
+			+ "}");
+
+	CompletionTestsRequestor2 requestor = new CompletionTestsRequestor2(true);
+	requestor.allowAllRequiredProposals();
+
+	String str = this.workingCopies[0].getSource();
+	String completeBehind = "of(true ? 0 : \"\").";
+	int cursorLocation = str.lastIndexOf(completeBehind) + completeBehind.length();
+	this.workingCopies[0].codeComplete(cursorLocation, requestor, this.wcOwner, new NullProgressMonitor());
+
+	String result = requestor.getResults();
+	assertTrue(String.format("Result doesn't contain expected method (%s)", result),
+	result.contains("get[METHOD_REF]{get(), Ljava.util.Optional<Ljava.io.Serializable;>;, ()Ljava.io.Serializable;, get, null, 60}\n"));
+}
+
+public void testGH960_onVarargArgument_expectCompletionsMatchingElementType() throws JavaModelException {
+	this.workingCopies = new ICompilationUnit[1];
+	this.workingCopies[0] = getWorkingCopy("/Completion/src/GH960.java", """
+			public class GH960 {
+				public void foo(GH960.State... states) {
+				}
+
+				public void boo() {
+					GH960.State currentState = GH960.State.BLOCKED;
+
+					foo()
+				}
+
+				public static enum State {
+					BLOCKED, RUNNABLE;
+				}
+			}
+			""");
+
+	CompletionTestsRequestor2 requestor = new CompletionTestsRequestor2(true);
+	requestor.allowAllRequiredProposals();
+
+	String str = this.workingCopies[0].getSource();
+	String completeBehind = "foo(";
+	int cursorLocation = str.lastIndexOf(completeBehind) + completeBehind.length();
+	this.workingCopies[0].codeComplete(cursorLocation, requestor, this.wcOwner, new NullProgressMonitor());
+
+	String result = requestor.getResults();
+	assertResults(
+			"BLOCKED[FIELD_REF]{State.BLOCKED, LGH960$State;, LGH960$State;, BLOCKED, null, "
+					+ (R_DEFAULT + R_RESOLVED + R_INTERESTING + R_CASE + R_UNQUALIFIED) + "}\n"
+					+ "RUNNABLE[FIELD_REF]{State.RUNNABLE, LGH960$State;, LGH960$State;, RUNNABLE, null, "
+					+ (R_DEFAULT + R_RESOLVED + R_INTERESTING + R_CASE + R_UNQUALIFIED) + "}\n"
+					+ "currentState[LOCAL_VARIABLE_REF]{currentState, null, LGH960$State;, currentState, null, "
+					+ (R_DEFAULT + R_RESOLVED + R_INTERESTING + R_CASE + R_UNQUALIFIED + R_NON_RESTRICTED) + "}\n"
+					+ "foo[METHOD_REF]{, LGH960;, ([LGH960$State;)V, foo, (states), " + (R_DEFAULT
+							+ R_RESOLVED + R_INTERESTING + R_CASE + R_EXACT_NAME + R_UNQUALIFIED + R_NON_RESTRICTED)
+					+ "}",
+			result);
+}
+
+public void testGH960_onVarargArguments_expectCompletionsMatchingElementType() throws JavaModelException {
+	this.workingCopies = new ICompilationUnit[1];
+	this.workingCopies[0] = getWorkingCopy("/Completion/src/GH960.java", """
+			public class GH960 {
+				public void foo(GH960.State... states) {
+				}
+
+				public void boo() {
+					GH960.State currentState = GH960.State.BLOCKED;
+
+					foo(State.BLOCKED, )
+				}
+
+				public static enum State {
+					BLOCKED, RUNNABLE;
+				}
+			}
+			""");
+
+	CompletionTestsRequestor2 requestor = new CompletionTestsRequestor2(true);
+	requestor.allowAllRequiredProposals();
+
+	String str = this.workingCopies[0].getSource();
+	String completeBehind = "foo(State.BLOCKED, ";
+	int cursorLocation = str.lastIndexOf(completeBehind) + completeBehind.length();
+	this.workingCopies[0].codeComplete(cursorLocation, requestor, this.wcOwner, new NullProgressMonitor());
+
+	String result = requestor.getResults();
+	int relevanceExpectedTypes = R_DEFAULT + R_RESOLVED + R_INTERESTING + R_CASE + R_UNQUALIFIED
+			+ R_EXACT_EXPECTED_TYPE;
+	assertContains("Enums",
+			"BLOCKED[FIELD_REF]{State.BLOCKED, LGH960$State;, LGH960$State;, BLOCKED, null, "
+					+ relevanceExpectedTypes + "}\n"
+					+ "RUNNABLE[FIELD_REF]{State.RUNNABLE, LGH960$State;, LGH960$State;, RUNNABLE, null, "
+					+ relevanceExpectedTypes + "}",
+			result);
+	assertContains("Variables",
+			"currentState[LOCAL_VARIABLE_REF]{currentState, null, LGH960$State;, currentState, null, "
+					+ (R_DEFAULT + R_RESOLVED + R_INTERESTING + R_CASE + R_UNQUALIFIED + R_NON_RESTRICTED
+							+ R_EXACT_EXPECTED_TYPE)
+					+ "}",
+			result);
+}
+
+public void testGH960_onBeforeVarargArguments_expectCompletionsMatchingElementType() throws JavaModelException {
+	this.workingCopies = new ICompilationUnit[1];
+	this.workingCopies[0] = getWorkingCopy("/Completion/src/GH960.java", """
+			public class GH960 {
+				public void foo(String name, Thread.State... states) {
+				}
+
+				public void boo() {
+				   Thread.State currentState = Thread.State.BLOCKED;
+				   String threadName = "name";
+
+				   foo(, State.BLOCKED)
+				}
+			}
+			""");
+
+	CompletionTestsRequestor2 requestor = new CompletionTestsRequestor2(true);
+	requestor.allowAllRequiredProposals();
+
+	String str = this.workingCopies[0].getSource();
+	String completeBehind = "foo(";
+	int cursorLocation = str.lastIndexOf(completeBehind) + completeBehind.length();
+	this.workingCopies[0].codeComplete(cursorLocation, requestor, this.wcOwner, new NullProgressMonitor());
+
+	String result = requestor.getResults();
+	assertContains("Variables",
+			"threadName[LOCAL_VARIABLE_REF]{threadName, null, Ljava.lang.String;, threadName, null, "
+					+ (R_DEFAULT + R_RESOLVED + R_INTERESTING + R_CASE + R_UNQUALIFIED + R_NON_RESTRICTED) + "}",
+			result);
+}
+
+public void testGH979_on1stConstructorArgument_expectCompletionsMatchinType() throws JavaModelException {
+	this.workingCopies = new ICompilationUnit[2];
+	this.workingCopies[1] = getWorkingCopy("/Completion/src/GH979List.java", """
+			public class GH979List<T> {
+
+			}
+			""");
+	this.workingCopies[0] = getWorkingCopy("/Completion/src/GH979.java", """
+			public class GH979 {
+				public GH979(GH979List<String> names, int age) {}
+
+				public static void foo() {
+					GH979 value = new GH979();
+				}
+
+				public static GH979List<String> newInstance() {
+					return null;
+				}
+			}
+			""");
+
+	CompletionTestsRequestor2 requestor = new CompletionTestsRequestor2(true);
+	requestor.allowAllRequiredProposals();
+
+	String str = this.workingCopies[0].getSource();
+	String completeBehind = "new GH979(";
+	int cursorLocation = str.lastIndexOf(completeBehind) + completeBehind.length();
+	this.workingCopies[0].codeComplete(cursorLocation, requestor, this.wcOwner, new NullProgressMonitor());
+
+	String result = requestor.getResults();
+	assertResults(
+			"GH979[ANONYMOUS_CLASS_DECLARATION]{, LGH979;, (LGH979List<Ljava.lang.String;>;I)V, null, (names, age), "
+					+ (R_DEFAULT + R_INTERESTING + R_RESOLVED + R_NON_RESTRICTED) + "}\n"
+					+ "GH979[METHOD_REF<CONSTRUCTOR>]{, LGH979;, (LGH979List<Ljava.lang.String;>;I)V, GH979, (names, age), "
+					+ (R_DEFAULT + R_INTERESTING + R_RESOLVED + R_NON_RESTRICTED) + "}\n"
+					+ "newInstance[METHOD_REF]{newInstance(), LGH979;, ()LGH979List<Ljava.lang.String;>;, newInstance, null, "
+					+ (R_DEFAULT + R_RESOLVED + R_INTERESTING + R_CASE + R_UNQUALIFIED + R_NON_RESTRICTED) + "}",
+			result);
+}
+
+public void testGH979_onAnonClassConstructorWith_expectOnlyAnonClassCompletion() throws JavaModelException {
+	this.workingCopies = new ICompilationUnit[2];
+	this.workingCopies[1] = getWorkingCopy("/Completion/src/Serial.java", """
+			public interface Serial {
+
+			}
+			""");
+	this.workingCopies[0] = getWorkingCopy("/Completion/src/GH979.java", """
+		public class GH979 {
+				public GH979() {}
+
+				public void foo() {
+					Serial run= new Serial() {
+					};
+				}
+
+				public Serial toString1() {
+					return null;
+				}
+			}
+			""");
+
+	CompletionTestsRequestor2 requestor = new CompletionTestsRequestor2(true);
+	requestor.allowAllRequiredProposals();
+
+	String str = this.workingCopies[0].getSource();
+	String completeBehind = "Serial run= new Serial(";
+	int cursorLocation = str.lastIndexOf(completeBehind) + completeBehind.length();
+	this.workingCopies[0].codeComplete(cursorLocation, requestor, this.wcOwner, new NullProgressMonitor());
+
+	String result = requestor.getResults();
+	assertResults("Serial[ANONYMOUS_CLASS_DECLARATION]{, LSerial;, ()V, null, null, "
+			+ (R_DEFAULT + R_INTERESTING + R_RESOLVED + R_NON_RESTRICTED) + "}", result);
+}
+
+public void testGH979_on1stConstructorArgumentWithFilledArgumentNames_expectCompletionsMatchinType()
+		throws JavaModelException {
+	this.workingCopies = new ICompilationUnit[2];
+	this.workingCopies[1] = getWorkingCopy("/Completion/src/GH979List.java", """
+			public class GH979List<T> {
+
+			}
+			""");
+	this.workingCopies[0] = getWorkingCopy("/Completion/src/GH979.java", """
+			public class GH979 {
+				public GH979(GH979List<String> names, int age, boolean valid) {}
+
+				public static void foo() {
+					GH979.instance().boo(new GH979(, 20, false));
+				}
+
+				public GH979 instance() {
+					return null;
+				}
+
+				public void boo(GH979 g) {
+
+				}
+
+				public static GH979List<String> newInstance() {
+					return null;
+				}
+			}
+			""");
+
+	CompletionTestsRequestor2 requestor = new CompletionTestsRequestor2(true);
+	requestor.allowAllRequiredProposals();
+
+	String str = this.workingCopies[0].getSource();
+	String completeBehind = "new GH979(";
+	int cursorLocation = str.lastIndexOf(completeBehind) + completeBehind.length();
+	this.workingCopies[0].codeComplete(cursorLocation, requestor, this.wcOwner, new NullProgressMonitor());
+
+	String result = requestor.getResults();
+	assertResults(
+			"GH979[ANONYMOUS_CLASS_DECLARATION]{, LGH979;, (LGH979List<Ljava.lang.String;>;IZ)V, null, (names, age, valid), "
+					+ (R_DEFAULT + R_INTERESTING + R_RESOLVED + R_NON_RESTRICTED) + "}\n"
+					+ "GH979[METHOD_REF<CONSTRUCTOR>]{, LGH979;, (LGH979List<Ljava.lang.String;>;IZ)V, GH979, (names, age, valid), "
+					+ (R_DEFAULT + R_INTERESTING + R_RESOLVED + R_NON_RESTRICTED) + "}\n"
+					+ "newInstance[METHOD_REF]{newInstance(), LGH979;, ()LGH979List<Ljava.lang.String;>;, newInstance, null, "
+					+ (R_DEFAULT + R_RESOLVED + R_INTERESTING + R_CASE + R_UNQUALIFIED + R_NON_RESTRICTED) + "}",
+			result);
 }
 }

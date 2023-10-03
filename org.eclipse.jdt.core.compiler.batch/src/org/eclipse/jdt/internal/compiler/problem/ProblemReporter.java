@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2022 IBM Corporation and others.
+ * Copyright (c) 2000, 2023 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -75,6 +75,8 @@
  *								bug 527554 - [18.3] Compiler support for JEP 286 Local-Variable Type
  *     Ulrich Grave <ulrich.grave@gmx.de> - Contributions for
  *                              bug 386692 - Missing "unused" warning on "autowired" fields
+ *     Ashley Scopes - Contributions for
+ * 								GH-954 	   - Module binding error renders incorrectly for diagnostics
  ********************************************************************************/
 package org.eclipse.jdt.internal.compiler.problem;
 
@@ -152,6 +154,7 @@ import org.eclipse.jdt.internal.compiler.ast.QualifiedSuperReference;
 import org.eclipse.jdt.internal.compiler.ast.QualifiedTypeReference;
 import org.eclipse.jdt.internal.compiler.ast.Receiver;
 import org.eclipse.jdt.internal.compiler.ast.RecordComponent;
+import org.eclipse.jdt.internal.compiler.ast.RecordPattern;
 import org.eclipse.jdt.internal.compiler.ast.Reference;
 import org.eclipse.jdt.internal.compiler.ast.ReferenceExpression;
 import org.eclipse.jdt.internal.compiler.ast.ReturnStatement;
@@ -316,6 +319,7 @@ public static int getIrritant(int problemID) {
 		case IProblem.NeedToEmulateFieldWriteAccess :
 		case IProblem.NeedToEmulateMethodAccess :
 		case IProblem.NeedToEmulateConstructorAccess :
+		case IProblem.SyntheticAccessorNotEnclosingMethod :
 			return CompilerOptions.AccessEmulation;
 
 		case IProblem.NonExternalizedStringLiteral :
@@ -510,6 +514,7 @@ public static int getIrritant(int problemID) {
 		case IProblem.RequiredNonNullButProvidedPotentialNull:
 			return CompilerOptions.NullAnnotationInferenceConflict;
 		case IProblem.RequiredNonNullButProvidedUnknown:
+		case IProblem.NullityUncheckedTypeAnnotation:
 		case IProblem.NullityUncheckedTypeAnnotationDetail:
 		case IProblem.NullityUncheckedTypeAnnotationDetailSuperHint:
 		case IProblem.ReferenceExpressionParameterNullityUnchecked:
@@ -2021,6 +2026,13 @@ public void disallowedTargetForAnnotation(Annotation annotation) {
 		new String[] {new String(annotation.resolvedType.shortReadableName())},
 		annotation.sourceStart,
 		annotation.sourceEnd);
+}
+public void explitAnnotationTargetRequired(Annotation annotation) {
+	this.handle(IProblem.ExplicitAnnotationTargetRequired,
+			NoArgument,
+			NoArgument,
+			annotation.sourceStart,
+			annotation.sourceEnd);
 }
 public void polymorphicMethodNotBelow17(ASTNode node) {
 	this.handle(
@@ -7079,6 +7091,27 @@ public void needToEmulateMethodAccess(
 		location.sourceStart,
 		location.sourceEnd);
 }
+public void checkSyntheticAccessor(MethodBinding method, ASTNode location) {
+    if (!method.isSynthetic()) {
+        int severity = computeSeverity(IProblem.SyntheticAccessorNotEnclosingMethod);
+        if (severity == ProblemSeverities.Ignore) return;
+        this.handle(
+            IProblem.SyntheticAccessorNotEnclosingMethod,
+            new String[] {
+                new String(method.declaringClass.readableName()),
+                new String(method.selector),
+                typesAsString(method, false)
+            },
+            new String[] {
+                new String(method.declaringClass.shortReadableName()),
+                new String(method.selector),
+                typesAsString(method, true)
+            },
+            severity,
+            location.sourceStart,
+            location.sourceEnd);
+    }
+}
 public void noAdditionalBoundAfterTypeVariable(TypeReference boundReference) {
 	this.handle(
 		IProblem.NoAdditionalBoundAfterTypeVariable,
@@ -9994,6 +10027,14 @@ public void varCannotBeMixedWithNonVarParams(ASTNode astNode) {
 		astNode.sourceStart,
 		astNode.sourceEnd);
 }
+public void varCannotBeUsedWithTypeArguments(ASTNode astNode) {
+	this.handle(
+			IProblem.VarCannotBeUsedWithTypeArguments,
+			NoArgument,
+			NoArgument,
+			astNode.sourceStart,
+			astNode.sourceEnd);
+}
 public void variableTypeCannotBeVoidArray(AbstractVariableDeclaration varDecl) {
 	this.handle(
 		IProblem.CannotAllocateVoidArray,
@@ -10612,6 +10653,11 @@ public void nullAnnotationIsRedundant(AbstractMethodDeclaration sourceMethod, in
 	if (i == -1) {
 		MethodDeclaration methodDecl = (MethodDeclaration) sourceMethod;
 		Annotation annotation = findAnnotation(methodDecl.annotations, TypeIds.BitNonNullAnnotation);
+		if (annotation == null) {
+			Annotation[] annotationsOnType = methodDecl.returnType.getTopAnnotations();
+			if (annotationsOnType != null)
+				annotation = findAnnotation(annotationsOnType, TypeIds.BitNonNullAnnotation);
+		}
 		sourceStart = annotation != null ? annotation.sourceStart : methodDecl.returnType.sourceStart;
 		sourceEnd = methodDecl.returnType.sourceEnd;
 	} else {
@@ -10626,6 +10672,20 @@ public void nullAnnotationIsRedundant(FieldDeclaration sourceField) {
 	Annotation annotation = findAnnotation(sourceField.annotations, TypeIds.BitNonNullAnnotation);
 	int sourceStart = annotation != null ? annotation.sourceStart : sourceField.type.sourceStart;
 	int sourceEnd = sourceField.type.sourceEnd;
+	this.handle(IProblem.RedundantNullAnnotation, ProblemHandler.NoArgument, ProblemHandler.NoArgument, sourceStart, sourceEnd);
+}
+
+public void nullAnnotationIsRedundant(TypeParameter typeParameter) {
+	Annotation annotation = findAnnotation(typeParameter.annotations, TypeIds.BitNonNullAnnotation);
+	int sourceStart = annotation != null ? annotation.sourceStart : typeParameter.sourceStart;
+	int sourceEnd = typeParameter.sourceEnd;
+	this.handle(IProblem.RedundantNullAnnotation, ProblemHandler.NoArgument, ProblemHandler.NoArgument, sourceStart, sourceEnd);
+}
+
+public void nullAnnotationIsRedundant(TypeReference typeReference, Annotation[] annotations) {
+	Annotation annotation = findAnnotation(annotations, TypeIds.BitNonNullAnnotation);
+	int sourceStart = annotation != null ? annotation.sourceStart : typeReference.sourceStart;
+	int sourceEnd = typeReference.sourceEnd;
 	this.handle(IProblem.RedundantNullAnnotation, ProblemHandler.NoArgument, ProblemHandler.NoArgument, sourceStart, sourceEnd);
 }
 
@@ -10952,13 +11012,7 @@ public void nullityMismatchingTypeAnnotation(Expression expression, TypeBinding 
 		superHint = status.superTypeHintName(this.options, false);
 		superHintShort = status.superTypeHintName(this.options, true);
 	} else {
-		problemId = (status.isAnnotatedToUnannotated()
-					? IProblem.AnnotatedTypeArgumentToUnannotated
-					: (status.isUnchecked()
-						? IProblem.NullityUncheckedTypeAnnotationDetail
-						: (requiredType.isTypeVariable() && !requiredType.hasNullTypeAnnotations())
-							? IProblem.NullityMismatchAgainstFreeTypeVariable
-							: IProblem.NullityMismatchingTypeAnnotation));
+		problemId = status.getProblemId(requiredType);
 		if (problemId == IProblem.NullityMismatchAgainstFreeTypeVariable) {
 			arguments      = new String[] { null, null, new String(requiredType.sourceName()) }; // don't show bounds here
 			shortArguments = new String[] { null, null, new String(requiredType.sourceName()) };
@@ -11426,9 +11480,8 @@ public void invalidTypeArguments(TypeReference[] typeReference) {
 			typeReference[typeReference.length - 1].sourceEnd);
 }
 public void invalidModule(ModuleReference ref) {
-	this.handle(IProblem.UndefinedModule,
-		NoArgument, new String[] { CharOperation.charToString(ref.moduleName) },
-		ref.sourceStart, ref.sourceEnd);
+	String[] args = new String[] { CharOperation.charToString(ref.moduleName) };
+	this.handle(IProblem.UndefinedModule, args, args, ref.sourceStart, ref.sourceEnd);
 }
 public void missingModuleAddReads(char[] requiredModuleName) {
 	String[] args = new String[] { new String(requiredModuleName) };
@@ -11645,6 +11698,7 @@ public void switchExpressionMixedCase(ASTNode statement) {
 		statement.sourceStart,
 		statement.sourceEnd);
 }
+// Is this redundant ?? See switchExpressionsBreakOutOfSwitchExpression
 public void switchExpressionBreakNotAllowed(ASTNode statement) {
 	this.handle(
 		IProblem.SwitchExpressionsYieldBreakNotAllowed,
@@ -12286,25 +12340,33 @@ public void IllegalFallThroughToPattern(Statement statement) {
 		statement.sourceStart,
 		statement.sourceEnd);
 	}
-public void switchPatternOnlyOnePatternCaseLabelAllowed(Expression element) {
+public void illegalFallthroughFromAPattern(Statement statement) {
 	this.handle(
-			IProblem.OnlyOnePatternCaseLabelAllowed,
+		IProblem.IllegalFallthroughFromAPattern,
+		NoArgument,
+		NoArgument,
+		statement.sourceStart,
+		statement.sourceEnd);
+	}
+public void illegalCaseConstantCombination(Expression element) {
+	this.handle(
+			IProblem.ConstantWithPatternIncompatible,
 			NoArgument,
 			NoArgument,
 			element.sourceStart,
 			element.sourceEnd);
 }
-public void switchPatternBothPatternAndDefaultCaseLabelsNotAllowed(Expression element) {
+public void patternSwitchNullOnlyOrFirstWithDefault(Expression element) {
 	this.handle(
-			IProblem.CannotMixPatternAndDefault,
+			IProblem.PatternSwitchNullOnlyOrFirstWithDefault,
 			NoArgument,
 			NoArgument,
 			element.sourceStart,
 			element.sourceEnd);
 }
-public void switchPatternBothNullAndNonTypePatternNotAllowed(Expression element) {
+public void patternSwitchCaseDefaultOnlyAsSecond(Expression element) {
 	this.handle(
-			IProblem.CannotMixNullAndNonTypePattern,
+			IProblem.PatternSwitchCaseDefaultOnlyAsSecond,
 			NoArgument,
 			NoArgument,
 			element.sourceStart,
@@ -12374,12 +12436,21 @@ public void incompatiblePatternType(ASTNode element, TypeBinding type, TypeBindi
 			element.sourceStart,
 			element.sourceEnd);
 }
-public void rawTypeInRecordPattern(TypeBinding type, ASTNode element) {
+public void cannotInferRecordPatternTypes(RecordPattern pattern) {
+	String arguments [] = new String [] { pattern.toString() };
 	this.handle(
-			IProblem.RawTypeInRecordPattern,
-			new String[] {new String(type.readableName())},
-			new String[] {new String(type.shortReadableName())},
-			element.sourceStart,
-			element.sourceEnd);
+			IProblem.CannotInferRecordPatternTypes,
+			arguments,
+			arguments,
+			pattern.sourceStart,
+			pattern.sourceEnd);
+}
+public void falseLiteralInGuard(Expression exp) {
+	this.handle(
+			IProblem.FalseConstantInGuard,
+			NoArgument,
+			NoArgument,
+			exp.sourceStart,
+			exp.sourceEnd);
 }
 }

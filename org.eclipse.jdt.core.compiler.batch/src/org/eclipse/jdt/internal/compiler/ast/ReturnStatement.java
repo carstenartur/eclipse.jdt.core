@@ -153,6 +153,9 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
 		} else if (traversedContext instanceof InitializationFlowContext) {
 				currentScope.problemReporter().cannotReturnInInitializer(this);
 				return FlowInfo.DEAD_END;
+		} else if (traversedContext.associatedNode instanceof SwitchExpression) {
+				currentScope.problemReporter().switchExpressionsReturnWithinSwitchExpression(this);
+				return FlowInfo.DEAD_END;
 		}
 	} while ((traversedContext = traversedContext.getLocalParent()) != null);
 
@@ -346,7 +349,7 @@ public void resolve(BlockScope scope) {
 	if (methodType == null)
 		return;
 
-	if (methodType.isProperType(true) && lambda != null) {
+	if (lambda != null && methodType.isProperType(true)) {
 		// ensure that type conversions don't leak a preliminary local type:
 		if (lambda.updateLocalTypes())
 			methodType = lambda.expectedResultType();

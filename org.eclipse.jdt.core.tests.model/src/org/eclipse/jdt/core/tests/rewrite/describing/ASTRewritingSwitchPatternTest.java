@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2021, 2022 IBM Corporation and others.
+ * Copyright (c) 2021, 2023 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -53,23 +53,23 @@ public class ASTRewritingSwitchPatternTest extends ASTRewritingTest {
 	}
 
 	public static Test suite() {
-		return createSuite(ASTRewritingSwitchPatternTest.class, 19);
+		return createSuite(ASTRewritingSwitchPatternTest.class, 21);
 	}
 
 	@Override
 	protected void setUp() throws Exception {
 		super.setUp();
-		if (this.apiLevel == AST.JLS19 ) { // Remove this after it is a standard feature
-			this.project1.setOption(JavaCore.COMPILER_COMPLIANCE, JavaCore.VERSION_19);
-			this.project1.setOption(JavaCore.COMPILER_SOURCE, JavaCore.VERSION_19);
-			this.project1.setOption(JavaCore.COMPILER_CODEGEN_TARGET_PLATFORM, JavaCore.VERSION_19);
+		if (this.apiLevel == AST.JLS21 ) { // Remove this after it is a standard feature
+			this.project1.setOption(JavaCore.COMPILER_COMPLIANCE, JavaCore.VERSION_21);
+			this.project1.setOption(JavaCore.COMPILER_SOURCE, JavaCore.VERSION_21);
+			this.project1.setOption(JavaCore.COMPILER_CODEGEN_TARGET_PLATFORM, JavaCore.VERSION_21);
 			this.project1.setOption(JavaCore.COMPILER_PB_ENABLE_PREVIEW_FEATURES, JavaCore.ENABLED);
 		}
 	}
 
 	private boolean checkAPILevel() {
-		if (this.apiLevel < 19) {
-			System.err.println("Test "+getName()+" requires a JRE 19");
+		if (this.apiLevel < 21) {
+			System.err.println("Test "+getName()+" requires a JRE 21");
 			return true;
 		}
 		return false;

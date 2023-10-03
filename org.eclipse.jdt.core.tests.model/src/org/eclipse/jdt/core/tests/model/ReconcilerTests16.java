@@ -24,6 +24,7 @@ import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.JavaModelException;
 import org.eclipse.jdt.core.WorkingCopyOwner;
 import org.eclipse.jdt.core.dom.AST;
+
 import junit.framework.Test;
 
 public class ReconcilerTests16 extends ModifyingResourceTests {
@@ -240,6 +241,358 @@ public void testBug576448_001() throws Exception {
 				markers);
 
 		this.workingCopy = getCompilationUnit("p/src/X.java").getWorkingCopy(this.wcOwner, null);
+		this.problemRequestor.initialize(this.workingCopy.getSource().toCharArray());
+		this.workingCopy.reconcile(JLS_LATEST, true, this.wcOwner, null);
+		assertProblems("Expecting no problems",
+				"----------\n" +
+				"----------\n",
+				this.problemRequestor);
+		this.workingCopy.discardWorkingCopy();
+	} finally {
+		deleteProject(p);
+	}
+}
+// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/342
+public void testissue342_001() throws Exception {
+	if (!isJRE16)
+		return;
+	IJavaProject p = createJava16Project("p");
+	createFolder("/p/src/a");
+	try {
+		createFile("p/src/a/Sneaker.java",
+				"package a;\n"+
+				"\n"+
+				"public record Sneaker(String brand, float price, int ... sizes) {\n"+
+				" public void test () {\n"+
+				"   Sneaker sn = new Sneaker(\"Eclipse\", 100, 9, 10, 11);\n"+
+				"   System.out.println(sn.sizes().length);\n" +
+				" }\n"+
+				"}");
+		String mainSource =
+				"package a;\n"+
+				"\n"+
+				"public class Main {\n"+
+				"  public static void main(String[] args) {\n"+
+				"   Sneaker sn = new Sneaker(\"Eclipse\", 100, 1, 2, 3);\n"+
+				"   System.out.println(sn.sizes().length);\n" +
+				"  }\n"+
+				"}";
+		createFile("p/src/a/Main.java", mainSource);
+
+		p.getProject().build(IncrementalProjectBuilder.FULL_BUILD, null);
+		IMarker[] markers = p.getProject().findMarkers(null, true, IResource.DEPTH_INFINITE);
+		assertMarkers("markers in p",
+				"",
+				markers);
+		int reconcileFlags= ICompilationUnit.FORCE_PROBLEM_DETECTION;
+		reconcileFlags|= ICompilationUnit.ENABLE_STATEMENTS_RECOVERY;
+		reconcileFlags|= ICompilationUnit.ENABLE_BINDINGS_RECOVERY;
+		this.workingCopy = getCompilationUnit("p/src/a/Main.java").getWorkingCopy(this.wcOwner, null);
+		this.problemRequestor.initialize(mainSource.toCharArray());
+		this.workingCopy.reconcile(JLS_LATEST, reconcileFlags, this.wcOwner, null);
+		assertProblems("Expecting no problems",
+				"----------\n" +
+				"----------\n",
+				this.problemRequestor);
+		this.workingCopy.discardWorkingCopy();
+	} finally {
+		deleteProject(p);
+	}
+}
+public void testGH612_001() throws Exception {
+	if (!isJRE16)
+		return;
+	IJavaProject p = createJava16Project("p");
+	createFolder("/p/src/a");
+	try {
+		String source =
+				"package a;\n"
+				+ "public class X {\n"
+				+ "    public static void main(String[] args) {\n"
+				+ "        Sub sub = new Sub();\n"
+				+ "        sub.method1();\n"
+				+ "    }\n"
+				+ "\n"
+				+ "    static class Outer<T> { \n"
+				+ "        class Inner {\n"
+				+ "            void sayHi() {\n"
+				+ "                System.out.println(\"hello world!\");\n"
+				+ "            }\n"
+				+ "        }\n"
+				+ "    }\n"
+				+ "\n"
+				+ "    static class Sub extends Outer<Sub.Inner> {\n"
+				+ "        void method1() {\n"
+				+ "            Inner inner = new Inner();\n"
+				+ "            inner.sayHi();\n"
+				+ "        }\n"
+				+ "    }\n"
+				+ "}\n";
+		createFile("p/src/a/X.java",
+				source);
+		p.getProject().build(IncrementalProjectBuilder.FULL_BUILD, null);
+		IMarker[] markers = p.getProject().findMarkers(null, true, IResource.DEPTH_INFINITE);
+		assertMarkers("markers in p",
+				"",
+				markers);
+	} finally {
+		deleteProject(p);
+	}
+}
+public void testGH612_002() throws Exception {
+	if (!isJRE16)
+		return;
+	IJavaProject p = createJava16Project("p");
+	createFolder("/p/src/a");
+	try {
+		String source =
+				"package a;\n"
+				+ "public class X {\n"
+				+ "    public static void main(String[] args) {\n"
+				+ "        Sub sub = new Sub();\n"
+				+ "        sub.method1();\n"
+				+ "    }\n"
+				+ "\n"
+				+ "    static interface Outer<T> { \n"
+				+ "        class Inner {\n"
+				+ "            void sayHi() {\n"
+				+ "                System.out.println(\"hello world!\");\n"
+				+ "            }\n"
+				+ "        }\n"
+				+ "    }\n"
+				+ "\n"
+				+ "    static class Sub implements Outer<Sub.Inner> {\n"
+				+ "        void method1() {\n"
+				+ "            Inner inner = new Inner();\n"
+				+ "            inner.sayHi();\n"
+				+ "        }\n"
+				+ "    }\n"
+				+ "}\n";
+		createFile("p/src/a/X.java",
+				source);
+		p.getProject().build(IncrementalProjectBuilder.FULL_BUILD, null);
+		IMarker[] markers = p.getProject().findMarkers(null, true, IResource.DEPTH_INFINITE);
+		assertMarkers("markers in p",
+				"",
+				markers);
+	} finally {
+		deleteProject(p);
+	}
+}
+// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/1085
+// Canonical constructor of generic record not found if other constructor is present
+public void testGHIssue1085() throws Exception {
+	if (!isJRE16)
+		return;
+	IJavaProject p = createJava16Project("p");
+	try {
+		createFile("p/src/GenericRecord.java",
+				"public record GenericRecord<A>(int parameter) {\n" +
+				"    public GenericRecord() {\n" +
+				"        this(0);\n" +
+				"    }\n" +
+				"}\n");
+
+		createFile("p/src/Test.java",
+				"public class Test {\n" +
+				"    public void test() {\n" +
+				"        new GenericRecord<String>(0);\n" +
+				"    }\n" +
+				"}\n");
+
+		p.getProject().build(IncrementalProjectBuilder.FULL_BUILD, null);
+		IMarker[] markers = p.getProject().findMarkers(null, true, IResource.DEPTH_INFINITE);
+		assertMarkers("markers in p",
+				"",
+				markers);
+
+		this.workingCopy = getCompilationUnit("p/src/Test.java").getWorkingCopy(this.wcOwner, null);
+		this.problemRequestor.initialize(this.workingCopy.getSource().toCharArray());
+		this.workingCopy.reconcile(JLS_LATEST, true, this.wcOwner, null);
+		assertProblems("Expecting no problems",
+				"----------\n" +
+				"----------\n",
+				this.problemRequestor);
+		this.workingCopy.discardWorkingCopy();
+	} finally {
+		deleteProject(p);
+	}
+}
+
+// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/1085
+// Canonical constructor of generic record not found if other constructor is present
+public void testGHIssue1085_2() throws Exception {
+	if (!isJRE16)
+		return;
+	IJavaProject p = createJava16Project("p");
+	try {
+		createFile("p/src/GenericRecord.java",
+				"public record GenericRecord<A>(int parameter) {\n" +
+				"    public GenericRecord() {\n" +
+				"        this(0);\n" +
+				"    }\n" +
+				"    public GenericRecord(int parameter) {\n" +
+				"        this.parameter = parameter;\n" +
+				"    }\n" +
+				"}\n");
+
+		createFile("p/src/Test.java",
+				"public class Test {\n" +
+				"    public void test() {\n" +
+				"        new GenericRecord<String>(0);\n" +
+				"    }\n" +
+				"}\n");
+
+		p.getProject().build(IncrementalProjectBuilder.FULL_BUILD, null);
+		IMarker[] markers = p.getProject().findMarkers(null, true, IResource.DEPTH_INFINITE);
+		assertMarkers("markers in p",
+				"",
+				markers);
+
+		this.workingCopy = getCompilationUnit("p/src/Test.java").getWorkingCopy(this.wcOwner, null);
+		this.problemRequestor.initialize(this.workingCopy.getSource().toCharArray());
+		this.workingCopy.reconcile(JLS_LATEST, true, this.wcOwner, null);
+		assertProblems("Expecting no problems",
+				"----------\n" +
+				"----------\n",
+				this.problemRequestor);
+		this.workingCopy.discardWorkingCopy();
+	} finally {
+		deleteProject(p);
+	}
+}
+// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/1085
+// Canonical constructor of generic record not found if other constructor is present
+public void testGHIssue1085_3() throws Exception {
+	if (!isJRE16)
+		return;
+	IJavaProject p = createJava16Project("p");
+	try {
+		createFile("p/src/GenericRecord.java",
+				"public record GenericRecord<A>(int parameter) {\n" +
+				"    public GenericRecord() {\n" +
+				"        this(0);\n" +
+				"    }\n" +
+				"    public GenericRecord {\n" +
+				"    }\n" +
+				"}\n");
+
+		createFile("p/src/Test.java",
+				"public class Test {\n" +
+				"    public void test() {\n" +
+				"        new GenericRecord<String>(0);\n" +
+				"    }\n" +
+				"}\n");
+
+		p.getProject().build(IncrementalProjectBuilder.FULL_BUILD, null);
+		IMarker[] markers = p.getProject().findMarkers(null, true, IResource.DEPTH_INFINITE);
+		assertMarkers("markers in p",
+				"",
+				markers);
+
+		this.workingCopy = getCompilationUnit("p/src/Test.java").getWorkingCopy(this.wcOwner, null);
+		this.problemRequestor.initialize(this.workingCopy.getSource().toCharArray());
+		this.workingCopy.reconcile(JLS_LATEST, true, this.wcOwner, null);
+		assertProblems("Expecting no problems",
+				"----------\n" +
+				"----------\n",
+				this.problemRequestor);
+		this.workingCopy.discardWorkingCopy();
+	} finally {
+		deleteProject(p);
+	}
+}
+// https://bugs.eclipse.org/bugs/show_bug.cgi?id=578080
+// incorrect compiler error: Type inference not working on records with constructor
+public void test578080() throws Exception {
+	if (!isJRE16)
+		return;
+	IJavaProject p = createJava16Project("p");
+	try {
+		createFile("p/src/Diamond.java",
+				"public record Diamond<T> (T value) {\n" +
+				"	public Diamond {	\n" +
+				"	}\n" +
+				"}\n");
+
+		createFile("p/src/DiamondTest.java",
+				"public class DiamondTest {\n" +
+				"	public void testDiamond(){\n" +
+				"		assertEquals(new Diamond<>(\"y\"), new Diamond<>(\"y\"));\n" +
+				"		final Diamond<String> hi = new Diamond<>(\"hello\");\n" +
+				"		assertNotNull(hi);\n" +
+				"	}\n" +
+				"\n" +
+				"	private void assertNotNull(Diamond<String> hi) {\n" +
+				"	}\n" +
+				"\n" +
+				"	private void assertEquals(Object o1, Object o2) {\n" +
+				"	} \n" +
+				"}\n");
+
+		p.getProject().build(IncrementalProjectBuilder.FULL_BUILD, null);
+		IMarker[] markers = p.getProject().findMarkers(null, true, IResource.DEPTH_INFINITE);
+		assertMarkers("markers in p",
+				"",
+				markers);
+
+		this.workingCopy = getCompilationUnit("p/src/DiamondTest.java").getWorkingCopy(this.wcOwner, null);
+		this.problemRequestor.initialize(this.workingCopy.getSource().toCharArray());
+		this.workingCopy.reconcile(JLS_LATEST, true, this.wcOwner, null);
+		assertProblems("Expecting no problems",
+				"----------\n" +
+				"----------\n",
+				this.problemRequestor);
+		this.workingCopy.discardWorkingCopy();
+	} finally {
+		deleteProject(p);
+	}
+}
+// https://bugs.eclipse.org/bugs/show_bug.cgi?id=577351
+// inference with diamond error in records in two files
+public void test577351() throws Exception {
+	if (!isJRE16)
+		return;
+	IJavaProject p = createJava16Project("p");
+	try {
+
+		createFile("p/src/TimeSeries.java",
+				"import java.util.Objects;\n" +
+				"\n" +
+				"public final class TimeSeries<T> {\n" +
+				"  public record Data<T>(long timestamp, T element) {\n" +
+				"    public Data {\n" +
+				"      Objects.requireNonNull(element);\n" +
+				"    }\n" +
+				"    @Override\n" +
+				"    public String toString() {\n" +
+				"      return timestamp + \" | \" + element;\n" +
+				"    }\n" +
+				"  }\n" +
+				"}\n");
+
+		createFile("p/src/TimeSeriesTest.java",
+				"public class TimeSeriesTest {\n" +
+				"	public interface Executable {\n" +
+				"		void execute() throws Throwable;\n" +
+				"	}\n" +
+				"\n" +
+				"	public void test() {\n" +
+				"		assertThrows(NullPointerException.class, () -> new TimeSeries.Data<>(0, null));\n" +
+				"	}\n" +
+				"\n" +
+				"	private void assertThrows(Class<NullPointerException> class1, Executable ex) {\n" +
+				"	}\n" +
+				"}\n"
+				);
+
+		p.getProject().build(IncrementalProjectBuilder.FULL_BUILD, null);
+		IMarker[] markers = p.getProject().findMarkers(null, true, IResource.DEPTH_INFINITE);
+		assertMarkers("markers in p",
+				"",
+				markers);
+
+		this.workingCopy = getCompilationUnit("p/src/TimeSeriesTest.java").getWorkingCopy(this.wcOwner, null);
 		this.problemRequestor.initialize(this.workingCopy.getSource().toCharArray());
 		this.workingCopy.reconcile(JLS_LATEST, true, this.wcOwner, null);
 		assertProblems("Expecting no problems",

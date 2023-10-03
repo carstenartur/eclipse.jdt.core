@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2019 IBM Corporation and others.
+ * Copyright (c) 2019, 2023 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -450,7 +450,10 @@ public void test009() throws JavaModelException {
 			"  }\n" +
 			"  public static void foo(Num num_) {\n" +
 			"    {\n" +
-			"      <SelectOnName:num_>;\n" +
+			"      switch (num_) {\n" +
+			"      case THREE ->\n" +
+			"          <SelectOnName:num_>;\n" +
+			"      }\n" +
 			"    }\n" +
 			"  }\n" +
 			"}\n";
@@ -500,13 +503,14 @@ public void test010() throws JavaModelException {
 			"  public X() {\n" +
 			"  }\n" +
 			"  public static void foo(Num num_) {\n" +
-			"    switch (num_) {\n" +
-			"    case THREE ->\n" +
-			"        {\n" +
-			"          int i_j;\n" +
-			"          System.out.println(<SelectOnName:i_j>);\n" +
-			"          break;\n" +
+			"    {\n" +
+			"      {\n" +
+			"        switch (num_) {\n" +
+			"        case THREE ->\n" +
+			"            int i_j;\n" +
+			"            <SelectOnName:i_j>;\n" +
 			"        }\n" +
+			"      }\n" +
 			"    }\n" +
 			"  }\n" +
 			"}\n";
@@ -626,7 +630,10 @@ public void test013() throws JavaModelException {
 			"  public static void foo(int num_) {\n" +
 			"    int i;\n" +
 			"    {\n" +
-			"      <SelectOnName:num_>;\n" +
+			"      switch (num_) {\n" +
+			"      case 3 ->\n" +
+			"          <SelectOnName:num_>;\n" +
+			"      }\n" +
 			"    }\n" +
 			"  }\n" +
 			"}\n";
@@ -664,7 +671,12 @@ public void test014() throws JavaModelException {
 			"  public static void foo(int num_) {\n" +
 			"    int i;\n" +
 			"    {\n" +
-			"      <SelectOnName:num_>;\n" +
+			"      switch (num_) {\n" +
+			"      case 3 ->\n" +
+			"          0;\n" +
+			"      default ->\n" +
+			"          <SelectOnName:num_>;\n" +
+			"      }\n" +
 			"    }\n" +
 			"  }\n" +
 			"}\n";
@@ -702,7 +714,12 @@ public void test015() throws JavaModelException {
 			"  public static void foo(int num_) {\n" +
 			"    int i;\n" +
 			"    {\n" +
-			"      <SelectOnName:num_>;\n" +
+			"      switch (num_) {\n" +
+			"      case 3 ->\n" +
+			"          0;\n" +
+			"      default ->\n" +
+			"          <SelectOnName:num_>;\n" +
+			"      }\n" +
 			"    }\n" +
 			"  }\n" +
 			"}\n";
@@ -740,7 +757,12 @@ public void test016() throws JavaModelException {
 			"  public void bar(int s) {\n" +
 			"    int i_j;\n" +
 			"    {\n" +
-			"      <SelectOnName:i_j>;\n" +
+			"      switch (s) {\n" +
+			"      case 3 ->\n" +
+			"          (s + 1);\n" +
+			"      default ->\n" +
+			"          <SelectOnName:i_j>;\n" +
+			"      }\n" +
 			"    }\n" +
 			"  }\n" +
 			"}\n";
@@ -775,7 +797,12 @@ public void test017() throws JavaModelException {
 			"  public void bar(int s) {\n" +
 			"    int i_j;\n" +
 			"    {\n" +
-			"      <SelectOnName:i_j>;\n" +
+			"      switch (s) {\n" +
+			"      case 3 ->\n" +
+			"          (s + 1);\n" +
+			"      default ->\n" +
+			"          <SelectOnName:i_j>;\n" +
+			"      }\n" +
 			"    }\n" +
 			"  }\n" +
 			"}\n";

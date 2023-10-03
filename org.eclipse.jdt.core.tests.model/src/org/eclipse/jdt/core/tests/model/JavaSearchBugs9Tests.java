@@ -25,7 +25,11 @@ import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.core.runtime.Path;
+import org.eclipse.jdt.core.IClasspathAttribute;
+import org.eclipse.jdt.core.IClasspathContainer;
+import org.eclipse.jdt.core.IClasspathEntry;
 import org.eclipse.jdt.core.ICompilationUnit;
+import org.eclipse.jdt.core.IField;
 import org.eclipse.jdt.core.IJavaElement;
 import org.eclipse.jdt.core.IJavaProject;
 import org.eclipse.jdt.core.ILocalVariable;
@@ -44,6 +48,9 @@ import org.eclipse.jdt.core.search.SearchMatch;
 import org.eclipse.jdt.core.search.SearchParticipant;
 import org.eclipse.jdt.core.search.SearchPattern;
 import org.eclipse.jdt.core.search.TypeReferenceMatch;
+import org.eclipse.jdt.core.tests.model.ClasspathTests.TestContainer;
+import org.eclipse.jdt.core.tests.util.Util;
+import org.eclipse.jdt.internal.core.ClasspathEntry;
 import org.eclipse.jdt.internal.core.JavaElement;
 import org.eclipse.jdt.internal.core.LocalVariable;
 import org.eclipse.jdt.internal.core.TypeParameter;
@@ -503,7 +510,7 @@ public void testBug501162_008() throws Exception {
 				"package pack22;\n" +
 				"public interface I22 {}\n");
 
-		addClasspathEntry(project1, JavaCore.newProjectEntry(project2.getPath()));
+		addModularProjectEntry(project1, project2);
 		project1.close(); // sync
 		project2.close();
 		project2.open(null);
@@ -1081,7 +1088,7 @@ public void testBug501162_019() throws Exception {
 				"    public ITwo i2;\n" +
 				"    public XOne X1;\n" +
 				"}\n");
-		addLibraryEntry(project1, "/JavaSearchBugs/lib/bzero501162.jar", false);
+		addModularLibraryEntry(project1, new Path("/JavaSearchBugs/lib/bzero501162.jar"), null);
 		project1.close(); // sync
 		project1.open(null);
 		SearchPattern pattern = SearchPattern.createPattern("pack.one",
@@ -1120,7 +1127,7 @@ public void testBug501162_020() throws Exception {
 				"    public ITwo i2;\n" +
 				"    public XOne X1;\n" +
 				"}\n");
-		addLibraryEntry(project1, "/JavaSearchBugs/lib/bzero501162.jar", false);
+		addModularLibraryEntry(project1, new Path("/JavaSearchBugs/lib/bzero501162.jar"), null);
 		project1.close(); // sync
 		project1.open(null);
 		SearchPattern pattern = SearchPattern.createPattern("pack.two",
@@ -1160,7 +1167,7 @@ public void testBug501162_021() throws Exception {
 				"    public ITwo i2;\n" +
 				"    public XOne X1;\n" +
 				"}\n");
-		addLibraryEntry(project1, "/JavaSearchBugs/lib/bzero501162.jar", false);
+		addModularLibraryEntry(project1, new Path("/JavaSearchBugs/lib/bzero501162.jar"), null);
 		project1.close(); // sync
 		project1.open(null);
 		SearchPattern pattern = SearchPattern.createPattern("pack.three",
@@ -1200,7 +1207,7 @@ public void testBug501162_022() throws Exception {
 				"    public ITwo i2;\n" +
 				"    public XOne X1;\n" +
 				"}\n");
-		addLibraryEntry(project1, "/JavaSearchBugs/lib/bzero501162.jar", false);
+		addModularLibraryEntry(project1, new Path("/JavaSearchBugs/lib/bzero501162.jar"), null);
 		project1.close(); // sync
 		project1.open(null);
 		SearchPattern pattern = SearchPattern.createPattern("java.base",
@@ -1386,7 +1393,7 @@ public void testBug501162_027() throws Exception {
 				"    public ITwo i2;\n" +
 				"    public XOne X1;\n" +
 				"}\n");
-		addLibraryEntry(project1, "/JavaSearchBugs/lib/bzero501162.jar", false);
+		addModularLibraryEntry(project1, new Path("/JavaSearchBugs/lib/bzero501162.jar"), null);
 		project1.close(); // sync
 		project1.open(null);
 		SearchPattern pattern = SearchPattern.createPattern("XOne",
@@ -1425,7 +1432,7 @@ public void testBug501162_028() throws Exception {
 				"    public ITwo i2;\n" +
 				"    public XOne X1;\n" +
 				"}\n");
-		addLibraryEntry(project1, "/JavaSearchBugs/lib/bzero501162.jar", false);
+		addModularLibraryEntry(project1, new Path("/JavaSearchBugs/lib/bzero501162.jar"), null);
 		project1.close(); // sync
 		project1.open(null);
 		SearchPattern pattern = SearchPattern.createPattern("XFourOne",
@@ -1462,7 +1469,7 @@ public void testBug501162_029() throws Exception {
 				"    public ITwo i2;\n" +
 				"    public XOne X1;\n" +
 				"}\n");
-		addLibraryEntry(project1, "/JavaSearchBugs/lib/bzero501162.jar", false);
+		addModularLibraryEntry(project1, new Path("/JavaSearchBugs/lib/bzero501162.jar"), null);
 		project1.close(); // sync
 		project1.open(null);
 		SearchPattern pattern = SearchPattern.createPattern("ITwo",
@@ -1502,7 +1509,7 @@ public void testBug501162_030() throws Exception {
 				"    public ITwo i2;\n" +
 				"    public XOne X1;\n" +
 				"}\n");
-		addLibraryEntry(project1, "/JavaSearchBugs/lib/bzero501162.jar", false);
+		addModularLibraryEntry(project1, new Path("/JavaSearchBugs/lib/bzero501162.jar"), null);
 		project1.close(); // sync
 		project1.open(null);
 		SearchPattern pattern = SearchPattern.createPattern("IThreeOne",
@@ -1539,7 +1546,7 @@ public void testBug501162_031() throws Exception {
 				"    public ITwo i2;\n" +
 				"    public XOne X1;\n" +
 				"}\n");
-		addLibraryEntry(project1, "/JavaSearchBugs/lib/bzero501162.jar", false);
+		addModularLibraryEntry(project1, new Path("/JavaSearchBugs/lib/bzero501162.jar"), null);
 		project1.close(); // sync
 		project1.open(null);
 		SearchPattern pattern = SearchPattern.createPattern("XThreeOne",
@@ -1576,7 +1583,7 @@ public void testBug501162_032() throws Exception {
 				"    public ITwo i2;\n" +
 				"    public XOne X1;\n" +
 				"}\n");
-		addLibraryEntry(project1, "/JavaSearchBugs/lib/bzero501162.jar", false);
+		addModularLibraryEntry(project1, new Path("/JavaSearchBugs/lib/bzero501162.jar"), null);
 		project1.close(); // sync
 		project1.open(null);
 		SearchPattern pattern = SearchPattern.createPattern("zero",
@@ -1652,7 +1659,7 @@ public void testBug501162_034() throws Exception {
 				"    public ITwo i2;\n" +
 				"    public XOne X1;\n" +
 				"}\n");
-		addLibraryEntry(project1, "/JavaSearchBugs/lib/bzero.src.501162.jar", false);
+		addModularLibraryEntry(project1, new Path("/JavaSearchBugs/lib/bzero.src.501162.jar"), null);
 		project1.close(); // sync
 		project1.open(null);
 		SearchPattern pattern = SearchPattern.createPattern("pack.two",
@@ -1692,7 +1699,7 @@ public void testBug501162_035() throws Exception {
 				"    public ITwo i2;\n" +
 				"    public XOne X1;\n" +
 				"}\n");
-		addLibraryEntry(project1, "/JavaSearchBugs/lib/bzero.src.501162.jar", false);
+		addModularLibraryEntry(project1, new Path("/JavaSearchBugs/lib/bzero.src.501162.jar"), null);
 		project1.close(); // sync
 		project1.open(null);
 		SearchPattern pattern = SearchPattern.createPattern("pack.three",
@@ -1918,7 +1925,7 @@ public void testBug501162_041() throws Exception {
 				"    public ITwo i2;\n" +
 				"    public XOne X1;\n" +
 				"}\n");
-		addLibraryEntry(project1, "/JavaSearchBugs/lib/bzero.src.501162.jar", false);
+		addModularLibraryEntry(project1, new Path("/JavaSearchBugs/lib/bzero.src.501162.jar"), null);
 		project1.close(); // sync
 		project1.open(null);
 		SearchPattern pattern = SearchPattern.createPattern("XOne",
@@ -1957,7 +1964,7 @@ public void testBug501162_042() throws Exception {
 				"    public ITwo i2;\n" +
 				"    public XOne X1;\n" +
 				"}\n");
-		addLibraryEntry(project1, "/JavaSearchBugs/lib/bzero.src.501162.jar", false);
+		addModularLibraryEntry(project1, new Path("/JavaSearchBugs/lib/bzero.src.501162.jar"), null);
 		project1.close(); // sync
 		project1.open(null);
 		SearchPattern pattern = SearchPattern.createPattern("XFourOne",
@@ -1994,7 +2001,7 @@ public void testBug501162_043() throws Exception {
 				"    public ITwo i2;\n" +
 				"    public XOne X1;\n" +
 				"}\n");
-		addLibraryEntry(project1, "/JavaSearchBugs/lib/bzero.src.501162.jar", false);
+		addModularLibraryEntry(project1, new Path("/JavaSearchBugs/lib/bzero.src.501162.jar"), null);
 		project1.close(); // sync
 		project1.open(null);
 		SearchPattern pattern = SearchPattern.createPattern("ITwo",
@@ -2036,7 +2043,7 @@ public void testBug501162_044() throws Exception {
 				"    public ITwo i2;\n" +
 				"    public XOne X1;\n" +
 				"}\n");
-		addLibraryEntry(project1, "/JavaSearchBugs/lib/bzero.src.501162.jar", false);
+		addModularLibraryEntry(project1, new Path("/JavaSearchBugs/lib/bzero.src.501162.jar"), null);
 		project1.close(); // sync
 		project1.open(null);
 		SearchPattern pattern = SearchPattern.createPattern("IThreeOne",
@@ -2074,7 +2081,7 @@ public void testBug501162_045() throws Exception {
 				"    public ITwo i2;\n" +
 				"    public XOne X1;\n" +
 				"}\n");
-		addLibraryEntry(project1, "/JavaSearchBugs/lib/bzero.src.501162.jar", false);
+		addModularLibraryEntry(project1, new Path("/JavaSearchBugs/lib/bzero.src.501162.jar"), null);
 		project1.close(); // sync
 		project1.open(null);
 		SearchPattern pattern = SearchPattern.createPattern("XThreeOne",
@@ -3516,7 +3523,7 @@ public void testBug519151_023() throws Exception {
 				"module second {\n" +
 				"}\n";
 		createFile("/second/src/module-info.java",	secondFile);
-		addLibraryEntry(project2, "/JavaSearchBugs/lib/lib519151.jar", false);
+		addModularLibraryEntry(project2, new Path("/JavaSearchBugs/lib/lib519151.jar"), null);
 		project1.close(); // sync
 		project2.close(); // sync
 		project2.open(null);
@@ -4747,5 +4754,262 @@ public void testBug547095_type_patter_search_modular() throws Exception {
 	}
 }
 
+/*
+ * Test for call hierarchy of a field with a type coming from a JRE module.
+ * https://github.com/eclipse-jdt/eclipse.jdt.core/issues/740
+ */
+public void testMethodReferenceForTypeFromJREModuleBugGh740() throws Exception {
+	String projectName = "gh740MethodReferenceForTypeParameterFromModuleBug";
+	try {
+		IJavaProject project = createJavaProject(projectName, new String[] {"src"}, new String[] {}, "bin", "11");
+
+		String jrePath = Util.getJREDirectory();
+		Path bootModPath = new Path(jrePath +"/lib/jrt-fs.jar");
+		Path sourceAttachment = new Path(jrePath +"/lib/src.zip");
+
+		addClasspathEntry(project, JavaCore.newContainerEntry(new Path("container/default"), ClasspathEntry.NO_ACCESS_RULES, new IClasspathAttribute[0], false));
+		JavaCore.setClasspathContainer(
+				new Path("container/default"),
+				new IJavaProject[]{ project },
+				new IClasspathContainer[] {
+					new TestContainer(
+						new Path("container/default"),
+						new IClasspathEntry[] {
+								JavaCore.newLibraryEntry(bootModPath, sourceAttachment, null, null, moduleAttribute(), false),
+						})
+				},
+				null);
+		String packageFolder = "/" + projectName + "/src/test";
+		createFolder(packageFolder);
+		String testSource =
+				"package test;\n" +
+				"public class Test {\n" +
+				"  public Object testField;\n" +
+				"  public void testMethod() {\n" +
+				"    testField = null;\n" +
+				"  }\n" +
+				"}";
+		createFile(packageFolder + "/Test.java", testSource);
+		buildAndExpectNoProblems(project);
+		IType type = project.findType("test.Test");
+		IField field = type.getField("testField");
+		search(field, REFERENCES, EXACT_RULE, SearchEngine.createWorkspaceScope(), this.resultCollector);
+		assertSearchResults(
+				"src/test/Test.java void test.Test.testMethod() [testField] EXACT_MATCH");
+	} finally {
+		deleteProject(projectName);
+	}
+}
+
+public void testGH902_whenTypeReferenceIsUnknown_expectToBeFound() throws CoreException {
+	try {
+		IJavaProject project = createJava9Project("JavaSearchBugs9");
+		project.open(null);
+		createFile("JavaSearchBugs9/src/GH902.java",
+				"""
+					public class GH902 {
+						public static void foo() {
+							StackWalker.getInstance().forEach(s -> System.out.println(s));
+						}
+					}
+				""");
+
+		refresh(project);
+
+		IType type = project.findType("java.lang.StackWalker");
+		assertNotNull("type should not be null", type);
+		search(type, REFERENCES, EXACT_RULE, SearchEngine.createWorkspaceScope());
+		assertTrue("Actual: ".concat(this.resultCollector.toString()),
+				this.resultCollector.toString().contains("src/GH902.java void GH902.foo() [StackWalker] EXACT_MATCH"));
+	} finally {
+		deleteProject("JavaSearchBugs9");
+	}
+}
+
+public void testGH902_whenTypeReferenceIsUnknownButQualified_expectToBeFound() throws CoreException {
+	try {
+		IJavaProject project = createJava9Project("JavaSearchBugs9");
+		project.open(null);
+		createFile("JavaSearchBugs9/src/GH902.java",
+				"""
+					public class GH902 {
+						public static void foo() {
+							java.lang.StackWalker.getInstance().forEach(s -> System.out.println(s));
+						}
+					}
+				""");
+
+		refresh(project);
+
+		IType type = project.findType("java.lang.StackWalker");
+		assertNotNull("type should not be null", type);
+		search(type, REFERENCES, EXACT_RULE, SearchEngine.createWorkspaceScope());
+		assertTrue("Actual: ".concat(this.resultCollector.toString()), this.resultCollector.toString()
+				.contains("src/GH902.java void GH902.foo() [java.lang.StackWalker] EXACT_MATCH"));
+	} finally {
+		deleteProject("JavaSearchBugs9");
+	}
+}
+
+public void testGH902_whenTypeReferenceIsUnknownButQualifiedNested_expectToBeFound() throws CoreException {
+	try {
+		IJavaProject project = createJava9Project("JavaSearchBugs9");
+		project.open(null);
+		createFile("JavaSearchBugs9/src/GH902.java",
+				"""
+					public class GH902 {
+						public static void foo() {
+							java.util.AbstractMap.Entry.comparingByKey();
+						}
+					}
+				""");
+
+		refresh(project);
+
+		IType type = project.findType("java.util.Map.Entry");
+		assertNotNull("type should not be null", type);
+		search(type, REFERENCES, RAW_RULE, SearchEngine.createWorkspaceScope());
+		assertTrue("Actual: ".concat(this.resultCollector.toString()), this.resultCollector.toString()
+				.contains("src/GH902.java void GH902.foo() [java.util.AbstractMap.Entry] EXACT_MATCH"));
+	} finally {
+		deleteProject("JavaSearchBugs9");
+	}
+}
+
+public void testGH902_whenTypeReferenceIsUnknownButNested_expectToBeFound() throws CoreException {
+	try {
+		IJavaProject project = createJava9Project("JavaSearchBugs9");
+		project.open(null);
+		createFile("JavaSearchBugs9/src/GH902.java",
+				"""
+					import static java.util.AbstractMap.*;
+					public class GH902 {
+						public static void foo() {
+							Entry.comparingByKey();
+						}
+					}
+				""");
+		refresh(project);
+
+		IType type = project.findType("java.util.Map.Entry");
+		assertNotNull("type should not be null", type);
+		search(type, REFERENCES, RAW_RULE, SearchEngine.createWorkspaceScope());
+		assertTrue("Actual: ".concat(this.resultCollector.toString()),
+				this.resultCollector.toString().contains("src/GH902.java void GH902.foo() [Entry] EXACT_MATCH"));
+	} finally {
+		deleteProject("JavaSearchBugs9");
+	}
+}
+
+/*
+ * Test for call hierarchy of a field with a type coming from a container,
+ * when the search is initiated in a project that defines a module.
+ * https://github.com/eclipse-jdt/eclipse.jdt.core/issues/740
+ */
+public void testModuleContainerSearchBugGh1039() throws Exception {
+	String jarProjectName = "gh1039ModuleContainerSearch";
+	setUpJavaProject(jarProjectName);
+	String projectName = "gh1039ModuleContainerSearchTest";
+	try {
+		IJavaProject project = createJava9Project(projectName);
+
+		addClasspathEntry(project, JavaCore.newContainerEntry(new Path("container/default"), ClasspathEntry.NO_ACCESS_RULES, new IClasspathAttribute[0], false));
+
+		Path jarPath = new Path("/gh1039ModuleContainerSearch/TestGH1039.jar");
+		JavaCore.setClasspathContainer(
+				new Path("container/default"),
+				new IJavaProject[]{ project },
+				new IClasspathContainer[] {
+					new TestContainer(
+						new Path("container/default"),
+						new IClasspathEntry[] {
+								JavaCore.newLibraryEntry(jarPath, null, null, null, moduleAttribute(), false),
+						})
+				},
+				null);
+		String fileContent =
+				"""
+				module testmodule {
+				    requires dummymodule;
+				}
+				""";
+		createFile("/" + projectName + "/src/module-info.java",	fileContent);
+		String packageFolder = "/" + projectName + "/src/test";
+		createFolder(packageFolder);
+		String testSource =
+				"""
+				package test;
+				@dummy.Dummy
+				public class Test {
+				};
+				""";
+		createFile(packageFolder + "/Test.java", testSource);
+		buildAndExpectNoProblems(project);
+		IType type = project.findType("dummy.Dummy");
+		search(type, REFERENCES, EXACT_RULE, SearchEngine.createWorkspaceScope(), this.resultCollector);
+		assertSearchResults(
+				"src/test/Test.java test.Test [dummy.Dummy] EXACT_MATCH");
+	} finally {
+		deleteProject(projectName);
+		deleteProject(jarProjectName);
+	}
+}
+
+/*
+ * The fix for GitHub issue 675 results in not finding search matches
+ * within a modular jar on the classpath.
+ * https://github.com/eclipse-jdt/eclipse.jdt.core/issues/935
+ * See also: https://github.com/eclipse-jdt/eclipse.jdt.core/issues/675
+ */
+public void testNoMatchesInModularJarOnClasspathBugGh935() throws Exception {
+	String projectName = "gh935NoMatchesInModularJarOnClasspath";
+	try {
+		IJavaProject project = createJavaProject(projectName, new String[] {"src"}, new String[] {"JCL11_LIB"}, "bin", "11");
+		String snippet1 =
+				"""
+				package test;
+				public class Test1 {
+				  public void testMethod() {
+				  }
+				}
+				""";
+		String snippet2 =
+				"""
+				package test;
+				public class Test2 {
+				  public void testCaller() {
+				      Test1 test1 = new Test1();
+				      test1.testMethod();
+				  }
+				}
+				""";
+
+		addLibrary(project,
+				"libGh935.jar",
+				"libGh935.src.zip",
+				new String[]  {
+						"module-info.java",
+						"module testmodule {\n" +
+						"  exports test;\n" +
+						"}",
+						"test/Test1.java",
+						snippet1,
+						"test/Test2.java",
+						snippet2, },
+				JavaCore.VERSION_11);
+
+		buildAndExpectNoProblems(project);
+		waitUntilIndexesReady();
+
+		IType type = project.findType("test.Test1");
+
+		IMethod method = type.getMethod("testMethod", new String[0]);
+		search(method, REFERENCES, EXACT_RULE, SearchEngine.createWorkspaceScope(), this.resultCollector);
+		assertSearchResults(
+				"libGh935.jar void test.Test2.testCaller() EXACT_MATCH");
+	} finally {
+		deleteProject(projectName);
+	}
+}
 // Add more tests here
 }

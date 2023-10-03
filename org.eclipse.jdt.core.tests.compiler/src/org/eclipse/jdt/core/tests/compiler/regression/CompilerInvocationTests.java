@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2006, 2022 IBM Corporation and others.
+ * Copyright (c) 2006, 2023 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -846,6 +846,7 @@ public void test011_problem_categories() {
 		expectedProblemAttributes.put("NeedToEmulateConstructorAccess", new ProblemAttributes(CategorizedProblem.CAT_CODE_STYLE));
 		expectedProblemAttributes.put("NeedToEmulateFieldReadAccess", new ProblemAttributes(CategorizedProblem.CAT_CODE_STYLE));
 		expectedProblemAttributes.put("NeedToEmulateFieldWriteAccess", new ProblemAttributes(CategorizedProblem.CAT_CODE_STYLE));
+		expectedProblemAttributes.put("SyntheticAccessorNotEnclosingMethod", new ProblemAttributes(CategorizedProblem.CAT_CODE_STYLE));
 		expectedProblemAttributes.put("NeedToEmulateMethodAccess", new ProblemAttributes(CategorizedProblem.CAT_CODE_STYLE));
 		expectedProblemAttributes.put("NestedServiceImpl", new ProblemAttributes(CategorizedProblem.CAT_TYPE));
 		expectedProblemAttributes.put("NoAdditionalBoundAfterTypeVariable", new ProblemAttributes(CategorizedProblem.CAT_TYPE));
@@ -904,6 +905,7 @@ public void test011_problem_categories() {
 		expectedProblemAttributes.put("NullityMismatchingTypeAnnotation", new ProblemAttributes(CategorizedProblem.CAT_POTENTIAL_PROGRAMMING_PROBLEM));
 		expectedProblemAttributes.put("NullityMismatchingTypeAnnotationSuperHint", new ProblemAttributes(CategorizedProblem.CAT_POTENTIAL_PROGRAMMING_PROBLEM));
 		expectedProblemAttributes.put("NullityMismatchTypeArgument", new ProblemAttributes(CategorizedProblem.CAT_POTENTIAL_PROGRAMMING_PROBLEM));
+		expectedProblemAttributes.put("NullityUncheckedTypeAnnotation", new ProblemAttributes(CategorizedProblem.CAT_POTENTIAL_PROGRAMMING_PROBLEM));
 		expectedProblemAttributes.put("NullityUncheckedTypeAnnotationDetail", new ProblemAttributes(CategorizedProblem.CAT_POTENTIAL_PROGRAMMING_PROBLEM));
 		expectedProblemAttributes.put("NullityUncheckedTypeAnnotationDetailSuperHint", new ProblemAttributes(CategorizedProblem.CAT_POTENTIAL_PROGRAMMING_PROBLEM));
 		expectedProblemAttributes.put("NullNotCompatibleToFreeTypeVariable", new ProblemAttributes(CategorizedProblem.CAT_POTENTIAL_PROGRAMMING_PROBLEM));
@@ -964,6 +966,8 @@ public void test011_problem_categories() {
 		expectedProblemAttributes.put("PotentialNullUnboxing", new ProblemAttributes(CategorizedProblem.CAT_POTENTIAL_PROGRAMMING_PROBLEM));
 		expectedProblemAttributes.put("ProviderMethodOrConstructorRequiredForServiceImpl", new ProblemAttributes(CategorizedProblem.CAT_TYPE));
 		expectedProblemAttributes.put("PublicClassMustMatchFileName", new ProblemAttributes(CategorizedProblem.CAT_TYPE));
+		expectedProblemAttributes.put("PatternSwitchNullOnlyOrFirstWithDefault", new ProblemAttributes(CategorizedProblem.CAT_PREVIEW_RELATED));
+		expectedProblemAttributes.put("PatternSwitchCaseDefaultOnlyAsSecond", new ProblemAttributes(CategorizedProblem.CAT_PREVIEW_RELATED));
 		expectedProblemAttributes.put("RawMemberTypeCannotBeParameterized", new ProblemAttributes(CategorizedProblem.CAT_TYPE));
 		expectedProblemAttributes.put("RawTypeReference", new ProblemAttributes(CategorizedProblem.CAT_UNCHECKED_RAW));
 		expectedProblemAttributes.put("RecursiveConstructorInvocation", new ProblemAttributes(CategorizedProblem.CAT_MEMBER));
@@ -1170,6 +1174,7 @@ public void test011_problem_categories() {
 		expectedProblemAttributes.put("UsingTerminallyDeprecatedSinceVersionPackage", new ProblemAttributes(CategorizedProblem.CAT_MODULE));
 		expectedProblemAttributes.put("UsingTerminallyDeprecatedSinceVersionType", new ProblemAttributes(CategorizedProblem.CAT_DEPRECATION));
 		expectedProblemAttributes.put("UsingTerminallyDeprecatedSinceVersionType", new ProblemAttributes(CategorizedProblem.CAT_DEPRECATION));
+		expectedProblemAttributes.put("VarCannotBeUsedWithTypeArguments", new ProblemAttributes(CategorizedProblem.CAT_SYNTAX));
 		expectedProblemAttributes.put("VarCannotBeMixedWithNonVarParams", new ProblemAttributes(CategorizedProblem.CAT_SYNTAX));
 		expectedProblemAttributes.put("VarIsNotAllowedHere", new ProblemAttributes(CategorizedProblem.CAT_SYNTAX));
 		expectedProblemAttributes.put("VarIsReserved", new ProblemAttributes(CategorizedProblem.CAT_SYNTAX));
@@ -1304,6 +1309,7 @@ public void test011_problem_categories() {
 	    expectedProblemAttributes.put("DiscouragedValueBasedTypeSynchronization", new ProblemAttributes(true));
 	    expectedProblemAttributes.put("ConstantWithPatternIncompatible", new ProblemAttributes(true));
 	    expectedProblemAttributes.put("IllegalFallthroughToPattern", new ProblemAttributes(true));
+	    expectedProblemAttributes.put("IllegalFallthroughFromAPattern", new ProblemAttributes(true));
 	    expectedProblemAttributes.put("OnlyOnePatternCaseLabelAllowed", new ProblemAttributes(true));
 	    expectedProblemAttributes.put("CannotMixPatternAndDefault", new ProblemAttributes(true));
 	    expectedProblemAttributes.put("CannotMixNullAndNonTypePattern", new ProblemAttributes(true));
@@ -1316,6 +1322,8 @@ public void test011_problem_categories() {
 	    expectedProblemAttributes.put("RecordPatternMismatch", new ProblemAttributes(true));
 	    expectedProblemAttributes.put("PatternTypeMismatch", new ProblemAttributes(true));
 	    expectedProblemAttributes.put("RawTypeInRecordPattern", new ProblemAttributes(true));
+	    expectedProblemAttributes.put("FalseConstantInGuard", new ProblemAttributes(true));
+	    expectedProblemAttributes.put("CannotInferRecordPatternTypes", new ProblemAttributes(true));
 	    expectedProblemAttributes.put("ClassExtendFinalRecord", new ProblemAttributes(CategorizedProblem.CAT_TYPE));
 	    expectedProblemAttributes.put("RecordErasureIncompatibilityInCanonicalConstructor", new ProblemAttributes(CategorizedProblem.CAT_TYPE));
 	    expectedProblemAttributes.put("JavadocInvalidModule", new ProblemAttributes(CategorizedProblem.CAT_INTERNAL));
@@ -1938,6 +1946,7 @@ public void test012_compiler_problems_tuning() {
 		expectedProblemAttributes.put("NeedToEmulateFieldReadAccess", new ProblemAttributes(JavaCore.COMPILER_PB_SYNTHETIC_ACCESS_EMULATION));
 		expectedProblemAttributes.put("NeedToEmulateFieldWriteAccess", new ProblemAttributes(JavaCore.COMPILER_PB_SYNTHETIC_ACCESS_EMULATION));
 		expectedProblemAttributes.put("NeedToEmulateMethodAccess", new ProblemAttributes(JavaCore.COMPILER_PB_SYNTHETIC_ACCESS_EMULATION));
+		expectedProblemAttributes.put("SyntheticAccessorNotEnclosingMethod", new ProblemAttributes(JavaCore.COMPILER_PB_SYNTHETIC_ACCESS_EMULATION));
 		expectedProblemAttributes.put("NestedServiceImpl", SKIP);
 		expectedProblemAttributes.put("NoAdditionalBoundAfterTypeVariable", SKIP);
 		expectedProblemAttributes.put("NoFieldOnBaseType", SKIP);
@@ -1991,6 +2000,7 @@ public void test012_compiler_problems_tuning() {
 		expectedProblemAttributes.put("NullityMismatchingTypeAnnotation", new ProblemAttributes(JavaCore.COMPILER_PB_NULL_SPECIFICATION_VIOLATION));
 		expectedProblemAttributes.put("NullityMismatchingTypeAnnotationSuperHint", new ProblemAttributes(JavaCore.COMPILER_PB_NULL_SPECIFICATION_VIOLATION));
 		expectedProblemAttributes.put("NullityMismatchTypeArgument", new ProblemAttributes(JavaCore.COMPILER_PB_NULL_SPECIFICATION_VIOLATION));
+		expectedProblemAttributes.put("NullityUncheckedTypeAnnotation", new ProblemAttributes(JavaCore.COMPILER_PB_NULL_UNCHECKED_CONVERSION));
 		expectedProblemAttributes.put("NullityUncheckedTypeAnnotationDetail", new ProblemAttributes(JavaCore.COMPILER_PB_NULL_UNCHECKED_CONVERSION));
 		expectedProblemAttributes.put("NullityUncheckedTypeAnnotationDetailSuperHint", new ProblemAttributes(JavaCore.COMPILER_PB_NULL_UNCHECKED_CONVERSION));
 		expectedProblemAttributes.put("NullExpressionReference", new ProblemAttributes(JavaCore.COMPILER_PB_NULL_REFERENCE));
@@ -2056,6 +2066,8 @@ public void test012_compiler_problems_tuning() {
 		expectedProblemAttributes.put("ProblemNotAnalysed", new ProblemAttributes(JavaCore.COMPILER_PB_SUPPRESS_WARNINGS_NOT_FULLY_ANALYSED));
 		expectedProblemAttributes.put("ProviderMethodOrConstructorRequiredForServiceImpl", SKIP);
 		expectedProblemAttributes.put("PublicClassMustMatchFileName", SKIP);
+		expectedProblemAttributes.put("PatternSwitchNullOnlyOrFirstWithDefault", SKIP);
+		expectedProblemAttributes.put("PatternSwitchCaseDefaultOnlyAsSecond", SKIP);
 		expectedProblemAttributes.put("RawMemberTypeCannotBeParameterized", SKIP);
 		expectedProblemAttributes.put("RawTypeReference", new ProblemAttributes(JavaCore.COMPILER_PB_RAW_TYPE_REFERENCE));
 		expectedProblemAttributes.put("RecursiveConstructorInvocation", SKIP);
@@ -2276,6 +2288,7 @@ public void test012_compiler_problems_tuning() {
 		expectedProblemAttributes.put("DisallowedExplicitThisParameter", SKIP);
 		expectedProblemAttributes.put("IllegalArrayOfUnionType", SKIP);
 		expectedProblemAttributes.put("IllegalArrayTypeInIntersectionCast", SKIP);
+		expectedProblemAttributes.put("VarCannotBeUsedWithTypeArguments", SKIP);
 		expectedProblemAttributes.put("VarCannotBeMixedWithNonVarParams", SKIP);
 		expectedProblemAttributes.put("VarIsNotAllowedHere", SKIP);
 		expectedProblemAttributes.put("VarIsReserved", SKIP);
@@ -2396,6 +2409,7 @@ public void test012_compiler_problems_tuning() {
 	    expectedProblemAttributes.put("DiscouragedValueBasedTypeSynchronization", SKIP);
 	    expectedProblemAttributes.put("ConstantWithPatternIncompatible", SKIP);
 	    expectedProblemAttributes.put("IllegalFallthroughToPattern", SKIP);
+	    expectedProblemAttributes.put("IllegalFallthroughFromAPattern", SKIP);
 	    expectedProblemAttributes.put("OnlyOnePatternCaseLabelAllowed", SKIP);
 	    expectedProblemAttributes.put("CannotMixPatternAndDefault", SKIP);
 	    expectedProblemAttributes.put("CannotMixNullAndNonTypePattern", SKIP);
@@ -2408,6 +2422,8 @@ public void test012_compiler_problems_tuning() {
 	    expectedProblemAttributes.put("RecordPatternMismatch", SKIP);
 	    expectedProblemAttributes.put("PatternTypeMismatch", SKIP);
 	    expectedProblemAttributes.put("RawTypeInRecordPattern", SKIP);
+	    expectedProblemAttributes.put("FalseConstantInGuard", SKIP);
+	    expectedProblemAttributes.put("CannotInferRecordPatternTypes", SKIP);
 	    expectedProblemAttributes.put("ClassExtendFinalRecord", SKIP);
 	    expectedProblemAttributes.put("RecordErasureIncompatibilityInCanonicalConstructor", SKIP);
 	    expectedProblemAttributes.put("JavadocInvalidModule", SKIP);

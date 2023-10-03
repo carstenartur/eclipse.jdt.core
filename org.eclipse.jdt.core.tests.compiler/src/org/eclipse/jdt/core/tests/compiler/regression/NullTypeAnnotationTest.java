@@ -5236,6 +5236,12 @@ public void testDefault01_bin() {
 				"}\n"
 			},
 			getCompilerOptions(),
+			"----------\n" +
+			"1. WARNING in X.java (at line 10)\n" +
+			"	return new ArrayList<@NonNull Number>();\n" +
+			"	                     ^^^^^^^^^^^^^^^\n" +
+			"The nullness annotation is redundant with a default that applies to this location\n" +
+			"----------\n",
 			"");
 	runNegativeTestWithLibs(
 		new String[] {
@@ -6554,6 +6560,8 @@ public void testBug435399() {
 		"");
 }
 public void testBug435962() {
+	Map options = getCompilerOptions();
+	options.put(JavaCore.COMPILER_PB_REDUNDANT_NULL_ANNOTATION, JavaCore.IGNORE);
 	runConformTestWithLibs(
 		new String[] {
 			"interfaces/CopyableNode.java",
@@ -6617,7 +6625,7 @@ public void testBug435962() {
 			"	}\n" +
 			"}\n"
 		},
-		getCompilerOptions(),
+		options,
 		"");
 }
 public void testBug440462() {
@@ -10812,6 +10820,11 @@ public void testBug485058() {
 		"	                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n" +
 		"Null constraint mismatch: The type \'@Nullable ? extends @NonNull Serializable\' is not a valid substitute for the type parameter \'Q extends @NonNull Serializable\'\n" +
 		"----------\n" +
+		"2. WARNING in test\\Test4.java (at line 25)\n" +
+		"	public static void g(Feature4<@Nullable ? extends @NonNull Serializable> feature) {\n" +
+		"	                                                  ^^^^^^^^^^^^^^^^^^^^^\n" +
+		"The nullness annotation is redundant with a default that applies to this location\n" +
+		"----------\n" +
 		"2. ERROR in test\\Test4.java (at line 25)\n" +
 		"	public static void g(Feature4<@Nullable ? extends @NonNull Serializable> feature) {\n" +
 		"	                                                  ^^^^^^^^\n" +
@@ -13184,6 +13197,12 @@ public void testBug499597simplified() {
 			"",
 		},
 		getCompilerOptions(),
+		"----------\n" +
+		"1. WARNING in Foo2.java (at line 15)\n" +
+		"	return Foo2.<@NonNull String>of(\"\"); // <-- no warning\n" +
+		"	             ^^^^^^^^^^^^^^^\n" +
+		"The nullness annotation is redundant with a default that applies to this location\n" +
+		"----------\n",
 		""
 	);
 }
@@ -13223,13 +13242,23 @@ public void testBug499597original() {
 		"----------\n" +
 		"1. WARNING in Foo.java (at line 12)\n" +
 		"	static <T> Collection<T> of(@NonNull T @NonNull... elements) {\n" +
-		"	                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n" +
+		"	                            ^^^^^^^^^^^^^^^^^^^^^^\n" +
 		"The nullness annotation is redundant with a default that applies to this location\n" +
 		"----------\n" +
-		"2. WARNING in Foo.java (at line 13)\n" +
+		"2. WARNING in Foo.java (at line 12)\n" +
+		"	static <T> Collection<T> of(@NonNull T @NonNull... elements) {\n" +
+		"	                                       ^^^^^^^^^^^\n" +
+		"The nullness annotation is redundant with a default that applies to this location\n" +
+		"----------\n" +
+		"3. WARNING in Foo.java (at line 13)\n" +
 		"	return Collections.singleton(elements[0]);\n" +
 		"	       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n" +
 		"Null type safety (type annotations): The expression of type \'Set<@NonNull T>\' needs unchecked conversion to conform to \'@NonNull Collection<@NonNull T>\', corresponding supertype is \'Collection<@NonNull T>\'\n" +
+		"----------\n" +
+		"4. WARNING in Foo.java (at line 23)\n" +
+		"	return Foo.<String @NonNull []>of(X); // <-- no warning\n" +
+		"	                   ^^^^^^^^^^^\n" +
+		"The nullness annotation is redundant with a default that applies to this location\n" +
 		"----------\n"
 	);
 }
@@ -13533,22 +13562,27 @@ public void testBug484926locals() {
 		},
 		options,
 		"----------\n" +
-		"1. ERROR in test\\NNBDOnLocalOrField.java (at line 16)\n" +
+		"1. WARNING in test\\NNBDOnLocalOrField.java (at line 16)\n" +
+		"	AtomicReference<String> x2 = new AtomicReference<@NonNull String>(), x3=new AtomicReference<@Nullable String>();\n" +
+		"	                                                 ^^^^^^^^^^^^^^^\n" +
+		"The nullness annotation is redundant with a default that applies to this location\n" +
+		"----------\n" +
+		"2. ERROR in test\\NNBDOnLocalOrField.java (at line 16)\n" +
 		"	AtomicReference<String> x2 = new AtomicReference<@NonNull String>(), x3=new AtomicReference<@Nullable String>();\n" +
 		"	                                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n" +
 		"Null type mismatch (type annotations): required \'AtomicReference<@NonNull String>\' but this expression has type \'@NonNull AtomicReference<@Nullable String>\'\n" +
 		"----------\n" +
-		"2. ERROR in test\\NNBDOnLocalOrField.java (at line 21)\n" +
+		"3. ERROR in test\\NNBDOnLocalOrField.java (at line 21)\n" +
 		"	x1.set(null);\n" +
 		"	       ^^^^\n" +
 		"Null type mismatch: required \'@NonNull String\' but the provided value is null\n" +
 		"----------\n" +
-		"3. ERROR in test\\NNBDOnLocalOrField.java (at line 22)\n" +
+		"4. ERROR in test\\NNBDOnLocalOrField.java (at line 22)\n" +
 		"	x2.set(null);\n" +
 		"	       ^^^^\n" +
 		"Null type mismatch: required \'@NonNull String\' but the provided value is null\n" +
 		"----------\n" +
-		"4. ERROR in test\\NNBDOnLocalOrField.java (at line 23)\n" +
+		"5. ERROR in test\\NNBDOnLocalOrField.java (at line 23)\n" +
 		"	x3.set(null);\n" +
 		"	       ^^^^\n" +
 		"Null type mismatch: required \'@NonNull String\' but the provided value is null\n" +
@@ -13592,22 +13626,27 @@ public void testBug484926fields() {
 		},
 		options,
 		"----------\n" +
-		"1. ERROR in test\\NNBDOnLocalOrField.java (at line 15)\n" +
+		"1. WARNING in test\\NNBDOnLocalOrField.java (at line 15)\n" +
+		"	AtomicReference<String> x2 = new AtomicReference<@NonNull String>(), x3=new AtomicReference<@Nullable String>();\n" +
+		"	                                                 ^^^^^^^^^^^^^^^\n" +
+		"The nullness annotation is redundant with a default that applies to this location\n" +
+		"----------\n" +
+		"2. ERROR in test\\NNBDOnLocalOrField.java (at line 15)\n" +
 		"	AtomicReference<String> x2 = new AtomicReference<@NonNull String>(), x3=new AtomicReference<@Nullable String>();\n" +
 		"	                                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n" +
 		"Null type mismatch (type annotations): required \'@NonNull AtomicReference<@NonNull String>\' but this expression has type \'@NonNull AtomicReference<@Nullable String>\'\n" +
 		"----------\n" +
-		"2. ERROR in test\\NNBDOnLocalOrField.java (at line 21)\n" +
+		"3. ERROR in test\\NNBDOnLocalOrField.java (at line 21)\n" +
 		"	x1.set(null);\n" +
 		"	       ^^^^\n" +
 		"Null type mismatch: required \'@NonNull String\' but the provided value is null\n" +
 		"----------\n" +
-		"3. ERROR in test\\NNBDOnLocalOrField.java (at line 22)\n" +
+		"4. ERROR in test\\NNBDOnLocalOrField.java (at line 22)\n" +
 		"	x2.set(null);\n" +
 		"	       ^^^^\n" +
 		"Null type mismatch: required \'@NonNull String\' but the provided value is null\n" +
 		"----------\n" +
-		"4. ERROR in test\\NNBDOnLocalOrField.java (at line 23)\n" +
+		"5. ERROR in test\\NNBDOnLocalOrField.java (at line 23)\n" +
 		"	x3.set(null);\n" +
 		"	       ^^^^\n" +
 		"Null type mismatch: required \'@NonNull String\' but the provided value is null\n" +
@@ -14321,7 +14360,111 @@ public void testBug508497() {
 		"----------\n"
 	);
 }
-public void testBug509025() {
+public void testBug509025_a() {
+	runConformTestWithLibs(
+		new String[] {
+			"MyAnno.java",
+			"import java.lang.annotation.Retention;\n" +
+			"import java.lang.annotation.RetentionPolicy;\n" +
+			"import org.eclipse.jdt.annotation.DefaultLocation;\n" +
+			"import org.eclipse.jdt.annotation.NonNull;\n" +
+			"import org.eclipse.jdt.annotation.NonNullByDefault;\n" +
+			"\n" +
+			"@Retention(RetentionPolicy.RUNTIME)\n" +
+			"@NonNullByDefault(DefaultLocation.ARRAY_CONTENTS)\n" +
+			"public @interface MyAnno {\n" +
+			"	@NonNull String[] items();\n" +
+			"\n" +
+			"}\n" +
+			"",
+		},
+		getCompilerOptions(),
+		"----------\n" +
+		"1. WARNING in MyAnno.java (at line 10)\n" +
+		"	@NonNull String[] items();\n" +
+		"	^^^^^^^^^^^^^^^^^\n" +
+		"The nullness annotation is redundant with a default that applies to this location\n" +
+		"----------\n",
+		""
+	);
+	runConformTestWithLibs(
+		false /* don't flush */,
+		new String[] {
+			"AnnoLoop.java",
+			"import org.eclipse.jdt.annotation.NonNull;\n" +
+			"import org.eclipse.jdt.annotation.NonNullByDefault;\n" +
+			"import org.eclipse.jdt.annotation.DefaultLocation;\n" +
+			"@NonNullByDefault(DefaultLocation.ARRAY_CONTENTS)\n" +
+			"public class AnnoLoop {\n" +
+			"	@NonNull String[] test(MyAnno anno) {\n" +
+			"		return anno.items();\n" +
+			"	}\n" +
+			"}\n" +
+			"",
+		},
+		getCompilerOptions(),
+		"----------\n" +
+		"1. WARNING in AnnoLoop.java (at line 6)\n" +
+		"	@NonNull String[] test(MyAnno anno) {\n" +
+		"	^^^^^^^^^^^^^^^^^\n" +
+		"The nullness annotation is redundant with a default that applies to this location\n" +
+		"----------\n",
+		""
+	);
+}
+public void testBug509025_b() {
+	runConformTestWithLibs(
+		new String[] {
+			"MyAnno.java",
+			"import java.lang.annotation.Retention;\n" +
+			"import java.lang.annotation.RetentionPolicy;\n" +
+			"\n" +
+			"import org.eclipse.jdt.annotation.NonNull;\n" +
+			"import org.eclipse.jdt.annotation.NonNullByDefault;\n" +
+			"\n" +
+			"@Retention(RetentionPolicy.RUNTIME)\n" +
+			"@NonNullByDefault\n" +
+			"public @interface MyAnno {\n" +
+			"	String @NonNull[] items();\n" +
+			"\n" +
+			"}\n" +
+			"",
+		},
+		getCompilerOptions(),
+		"----------\n" +
+		"1. WARNING in MyAnno.java (at line 10)\n" +
+		"	String @NonNull[] items();\n" +
+		"	       ^^^^^^^^^^\n" +
+		"The nullness annotation is redundant with a default that applies to this location\n" +
+		"----------\n",
+		""
+	);
+	runConformTestWithLibs(
+		false /* don't flush */,
+		new String[] {
+			"AnnoLoop.java",
+			"import org.eclipse.jdt.annotation.NonNull;\n" +
+			"import org.eclipse.jdt.annotation.NonNullByDefault;\n" +
+			"\n" +
+			"@NonNullByDefault\n" +
+			"public class AnnoLoop {\n" +
+			"	String @NonNull[] test(MyAnno anno) {\n" +
+			"		return anno.items();\n" +
+			"	}\n" +
+			"}\n" +
+			"",
+		},
+		getCompilerOptions(),
+		"----------\n" +
+		"1. WARNING in AnnoLoop.java (at line 6)\n" +
+		"	String @NonNull[] test(MyAnno anno) {\n" +
+		"	       ^^^^^^^^^^\n" +
+		"The nullness annotation is redundant with a default that applies to this location\n" +
+		"----------\n",
+		""
+	);
+}
+public void testBug509025_c() {
 	runConformTestWithLibs(
 		new String[] {
 			"MyAnno.java",
@@ -14340,6 +14483,7 @@ public void testBug509025() {
 			"",
 		},
 		getCompilerOptions(),
+		"",
 		""
 	);
 	runConformTestWithLibs(
@@ -14351,14 +14495,14 @@ public void testBug509025() {
 			"\n" +
 			"@NonNullByDefault\n" +
 			"public class AnnoLoop {\n" +
-			"	@NonNull\n" +
-			"	String[] test(MyAnno anno) {\n" +
+			"	@NonNull String[] test(MyAnno anno) {\n" +
 			"		return anno.items();\n" +
 			"	}\n" +
 			"}\n" +
 			"",
 		},
 		getCompilerOptions(),
+		"",
 		""
 	);
 }
@@ -18407,4 +18551,474 @@ public void testRequireNonNull() {
 	runner.runConformTest();
 }
 
+public void testBug522142_redundant1() {
+	Runner runner = new Runner();
+	runner.testFiles =
+		new String[] {
+			"Foo.java",
+			"import static org.eclipse.jdt.annotation.DefaultLocation.*;" +
+			"import org.eclipse.jdt.annotation.*;" +
+			"@NonNullByDefault({PARAMETER, RETURN_TYPE, FIELD, TYPE_PARAMETER, TYPE_BOUND, TYPE_ARGUMENT})\n" +
+			"interface Foo<A> {\n" +
+			"    interface Bar<@NonNull A> extends Iterable<Foo<A>> {\n" +
+			"    }\n" +
+			"}\n"
+		};
+	runner.expectedCompilerLog =
+			"----------\n" +
+			"1. WARNING in Foo.java (at line 3)\n" +
+			"	interface Bar<@NonNull A> extends Iterable<Foo<A>> {\n" +
+			"	              ^^^^^^^^^^\n" +
+			"The nullness annotation is redundant with a default that applies to this location\n" +
+			"----------\n";
+	runner.customOptions = getCompilerOptions();
+	runner.classLibraries = this.LIBS;
+	runner.runWarningTest();
+}
+
+public void testBug522142_redundant2() {
+	// challenge ArrayQualifiedTypeReference:
+	Runner runner = new Runner();
+	runner.testFiles =
+		new String[] {
+			"Foo.java",
+			"import static org.eclipse.jdt.annotation.DefaultLocation.*;" +
+			"import org.eclipse.jdt.annotation.*;" +
+			"@NonNullByDefault({PARAMETER, RETURN_TYPE, FIELD, TYPE_PARAMETER, TYPE_BOUND, TYPE_ARGUMENT})\n" +
+			"class Foo {\n" +
+			"	java.util.List<java.lang.String @NonNull[]> f1 = new java.util.ArrayList<>();\n" +
+			"	java.util.List<java.lang.String @NonNull[][]> f2 = new java.util.ArrayList<>();\n" +
+			"}\n"
+		};
+	runner.expectedCompilerLog =
+			"----------\n" +
+			"1. WARNING in Foo.java (at line 3)\n" +
+			"	java.util.List<java.lang.String @NonNull[]> f1 = new java.util.ArrayList<>();\n" +
+			"	                                ^^^^^^^^^^\n" +
+			"The nullness annotation is redundant with a default that applies to this location\n" +
+			"----------\n" +
+			"2. WARNING in Foo.java (at line 4)\n" +
+			"	java.util.List<java.lang.String @NonNull[][]> f2 = new java.util.ArrayList<>();\n" +
+			"	                                ^^^^^^^^^^^^\n" +
+			"The nullness annotation is redundant with a default that applies to this location\n" +
+			"----------\n";
+	runner.customOptions = getCompilerOptions();
+	runner.classLibraries = this.LIBS;
+	runner.runWarningTest();
+}
+
+public void testBug522142_redundant3() {
+	// challenge ArrayQualifiedTypeReference:
+	Runner runner = new Runner();
+	runner.testFiles =
+		new String[] {
+			"Foo.java",
+			"import static org.eclipse.jdt.annotation.DefaultLocation.*;" +
+			"import org.eclipse.jdt.annotation.*;" +
+			"@NonNullByDefault({PARAMETER, RETURN_TYPE, FIELD, TYPE_PARAMETER, TYPE_BOUND, TYPE_ARGUMENT})\n" +
+			"class Foo {\n" +
+			"	java.util.List<java.lang. @NonNull String> f = new java.util.ArrayList<>();\n" +
+			"}\n"
+		};
+	runner.expectedCompilerLog =
+			"----------\n" +
+			"1. WARNING in Foo.java (at line 3)\n" +
+			"	java.util.List<java.lang. @NonNull String> f = new java.util.ArrayList<>();\n" +
+			"	                          ^^^^^^^^^^^^^^^\n" +
+			"The nullness annotation is redundant with a default that applies to this location\n" +
+			"----------\n";
+	runner.customOptions = getCompilerOptions();
+	runner.classLibraries = this.LIBS;
+	runner.runWarningTest();
+}
+public void testBug522142_bogusError() {
+	Runner runner = new Runner();
+	runner.testFiles =
+		new String[] {
+			"Foo.java",
+			"import static org.eclipse.jdt.annotation.DefaultLocation.*;" +
+			"import org.eclipse.jdt.annotation.*;" +
+			"@NonNullByDefault({PARAMETER, RETURN_TYPE, FIELD, TYPE_PARAMETER, TYPE_BOUND, TYPE_ARGUMENT})\n" +
+			"interface Foo<A> {\n" +
+			"    interface Bar<A> extends Iterable<Foo<A>> {\n" +
+			"    }\n" +
+			"}\n"
+		};
+	runner.expectedCompilerLog =
+			"";
+	runner.customOptions = getCompilerOptions();
+	runner.classLibraries = this.LIBS;
+	runner.runConformTest();
+}
+public void testBug499596() throws Exception {
+	Runner runner = new Runner();
+	runner.testFiles =
+		new String[] {
+			"Foo.java",
+			"import static org.eclipse.jdt.annotation.DefaultLocation.*;\n" +
+			"import org.eclipse.jdt.annotation.*;\n" +
+			"import java.util.*;\n" +
+			"\n" +
+			"@NonNullByDefault({ PARAMETER, RETURN_TYPE, FIELD, TYPE_PARAMETER, TYPE_BOUND, TYPE_ARGUMENT, ARRAY_CONTENTS })\n" +
+			"abstract class Foo {\n" +
+			"	abstract <T> Collection<T> singleton(T t);\n" +
+			"	Collection<String[]> from0(@NonNull String @NonNull [] @NonNull... elements) { // <-- 3 warnings here, ok\n" +
+			"		return singleton(elements[0]);\n" +
+			"	}\n" +
+			"	Collection<String[]> from1(String @NonNull [] @NonNull... elements) { // <-- 2 warnings here, ok\n" +
+			"		return singleton(elements[0]);\n" +
+			"	}\n" +
+			"	Collection<String[]> from2(String [] @NonNull... elements) { // <-- 1 warning here, ok\n" +
+			"		return singleton(elements[0]);\n" +
+			"	}\n" +
+			"	Collection<String[]> from3(String []... elements) {\n" +
+			"		return singleton(elements[0]);\n" +
+			"	}\n" +
+			"	@NonNullByDefault({}) // cancel outer default\n" +
+			"	Collection<@NonNull String @NonNull[]> from4(String []... elements) {\n" +
+			"		return singleton(elements[0]); // <-- should warn\n" +
+			"	}\n" +
+			"}\n"
+		};
+	// Expectations:
+	// from0 .. from3:
+	// 		declarations should show the indicated number of warnings
+	// 		statements are OK, since everything is covered by the outer @NNBD
+	// from4 should flag the statement (only)
+	runner.expectedCompilerLog =
+			"----------\n" +
+			"1. WARNING in Foo.java (at line 8)\n" +
+			"	Collection<String[]> from0(@NonNull String @NonNull [] @NonNull... elements) { // <-- 3 warnings here, ok\n" +
+			"	                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n" +
+			"The nullness annotation is redundant with a default that applies to this location\n" +
+			"----------\n" +
+			"2. WARNING in Foo.java (at line 8)\n" +
+			"	Collection<String[]> from0(@NonNull String @NonNull [] @NonNull... elements) { // <-- 3 warnings here, ok\n" +
+			"	                                           ^^^^^^^^^^^^^^^^^^^^^^^\n" +
+			"The nullness annotation is redundant with a default that applies to this location\n" +
+			"----------\n" +
+			"3. WARNING in Foo.java (at line 8)\n" +
+			"	Collection<String[]> from0(@NonNull String @NonNull [] @NonNull... elements) { // <-- 3 warnings here, ok\n" +
+			"	                                                       ^^^^^^^^^^^\n" +
+			"The nullness annotation is redundant with a default that applies to this location\n" +
+			"----------\n" +
+			"4. WARNING in Foo.java (at line 11)\n" +
+			"	Collection<String[]> from1(String @NonNull [] @NonNull... elements) { // <-- 2 warnings here, ok\n" +
+			"	                                  ^^^^^^^^^^^^^^^^^^^^^^^\n" +
+			"The nullness annotation is redundant with a default that applies to this location\n" +
+			"----------\n" +
+			"5. WARNING in Foo.java (at line 11)\n" +
+			"	Collection<String[]> from1(String @NonNull [] @NonNull... elements) { // <-- 2 warnings here, ok\n" +
+			"	                                              ^^^^^^^^^^^\n" +
+			"The nullness annotation is redundant with a default that applies to this location\n" +
+			"----------\n" +
+			"6. WARNING in Foo.java (at line 14)\n" +
+			"	Collection<String[]> from2(String [] @NonNull... elements) { // <-- 1 warning here, ok\n" +
+			"	                                     ^^^^^^^^^^^\n" +
+			"The nullness annotation is redundant with a default that applies to this location\n" +
+			"----------\n" +
+			"7. WARNING in Foo.java (at line 22)\n" +
+			"	return singleton(elements[0]); // <-- should warn\n" +
+			"	                 ^^^^^^^^^^^\n" +
+			"Null type safety (type annotations): The expression of type \'String[]\' needs unchecked conversion to conform to \'@NonNull String @NonNull[]\'\n" +
+			"----------\n";
+	runner.customOptions = getCompilerOptions();
+	runner.classLibraries = this.LIBS;
+	runner.runWarningTest();
+}
+public void testRedundantNonNull_field() {
+	Runner runner = new Runner();
+	runner.testFiles =
+		new String[] {
+			"test1/Foo.java",
+			"package test1;\n" +
+			"import org.eclipse.jdt.annotation.*;\n" +
+			"@NonNullByDefault\n" +
+			"public class Foo {\n" +
+			"    @NonNull Object f=new Object();\n" +
+			"}\n"
+		};
+	runner.expectedCompilerLog =
+			"----------\n" +
+			"1. WARNING in test1\\Foo.java (at line 5)\n" +
+			"	@NonNull Object f=new Object();\n" +
+			"	^^^^^^^^^^^^^^^\n" +
+			"The nullness annotation is redundant with a default that applies to this location\n" +
+			"----------\n";
+	runner.classLibraries = this.LIBS;
+	runner.runWarningTest();
+}
+public void testGH1007_srikanth() {
+	Runner runner = new Runner();
+	runner.testFiles =
+		new String[] {
+			"SubClass.java",
+			"// ECJ error in next line: Type mismatch: cannot convert from Class<SubClass> to Class<? extends SuperClass>[]\n" +
+			"@AnnotationWithArrayInitializer(annotationArgument = SubClass.class)\n" +
+			"class AnnotatedClass2 extends AnnotatedSuperClass {}\n" +
+			"\n" +
+			"//ECJ error in next line: Type mismatch: cannot convert from Class<SubClass> to Class<? extends SuperClass>\n" +
+			"@AnnotationWithArrayInitializer(annotationArgument = {SubClass.class})\n" +
+			"class AnnotatedClass extends AnnotatedSuperClass {}\n" +
+			"\n" +
+			"\n" +
+			"class AnnotatedSuperClass {}\n" +
+			"\n" +
+			"@interface AnnotationWithArrayInitializer {\n" +
+			"    Class<? extends SuperClass>[] annotationArgument();\n" +
+			"}\n" +
+			"\n" +
+			"class SubClass extends SuperClass {}\n" +
+			"abstract class SuperClass {}"
+		};
+	runner.runConformTest();
+}
+public void testGH854() {
+	Runner runner = new Runner();
+	runner.testFiles =
+		new String[] {
+			"Annot.java",
+			"public @interface Annot {\n" +
+			"    Class<? extends Init<? extends Configuration>>[] inits(); \n" +
+			"}\n",
+			"Configuration.java",
+			"public interface Configuration {\n" +
+			"}\n",
+			"Init.java",
+			"public interface Init<C extends Configuration> {\n" +
+			"}\n",
+			"App.java",
+			"interface I<T> {}\n" +
+			"class IImpl<T> implements I<String>, Init<Configuration> {}\n" +
+			"@Annot(inits = {App.MyInit.class})\n" +
+			"public class App {\n" +
+			"	static class MyInit extends IImpl<Configuration> {}\n" +
+			"}\n"
+		};
+	runner.runConformTest();
+}
+// duplicate of #1077
+public void testGH476() {
+	Runner runner = new Runner();
+	runner.testFiles =
+		new String[] {
+			"Controller.java",
+			"public class Controller<T> {\n" +
+			"    final static String ENDPOINT = \"controll\";\n" +
+			"}\n",
+			"RequestMapping.java",
+			"import java.lang.annotation.ElementType;\n" +
+			"import java.lang.annotation.Retention;\n" +
+			"import java.lang.annotation.RetentionPolicy;\n" +
+			"import java.lang.annotation.Target;\n" +
+			"\n" +
+			"@Target(ElementType.TYPE)\n" +
+			"@Retention(RetentionPolicy.RUNTIME)\n" +
+			"public @interface RequestMapping {\n" +
+			"	String name() default \"\";\n" +
+			"	String[] value() default {};\n" +
+			"}\n",
+			"CtlImpl.java",
+			"@RequestMapping(CtlImpl.CTL_ENDPOINT)\n" +
+			"public class CtlImpl extends Controller<String> {\n" +
+			"    final static String CTL_ENDPOINT = ENDPOINT + \"/ctl\";\n" +
+			"    static String value;\n" +
+			"}\n"
+		};
+	runner.runConformTest();
+}
+public void testVSCodeIssue3076() {
+	Runner runner = new Runner();
+	runner.testFiles =
+		new String[] {
+			"demo/cache/AbstractCache.java",
+			"package demo.cache;\n" +
+			"\n" +
+			"public abstract class AbstractCache {\n" +
+			"    public enum Expiry {\n" +
+			"        ONE, TWO, THREE\n" +
+			"    }\n" +
+			"\n" +
+			"    protected abstract void cacheThis(int param1, Expiry param2);\n" +
+			"}\n",
+			"demo/Annot.java",
+			"package demo;\n" +
+			"public @interface Annot {\n" +
+			"	String defaultProperty();\n" +
+			"}\n",
+			"demo/cache/MyCache.java",
+			"package demo.cache;\n" +
+			"\n" +
+			"import demo.Annot;\n" +
+			"\n" +
+			"/**\n" +
+			" * This annotation is what causes the confusion around the nested Expiry type.\n" +
+			" *\n" +
+			" * If you comment out this annotation the language server has no problem\n" +
+			" * figuring it out.\n" +
+			" *\n" +
+			" * It can be *any* annotation.\n" +
+			" * So it would seem that referring to your own class outside of the\n" +
+			" * class definition is what triggers this particular bug.\n" +
+			" */\n" +
+			"@Annot(defaultProperty = MyCache.DEFAULT_PROPERTY_NAME)\n" +
+			"public class MyCache extends AbstractCache {\n" +
+			"    public static final String DEFAULT_PROPERTY_NAME = \"WHATEVER\";\n" +
+			"\n" +
+			"    @Override\n" +
+			"    protected void cacheThis(int param1, Expiry param2) {\n" +
+			"        throw new UnsupportedOperationException(\"Unimplemented method 'doSomethingElse'\");\n" +
+			"    }\n" +
+			"}\n"
+		};
+	runner.runConformTest();
+}
+public void testGH986() {
+	Runner runner = new Runner();
+	runner.testFiles =
+		new String[] {
+			"mypackage/Example.java",
+			"package mypackage;\n" +
+			"\n" +
+			"import java.io.Serializable;\n" +
+			"\n" +
+			"@Deprecated(since = Example.SINCE)\n" +
+			"public class Example<T> implements Serializable {\n" +
+			"	\n" +
+			"	static final String SINCE = \"...\";\n" +
+			"\n" +
+			"	private T target;\n" +
+			"\n" +
+			"}"
+		};
+	runner.runConformTest();
+}
+public void testGHjdtls2386() {
+	Runner runner = new Runner();
+	runner.testFiles =
+		new String[] {
+			"ConfigurableApplicationContext.java",
+			"public class ConfigurableApplicationContext { }\n",
+			"ApplicationContextInitializer.java",
+			"public interface ApplicationContextInitializer<T> {\n" +
+			"	void initialize(T context);\n" +
+			"}\n",
+			"ContextConfiguration.java",
+			"""
+			import static java.lang.annotation.ElementType.*;
+			import static java.lang.annotation.RetentionPolicy.*;
+			import java.lang.annotation.*;
+
+			@Target(TYPE)
+			@Retention(RUNTIME)
+			public @interface ContextConfiguration {
+				Class<? extends ApplicationContextInitializer<?>>[] initializers();
+			}
+			""",
+			"AbstractTest.java",
+			"""
+			@ContextConfiguration(initializers = {AbstractTest.Initializer.class})
+			public abstract class AbstractTest {
+
+			  static class Initializer
+			      implements ApplicationContextInitializer<ConfigurableApplicationContext> {
+
+			    @Override
+			    public void initialize(ConfigurableApplicationContext configurableApplicationContext) {
+
+			    }
+			  }
+			}
+			"""
+		};
+	runner.runConformTest();
+}
+public void testGH1311() {
+	Runner runner = new Runner();
+	runner.customOptions = getCompilerOptions();
+	runner.customOptions.put(CompilerOptions.OPTION_SyntacticNullAnalysisForFields, CompilerOptions.ENABLED);
+	runner.testFiles = new String[] {
+		"nullable/Foo.java",
+		"""
+		package nullable;
+
+		import org.eclipse.jdt.annotation.Nullable;
+
+		public class Foo {
+
+			@Nullable
+			private String text;
+
+			public Foo(String text) {
+				this.text = text;
+			}
+
+			public int getTextSize() {
+				return (text == null)? 0: text.length();
+			}
+		}
+		"""
+		};
+	runner.classLibraries = this.LIBS;
+	runner.runConformTest();
+}
+public void testGH1311_expiry() {
+	Runner runner = new Runner();
+	runner.customOptions = getCompilerOptions();
+	runner.customOptions.put(CompilerOptions.OPTION_SyntacticNullAnalysisForFields, CompilerOptions.ENABLED);
+	runner.testFiles = new String[] {
+		"nullable/Foo.java",
+		"""
+		package nullable;
+
+		import org.eclipse.jdt.annotation.Nullable;
+
+		public class Foo {
+
+			@Nullable
+			private String text;
+
+			public Foo(String text) {
+				this.text = text;
+			}
+
+			public int getTextSize1() {
+				int length = (text == null)? 0: text.length();
+				return text.length();
+			}
+			public int getTextSize2() {
+				int length = (text != null)? text.length() : 0;
+				return text.length();
+			}
+			public int getTextSize3() {
+				return (text == null)? 0:
+							b() ? text.length() : -1;
+			}
+			boolean b() { return true; }
+		}
+		"""
+		};
+	runner.expectedCompilerLog =
+		"""
+		----------
+		1. ERROR in nullable\\Foo.java (at line 16)
+			return text.length();
+			       ^^^^
+		Potential null pointer access: this expression has a \'@Nullable\' type
+		----------
+		2. ERROR in nullable\\Foo.java (at line 20)
+			return text.length();
+			       ^^^^
+		Potential null pointer access: this expression has a \'@Nullable\' type
+		----------
+		3. ERROR in nullable\\Foo.java (at line 24)
+			b() ? text.length() : -1;
+			      ^^^^
+		Potential null pointer access: this expression has a \'@Nullable\' type
+		----------
+		""";
+
+	runner.classLibraries = this.LIBS;
+	runner.runNegativeTest();
+}
 }

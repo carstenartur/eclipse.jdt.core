@@ -161,6 +161,7 @@ import org.eclipse.jdt.internal.core.util.Util;
 import org.eclipse.jdt.internal.formatter.DefaultCodeFormatter;
 import org.eclipse.osgi.service.debug.DebugOptions;
 import org.eclipse.osgi.service.debug.DebugOptionsListener;
+import org.eclipse.osgi.service.debug.DebugTrace;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.ServiceRegistration;
 import org.osgi.service.prefs.BackingStoreException;
@@ -200,7 +201,7 @@ public class JavaModelManager implements ISaveParticipant, IContentTypeChangeLis
 	 * Define a zip cache object.
 	 */
 	static class ZipCache {
-		private Map<Object, ZipFile> map;
+		private final Map<Object, ZipFile> map;
 		Object owner;
 
 		ZipCache(Object owner) {
@@ -257,14 +258,14 @@ public class JavaModelManager implements ISaveParticipant, IContentTypeChangeLis
 	public HashMap<String, String> deprecatedVariables = new HashMap<>(5);
 	public HashSet<String> readOnlyVariables = new HashSet<>(5);
 	public HashMap<String, IPath> previousSessionVariables = new HashMap<>(5);
-	private ThreadLocal<Set<String>> variableInitializationInProgress = new ThreadLocal<>();
+	private final ThreadLocal<Set<String>> variableInitializationInProgress = new ThreadLocal<>();
 
 	/**
 	 * Classpath containers pool
 	 */
 	public HashMap<IJavaProject, Map<IPath, IClasspathContainer>> containers = new HashMap<>(5);
 	public HashMap<IJavaProject, Map<IPath, IClasspathContainer>> previousSessionContainers = new HashMap<>(5);
-	private ThreadLocal<Map<IJavaProject, Set<IPath>>> containerInitializationInProgress = new ThreadLocal<>();
+	private final ThreadLocal<Map<IJavaProject, Set<IPath>>> containerInitializationInProgress = new ThreadLocal<>();
 	ThreadLocal<Map<IJavaProject, Map<IPath, IClasspathContainer>>> containersBeingInitialized = new ThreadLocal<>();
 
 	public static final int NO_BATCH_INITIALIZATION = 0;
@@ -280,7 +281,7 @@ public class JavaModelManager implements ISaveParticipant, IContentTypeChangeLis
 	/*
 	 * A HashSet that contains the IJavaProject whose classpath is being resolved.
 	 */
-	private ThreadLocal<Set<IJavaProject>> classpathsBeingResolved = new ThreadLocal<>();
+	private final ThreadLocal<Set<IJavaProject>> classpathsBeingResolved = new ThreadLocal<>();
 
 	/*
 	 * The unique workspace scope
@@ -417,6 +418,8 @@ public class JavaModelManager implements ISaveParticipant, IContentTypeChangeLis
 	static final int PREF_DEFAULT = 1;
 
 	static final Object[][] NO_PARTICIPANTS = new Object[0][];
+
+	private static DebugTrace DEBUG_TRACE;
 
 	public static class CompilationParticipants {
 
@@ -592,7 +595,7 @@ public class JavaModelManager implements ISaveParticipant, IContentTypeChangeLis
 	/* whether an AbortCompilationUnit should be thrown when the source of a compilation unit cannot be retrieved */
 	public ThreadLocal<Boolean> abortOnMissingSource = new ThreadLocal<>();
 
-	private ExternalFoldersManager externalFoldersManager = ExternalFoldersManager.getExternalFoldersManager();
+	private final ExternalFoldersManager externalFoldersManager = ExternalFoldersManager.getExternalFoldersManager();
 
 	/**
 	 * Returns whether the given full path (for a package) conflicts with the output location
@@ -1213,7 +1216,7 @@ public class JavaModelManager implements ISaveParticipant, IContentTypeChangeLis
 	/*
 	 * Temporary cache of newly opened elements
 	 */
-	private ThreadLocal<HashMap<IJavaElement, Object>> temporaryCache = new ThreadLocal<>();
+	private final ThreadLocal<HashMap<IJavaElement, Object>> temporaryCache = new ThreadLocal<>();
 
 	/**
 	 * Set of elements which are out of sync with their buffers.
@@ -1655,7 +1658,7 @@ public class JavaModelManager implements ISaveParticipant, IContentTypeChangeLis
 	 * A cache of opened zip files per thread.
 	 * (for a given thread, the object value is a HashMap from IPath to java.io.ZipFile)
 	 */
-	private ThreadLocal<ZipCache> zipFiles = new ThreadLocal<>();
+	private final ThreadLocal<ZipCache> zipFiles = new ThreadLocal<>();
 
 	private UserLibraryManager userLibraryManager;
 
@@ -1919,8 +1922,11 @@ public class JavaModelManager implements ISaveParticipant, IContentTypeChangeLis
 		Hashtable<String, String> properties = new Hashtable<>(2);
 		properties.put(DebugOptions.LISTENER_SYMBOLICNAME, JavaCore.PLUGIN_ID);
 		DEBUG_REGISTRATION = context.registerService(DebugOptionsListener.class, new DebugOptionsListener() {
+
+
 			@Override
 			public void optionsChanged(DebugOptions options) {
+				DEBUG_TRACE = options.newDebugTrace(JavaCore.PLUGIN_ID, JavaModelManager.class);
 				boolean debug = options.getBooleanOption(DEBUG, false);
 				BufferManager.VERBOSE = debug && options.getBooleanOption(BUFFER_MANAGER_DEBUG, false);
 				JavaBuilder.DEBUG = debug && options.getBooleanOption(BUILDER_DEBUG, false);
@@ -4717,6 +4723,18 @@ public class JavaModelManager implements ISaveParticipant, IContentTypeChangeLis
 		String message = MessageFormat.format(pattern, new Object[]{action, length, delta});
 
 		System.out.println(message);
+	}
+
+	public static void trace(String msg) {
+		DEBUG_TRACE.trace(null, msg);
+	}
+
+	public static void trace(String msg, Exception e) {
+		DEBUG_TRACE.trace(null, msg, e);
+	}
+
+	public static void traceDumpStack() {
+		DEBUG_TRACE.traceDumpStack(null);
 	}
 
 	/**

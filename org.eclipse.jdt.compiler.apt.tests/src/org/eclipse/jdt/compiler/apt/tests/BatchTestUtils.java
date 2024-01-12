@@ -75,10 +75,10 @@ public class BatchTestUtils {
 	private static File _tmpGenDir;
 
 	public static final class DiagnosticReport<S> implements DiagnosticListener<S> {
-		public StringBuffer buffer;
+		public StringBuilder buffer;
 		private final List<Diagnostic<? extends S>> diagnostics = new ArrayList<>();
 		DiagnosticReport() {
-			this.buffer = new StringBuffer();
+			this.buffer = new StringBuilder();
 		}
 		public void report(Diagnostic<? extends S> diagnostic) {
 			diagnostics.add(diagnostic);
@@ -106,7 +106,7 @@ public class BatchTestUtils {
 		StandardJavaFileManager manager = compiler.getStandardFileManager(diagnostics, Locale.getDefault(), Charset.defaultCharset());
 
 		// create new list containing inputfile
-		List<File> files = new ArrayList<File>();
+		List<File> files = new ArrayList<>();
 		files.add(inputFile);
 		Iterable<? extends JavaFileObject> units = manager.getJavaFileObjectsFromFiles(files);
 		StringWriter stringWriter = new StringWriter();
@@ -157,7 +157,7 @@ public class BatchTestUtils {
 		StandardJavaFileManager manager = compiler.getStandardFileManager(null, Locale.getDefault(), Charset.defaultCharset());
 		Iterable<? extends File> location = manager.getLocation(StandardLocation.CLASS_PATH);
 		// create new list containing inputfile
-		List<File> files = new ArrayList<File>();
+		List<File> files = new ArrayList<>();
 		findFilesUnder(targetFolder, files);
 		files.sort(new Comparator<File>() {
 			@Override
@@ -235,7 +235,7 @@ public class BatchTestUtils {
 		StandardJavaFileManager manager = compiler.getStandardFileManager(null, Locale.getDefault(), Charset.defaultCharset());
 
 		// create new list containing inputfile
-		List<File> files = new ArrayList<File>();
+		List<File> files = new ArrayList<>();
 		findFilesUnder(targetFolder, files);
 		Iterable<? extends JavaFileObject> units = manager.getJavaFileObjectsFromFiles(files);
 		StringWriter stringWriter = new StringWriter();
@@ -273,7 +273,7 @@ public class BatchTestUtils {
 		StandardJavaFileManager manager = compiler.getStandardFileManager(null, Locale.getDefault(), Charset.defaultCharset());
 		Iterable<? extends File> location = manager.getLocation(StandardLocation.CLASS_PATH);
 		// create new list containing inputfile
-		List<File> files = new ArrayList<File>();
+		List<File> files = new ArrayList<>();
 		findFilesUnder(targetFolder, files);
 		Iterable<? extends JavaFileObject> units = manager.getJavaFileObjectsFromFiles(files);
 		StringWriter stringWriter = new StringWriter();
@@ -359,7 +359,7 @@ public class BatchTestUtils {
 		StandardJavaFileManager manager = compiler.getStandardFileManager(null, Locale.getDefault(), Charset.defaultCharset());
 
 		// create new list containing inputfile
-		List<File> files = new ArrayList<File>();
+		List<File> files = new ArrayList<>();
 		findFilesUnder(targetFolder, files);
 		Iterable<? extends JavaFileObject> units = manager.getJavaFileObjectsFromFiles(files);
 
@@ -559,18 +559,12 @@ public class BatchTestUtils {
 	public static byte[] read(java.io.File file) throws java.io.IOException {
 		int fileLength;
 		byte[] fileBytes = new byte[fileLength = (int) file.length()];
-		java.io.FileInputStream stream = null;
-		try {
-			stream = new java.io.FileInputStream(file);
+		try (java.io.FileInputStream stream = new java.io.FileInputStream(file)) {
 			int bytesRead = 0;
 			int lastReadSize = 0;
 			while ((lastReadSize != -1) && (bytesRead != fileLength)) {
 				lastReadSize = stream.read(fileBytes, bytesRead, fileLength - bytesRead);
 				bytesRead += lastReadSize;
-			}
-		} finally {
-			if (stream != null) {
-				stream.close();
 			}
 		}
 		return fileBytes;
@@ -593,7 +587,6 @@ public class BatchTestUtils {
 	 *            the full path to the resource location.
 	 * @param destFolder
 	 *            the full path to the destination location.
-	 * @throws IOException
 	 */
 	public static void copyResource(File src, File dest) throws IOException {
 		if (dest.exists() &&
@@ -624,15 +617,9 @@ public class BatchTestUtils {
 			}
 		}
 		// write bytes to dest
-		FileOutputStream out = null;
-		try {
-			out = new FileOutputStream(dest);
+		try (FileOutputStream out = new FileOutputStream(dest)) {
 			out.write(srcBytes);
 			out.flush();
-		} finally {
-			if (out != null) {
-				out.close();
-			}
 		}
 	}
 
@@ -648,7 +635,6 @@ public class BatchTestUtils {
 	 *            the absolute path of the folder under which the resource will be copied. Folder
 	 *            and subfolders will be created if necessary.
 	 * @return a file representing the copied resource
-	 * @throws IOException
 	 */
 	public static File copyResource(String resourcePath, File targetFolder) throws IOException {
 		File resDir = new File(getPluginDirectoryPath(), RESOURCES_DIR);
@@ -668,7 +654,6 @@ public class BatchTestUtils {
 	 * @param resourceFolderName the name of the source folder, relative to
 	 * <code>[plugin-root]/resources</code>
 	 * @param the absolute path of the destination folder
-	 * @throws IOException
 	 */
 	public static void copyResources(String resourceFolderName, File destFolder) throws IOException {
 		File resDir = new File(getPluginDirectoryPath(), RESOURCES_DIR);

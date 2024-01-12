@@ -130,7 +130,7 @@ public class IdeFilerImpl implements Filer {
 
 		Set<IFile> parentFiles;
 		if (originatingElements != null && originatingElements.length > 0) {
-			parentFiles = new HashSet<IFile>(originatingElements.length);
+			parentFiles = new HashSet<>(originatingElements.length);
 			for (Element elem : originatingElements) {
 				IFile enclosing = _env.getEnclosingIFile(elem);
 				if (null != enclosing) {
@@ -181,7 +181,7 @@ public class IdeFilerImpl implements Filer {
 //		}
 		Set<IFile> parentFiles = Collections.emptySet();
 		if (originatingElements != null && originatingElements.length > 0) {
-			parentFiles = new HashSet<IFile>(originatingElements.length);
+			parentFiles = new HashSet<>(originatingElements.length);
 			for (Element elem : originatingElements) {
 				IFile enclosing = _env.getEnclosingIFile(elem);
 				if (null != enclosing) {
@@ -251,7 +251,6 @@ public class IdeFilerImpl implements Filer {
     /**
      * Validate that a path fits the rules for being created.
      * @see IWorkspace#validatePath()
-     * @throws IOException
      */
     private void validatePath(IFile file) throws IOException
 	{

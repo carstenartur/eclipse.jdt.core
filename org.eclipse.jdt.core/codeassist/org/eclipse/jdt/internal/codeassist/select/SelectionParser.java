@@ -43,6 +43,7 @@ import org.eclipse.jdt.internal.compiler.ast.EmptyStatement;
 import org.eclipse.jdt.internal.compiler.ast.ExplicitConstructorCall;
 import org.eclipse.jdt.internal.compiler.ast.Expression;
 import org.eclipse.jdt.internal.compiler.ast.FieldReference;
+import org.eclipse.jdt.internal.compiler.ast.ForeachStatement;
 import org.eclipse.jdt.internal.compiler.ast.GuardedPattern;
 import org.eclipse.jdt.internal.compiler.ast.IfStatement;
 import org.eclipse.jdt.internal.compiler.ast.ImportReference;
@@ -64,6 +65,7 @@ import org.eclipse.jdt.internal.compiler.ast.ReturnStatement;
 import org.eclipse.jdt.internal.compiler.ast.SingleMemberAnnotation;
 import org.eclipse.jdt.internal.compiler.ast.SingleNameReference;
 import org.eclipse.jdt.internal.compiler.ast.Statement;
+import org.eclipse.jdt.internal.compiler.ast.StringTemplate;
 import org.eclipse.jdt.internal.compiler.ast.SuperReference;
 import org.eclipse.jdt.internal.compiler.ast.SwitchExpression;
 import org.eclipse.jdt.internal.compiler.ast.SwitchStatement;
@@ -76,6 +78,7 @@ import org.eclipse.jdt.internal.compiler.env.ICompilationUnit;
 import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
 import org.eclipse.jdt.internal.compiler.lookup.TypeBinding;
 import org.eclipse.jdt.internal.compiler.parser.JavadocParser;
+import org.eclipse.jdt.internal.compiler.parser.Parser;
 import org.eclipse.jdt.internal.compiler.parser.RecoveredType;
 import org.eclipse.jdt.internal.compiler.problem.ProblemReporter;
 import org.eclipse.jdt.internal.compiler.util.Util;
@@ -104,6 +107,8 @@ public class SelectionParser extends AssistParser {
 	protected static final int K_INSIDE_EXPRESSION_SWITCH = SELECTION_PARSER + 12; // whether we are in an expression switch
 	protected static final int K_INSIDE_WHEN = SELECTION_PARSER + 13; // whether we are in the guard
 
+	protected static final int K_INSIDE_FOR_EACH = SELECTION_PARSER + 14; // whether we are in a for each statement
+
 
 
 	/* https://bugs.eclipse.org/bugs/show_bug.cgi?id=476693
@@ -115,11 +120,13 @@ public class SelectionParser extends AssistParser {
 	 * Rationale: we really need to complete parsing the invocation for resolving to succeed.
 	 */
 	private int selectionNodeFoundLevel = 0;
+	private boolean parsingEmbeddedExpression = false;
 	public ASTNode assistNodeParent; // the parent node of assist node
 
 	/* public fields */
 
 	public int selectionStart, selectionEnd;
+
 	public static final char[] SUPER = "super".toCharArray(); //$NON-NLS-1$
 	public static final char[] THIS = "this".toCharArray(); //$NON-NLS-1$
 
@@ -213,6 +220,7 @@ private void buildMoreCompletionContext(Expression expression) {
 			case K_INSIDE_ELSE:
 			case K_INSIDE_STATEMENT_SWITCH:
 			case K_INSIDE_EXPRESSION_SWITCH:
+			case K_INSIDE_FOR_EACH:
 				int newAstPtr = (int) this.elementObjectInfoStack[i];
 				int length = this.astPtr - newAstPtr;
 				Statement[] statements = new Statement[length + (orphan != null ? 1 : 0)];
@@ -236,6 +244,11 @@ private void buildMoreCompletionContext(Expression expression) {
 					case K_INSIDE_ELSE:
 						elseStat = b;
 						orphan = null; // orphan subsumed into the dangling else
+						break;
+					case K_INSIDE_FOR_EACH:
+						ForeachStatement forEach = (ForeachStatement)this.astStack[this.astPtr--];
+						forEach.action = b;
+						orphan = forEach;
 						break;
 					case K_POST_WHILE_EXPRESSION:
 						whileBody = b;
@@ -386,6 +399,12 @@ protected void classInstanceCreation(boolean hasClassBody) {
 		this.isOrphanCompletionNode = true;
 	} else {
 		super.classInstanceCreation(hasClassBody);
+		if (this.assistNode != null) {
+			QualifiedAllocationExpression alloc = (QualifiedAllocationExpression) this.expressionStack[this.expressionPtr];
+			if (this.assistNode.sourceStart >= alloc.sourceStart && this.assistNode.sourceEnd <= alloc.sourceEnd)
+				this.selectionNodeFoundLevel = 1; // continue to parse until containing block statement is reduced, so as to
+			    // ensure the type declaration makes it to the astStack (possibly as a subexpression or as an expression statement)
+		}
 	}
 }
 @Override
@@ -909,6 +928,19 @@ protected void consumeStatementWhile() {
 }
 
 @Override
+protected void consumeEnhancedForStatementHeader() {
+	super.consumeEnhancedForStatementHeader();
+	pushOnElementStack(K_INSIDE_FOR_EACH, this.expressionPtr, this.astPtr);
+}
+
+@Override
+protected void consumeEnhancedForStatement() {
+	super.consumeEnhancedForStatement();
+	popUntilElement(K_INSIDE_FOR_EACH);
+	popElement(K_INSIDE_FOR_EACH);
+}
+
+@Override
 protected void consumeBinaryExpression(int op) {
 	super.consumeBinaryExpression(op);
 	if (op == AND_AND) {
@@ -1228,7 +1260,7 @@ protected void consumeMethodInvocationName() {
 				return null;
 			}
 			@Override
-			public StringBuffer printExpression(int indent, StringBuffer output) {
+			public StringBuilder printExpression(int indent, StringBuilder output) {
 				return output;
 			}
 		});
@@ -1280,7 +1312,7 @@ protected void consumeMethodInvocationPrimary() {
 				return null;
 			}
 			@Override
-			public StringBuffer printExpression(int indent, StringBuffer output) {
+			public StringBuilder printExpression(int indent, StringBuilder output) {
 				return output;
 			}
 		});
@@ -1836,6 +1868,42 @@ protected MessageSend newMessageSendWithTypeArguments() {
 	this.isOrphanCompletionNode = true;
 	return messageSend;
 }
+
+@Override
+protected void consumeTemplate(int token) {
+	super.consumeTemplate(token);
+	StringTemplate st = (StringTemplate) this.expressionStack[this.expressionPtr];
+	if (this.selectionStart >= st.sourceStart && this.selectionEnd < st.sourceEnd) {
+		this.restartRecovery = true;
+		this.selectionNodeFoundLevel = 1; // continue to parse until containing block statement gets reduced.
+	}
+}
+
+@Override
+protected Expression parseEmbeddedExpression(Parser parser, char[] source, int offset, int length,
+		CompilationUnitDeclaration unit, boolean recordLineSeparators) {
+
+	Expression e = super.parseEmbeddedExpression(parser, source, offset, length, unit, recordLineSeparators);
+	if (((AssistParser) parser).assistNode != null) {
+		this.assistNode = ((AssistParser) parser).assistNode;
+		((SelectionScanner) this.scanner).selectionIdentifier = ((SelectionScanner)parser.scanner).selectionIdentifier;
+	}
+	return e;
+}
+@Override
+protected SelectionParser getEmbeddedExpressionParser() {
+	SelectionParser sp = new SelectionParser(this.problemReporter);
+	sp.selectionStart = this.selectionStart;
+	sp.selectionEnd = this.selectionEnd;
+	sp.parsingEmbeddedExpression = true;
+
+	SelectionScanner selectionScanner = (SelectionScanner)sp.scanner;
+	selectionScanner.selectionIdentifier = null;
+	selectionScanner.selectionStart = this.selectionStart;
+	selectionScanner.selectionEnd = this.selectionEnd;
+	return sp;
+}
+
 @Override
 public CompilationUnitDeclaration parse(ICompilationUnit sourceUnit, CompilationResult compilationResult, int start, int end) {
 
@@ -1852,9 +1920,25 @@ public CompilationUnitDeclaration parse(ICompilationUnit sourceUnit, Compilation
 
 @Override
 protected boolean restartRecovery() {
-	return requireExtendedRecovery() || this.selectionNodeFoundLevel > 0 ?
-			false :
-			super.restartRecovery();
+	if (requireExtendedRecovery() || this.selectionNodeFoundLevel > 0 || this.parsingEmbeddedExpression)
+		return false;
+	boolean deferRestartOnLocalType = false;
+	for (int i = 0; i <= this.elementPtr; i++) {
+		switch (this.elementKindStack[i]) {
+			case K_INSIDE_STATEMENT_SWITCH:
+			case K_INSIDE_EXPRESSION_SWITCH:
+			case K_INSIDE_IF:
+			case K_INSIDE_WHILE:
+				deferRestartOnLocalType = true;
+				break;
+			case K_TYPE_DELIMITER:
+				if (deferRestartOnLocalType)
+					return false;
+				break;
+		}
+	}
+
+	return super.restartRecovery();
 }
 
 @Override

@@ -659,7 +659,6 @@ public SyntheticMethodBinding addSyntheticMethod(LambdaExpression lambda) {
 /*
  * Add a synthetic method for the reference expression as a place holder for code generation
  * only if the reference expression's target is serializable
- *
  */
 public SyntheticMethodBinding addSyntheticMethod(ReferenceExpression ref) {
 	if (!isPrototype()) throw new IllegalStateException();
@@ -908,7 +907,7 @@ public List<MethodBinding> checkAndAddSyntheticRecordComponentAccessors(MethodBi
 	// and no accessor should be created (essentially in a recovered code if there are errors) - if there are no
 	// errors then filteredComponents equals components.
 	List<String> filteredComponents = Arrays.stream(this.fields) // initialize with all the record components
-			.filter(f -> f.isRecordComponent())
+			.filter(FieldBinding::isRecordComponent)
 			.map(f -> new String(f.name))
 			.collect(Collectors.toList());
 
@@ -1391,8 +1390,7 @@ public RecordComponentBinding[] components() {
 					TypeBinding leafType = rcb.type.leafComponentType();
 					if (leafType instanceof ReferenceBinding && (((ReferenceBinding) leafType).modifiers & ExtraCompilerModifiers.AccGenericSignature) != 0)
 						smb.modifiers |= ExtraCompilerModifiers.AccGenericSignature;
-					// Don't copy the annotations to the accessor method's return type from record component
-					smb.returnType = rcb.type.unannotated();
+					smb.returnType = rcb.type;
 					// add code for implicit canonical constructor argument annotations also
 					for (FieldBinding f : this.fields) {
 						if (f.isRecordComponent() && CharOperation.equals(f.name, rcb.name)) {

@@ -86,7 +86,6 @@ public class BatchDispatchTests extends TestCase {
 	/**
 	 * Veriy that processor sees correct environment options
 	 * (sanity check with system compiler)
-	 * @throws IOException
 	 */
 	public void testProcessorArgumentsWithSystemCompiler() throws IOException {
 		// System compiler
@@ -101,7 +100,6 @@ public class BatchDispatchTests extends TestCase {
 	/**
 	 * Veriy that processor sees correct environment options
 	 * when called from Eclipse compiler
-	 * @throws IOException
 	 */
 	public void _testProcessorArgumentsWithEclipseCompiler() throws IOException {
 		JavaCompiler compiler = BatchTestUtils.getEclipseCompiler();
@@ -112,7 +110,6 @@ public class BatchDispatchTests extends TestCase {
 	 * Read annotation values and generate a class using system compiler (javac)
 	 * This is a sanity check to verify that the processors, sample code, and
 	 * compiler options are correct.
-	 * @throws IOException
 	 */
 	public void testCompilerOneClassWithSystemCompiler() throws IOException {
 		// System compiler
@@ -126,7 +123,6 @@ public class BatchDispatchTests extends TestCase {
 
 	/**
 	 * Read annotation values and generate a class using Eclipse compiler
-	 * @throws IOException
 	 */
 	public void testCompilerOneClassWithEclipseCompiler() throws IOException {
 		// Eclipse compiler
@@ -164,7 +160,7 @@ public class BatchDispatchTests extends TestCase {
 		File inputFile = BatchTestUtils.copyResource("targets/dispatch/WarnGenClass.java", targetFolder);
 		assertNotNull("No input file", inputFile);
 
-		List<String> options = new ArrayList<String>();
+		List<String> options = new ArrayList<>();
 		if (extraOptions != null) {
 			options.addAll(Arrays.asList(extraOptions));
 		}
@@ -186,7 +182,6 @@ public class BatchDispatchTests extends TestCase {
 
 	/**
 	 * Validate the inherited annotations test against the javac compiler.
-	 * @throws IOException
 	 */
 	public void testInheritedAnnosWithSystemCompiler() throws IOException {
 		JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
@@ -199,7 +194,6 @@ public class BatchDispatchTests extends TestCase {
 
 	/**
 	 * Test dispatch of annotation processor on inherited annotations.
-	 * @throws IOException
 	 */
 	public void testInheritedAnnosWithEclipseCompiler() throws IOException {
 		JavaCompiler compiler = BatchTestUtils.getEclipseCompiler();
@@ -208,14 +202,13 @@ public class BatchDispatchTests extends TestCase {
 
 	/**
 	 * Verify that if a type has two annotations, both processors are run.
-	 * @throws IOException
 	 */
 	public void _testTwoAnnotations() throws IOException {
 		File targetFolder = TestUtils.concatPath(BatchTestUtils.getSrcFolderName(), "targets", "dispatch");
 		File inputFile = BatchTestUtils.copyResource("targets/dispatch/TwoAnnotations.java", targetFolder);
 		assertNotNull("No input file", inputFile);
 
-		List<String> options = new ArrayList<String>();
+		List<String> options = new ArrayList<>();
 		// See corresponding list in CheckArgsProc processor.
 		// Processor will throw IllegalStateException if it detects a mismatch.
 		options.add("-Afoo=bar");
@@ -240,7 +233,7 @@ public class BatchDispatchTests extends TestCase {
 		File inputFile = BatchTestUtils.copyResource("targets/dispatch/HasGenClass.java", targetFolder);
 		assertNotNull("No input file", inputFile);
 
-		List<String> options = new ArrayList<String>();
+		List<String> options = new ArrayList<>();
 		BatchTestUtils.compileOneClass(compiler, options, inputFile);
 
 		// check that the gen-src and class files were generated
@@ -260,7 +253,7 @@ public class BatchDispatchTests extends TestCase {
 		File inputFile = BatchTestUtils.copyResource("targets/dispatch/HasCheckArgs.java", targetFolder);
 		assertNotNull("No input file", inputFile);
 
-		List<String> options = new ArrayList<String>();
+		List<String> options = new ArrayList<>();
 		// See corresponding list in CheckArgsProc processor.
 		// Processor will throw IllegalStateException if it detects a mismatch.
 		options.add("-Afoo=bar");
@@ -273,14 +266,13 @@ public class BatchDispatchTests extends TestCase {
 	 * Test functionality by running a particular processor against the types in
 	 * resources/targets.  The processor must support "*" (the set of all annotations)
 	 * and must report its errors or success via the methods in BaseProcessor.
-	 * @throws IOException
 	 */
 	private void internalTestInheritance(JavaCompiler compiler, String processorClass) throws IOException {
 		System.clearProperty(processorClass);
 		File targetFolder = TestUtils.concatPath(BatchTestUtils.getSrcFolderName(), "targets/dispatch", "inheritedanno");
 		BatchTestUtils.copyResources("targets/dispatch/inheritedanno", targetFolder);
 
-		List<String> options = new ArrayList<String>();
+		List<String> options = new ArrayList<>();
 		options.add("-A" + processorClass);
 		BatchTestUtils.compileTree(compiler, options, targetFolder);
 
@@ -301,7 +293,7 @@ public class BatchDispatchTests extends TestCase {
 			"targets",
 			"dispatch");
 
-		List<String> options = new ArrayList<String>();
+		List<String> options = new ArrayList<>();
 		// See corresponding list in CheckArgsProc processor.
 		// Processor will throw IllegalStateException if it detects a mismatch.
 		options.add("-classpath");

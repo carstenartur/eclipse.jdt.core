@@ -31,7 +31,6 @@ package org.eclipse.jdt.internal.codeassist.select;
  *           <SelectOnAllocationExpression:new Bar(1, 2)>
  *         }
  *       }
- *
  */
 
 import org.eclipse.jdt.internal.compiler.ast.ConstructorDeclaration;
@@ -54,7 +53,7 @@ public class SelectionOnQualifiedAllocationExpression extends QualifiedAllocatio
 	}
 
 	@Override
-	public StringBuffer printExpression(int indent, StringBuffer output) {
+	public StringBuilder printExpression(int indent, StringBuilder output) {
 		if (this.enclosingInstance == null)
 			output.append("<SelectOnAllocationExpression:");  //$NON-NLS-1$
 		else

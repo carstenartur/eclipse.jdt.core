@@ -3731,4 +3731,130 @@ public class RecordPatternTest extends AbstractRegressionTest9 {
 					"""
 				});
 	}
+	public void testIssue1732_01() {
+		runNegativeTest(
+				new String[] {
+				"X.java",
+				"""
+				record R(int x, int y) {}
+
+				public class X {
+
+					public int foo(R r) {
+						return switch (r) {
+							case R() -> 0;
+						};
+					}
+				}
+				"""
+				},
+				"----------\n" +
+				"1. ERROR in X.java (at line 7)\n" +
+				"	case R() -> 0;\n" +
+				"	     ^^^\n" +
+				"Record pattern should match the signature of the record declaration\n" +
+				"----------\n");
+	}
+	public void testIssue1732_02() {
+		runNegativeTest(
+				new String[] {
+				"X.java",
+				"""
+				record R(int x, int y) {}
+
+				public class X {
+
+					public int foo(R r) {
+						return switch (r) {
+							case R(int x) -> 0;
+						};
+					}
+				}
+				"""
+				},
+				"----------\n" +
+				"1. ERROR in X.java (at line 7)\n" +
+				"	case R(int x) -> 0;\n" +
+				"	     ^^^^^^^^\n" +
+				"Record pattern should match the signature of the record declaration\n" +
+				"----------\n");
+	}
+	public void testIssue1732_03() {
+		runNegativeTest(
+				new String[] {
+				"X.java",
+				"""
+				record R(int x, int y) {}
+
+				public class X {
+
+					public int foo(R r) {
+						return switch (r) {
+							case R(int x, int y, int z) -> 0;
+						};
+					}
+				}
+				"""
+				},
+				"----------\n" +
+				"1. ERROR in X.java (at line 7)\n" +
+				"	case R(int x, int y, int z) -> 0;\n" +
+				"	     ^^^^^^^^^^^^^^^^^^^^^^\n" +
+				"Record pattern should match the signature of the record declaration\n" +
+				"----------\n");
+	}
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/1788
+	// Inference issue between the diamond syntax and pattern matching (switch on objects)
+	public void testGHI1788() {
+		runConformTest(
+				new String[] {
+				"X.java",
+				"""
+				public class X {
+
+				  final static class Entry<K,V> {
+				    K key;
+				    V value;
+
+				    public Entry(K key, V value) {
+				      this.key = key;
+				      this.value = value;
+				    }
+
+				    public K key() { return key; }
+				    public V value() { return value; }
+				    public void value(V value) { this.value = value; }
+				    @Override
+				    public String toString() {
+				    	return "Key = " + key + " Value = " + value;
+				    }
+				  }
+
+				  sealed interface I<V> {}
+				  record A<V>(V value) implements I<V> {}
+				  record B<V>(V value) implements I<V> {}
+
+				  private static <K, V> Entry<K,V> foo(Entry<K, I<V>> entry) {
+				    return new Entry<>(entry.key(), switch (entry.value()) {
+				      case A<V>(V value) -> {
+				        entry.value(new B<>(value));
+				        yield value;
+				      }
+				      case B<V>(V value) -> value;
+				    });
+				  }
+
+				  public static void main(String[] args) {
+					  Entry<String, I<String>> entry = new Entry<>("KEY", new A<>("VALUE"));
+					  System.out.println(entry);
+					  System.out.println(foo(entry));
+					  System.out.println(entry);
+				  }
+				}
+				"""
+				},
+				"Key = KEY Value = A[value=VALUE]\n" +
+				"Key = KEY Value = VALUE\n" +
+				"Key = KEY Value = B[value=VALUE]");
+	}
 }

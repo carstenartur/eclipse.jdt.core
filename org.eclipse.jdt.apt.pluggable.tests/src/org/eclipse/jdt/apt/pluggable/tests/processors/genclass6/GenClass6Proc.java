@@ -62,7 +62,7 @@ public class GenClass6Proc extends AbstractProcessor {
 		_processingEnv = processingEnv;
 		_filer = _processingEnv.getFiler();
 		_messager = _processingEnv.getMessager();
-		_classesToSummarize = new HashMap<String, Element>();
+		_classesToSummarize = new HashMap<>();
 	}
 
 	/* (non-Javadoc)
@@ -93,9 +93,6 @@ public class GenClass6Proc extends AbstractProcessor {
 		}
 	}
 
-	/**
-	 * @param genClassMirror
-	 */
 	private void processType(GenClass6 genClassMirror, Element annotatedEl) {
 		// Collect and validate the parameters of the annotation
 		String pkg = null;
@@ -118,7 +115,7 @@ public class GenClass6Proc extends AbstractProcessor {
 
 		// Options allow the processor to expose certain error conditions.
 		if (null != options) {
-			Set<String> optionSet = new HashSet<String>(Arrays.asList(options));
+			Set<String> optionSet = new HashSet<>(Arrays.asList(options));
 			// See https://bugs.eclipse.org/269934: calling getEnclosedElements forces resolution of referenced types
 			if (optionSet.contains("forceElementResolution")) {
 				annotatedEl.getEnclosedElements();

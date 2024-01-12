@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2014, 2022 Mateusz Matela and others.
+ * Copyright (c) 2014, 2024 Mateusz Matela and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -40,6 +40,7 @@ import static org.eclipse.jdt.internal.compiler.parser.TerminalTokens.TokenNamei
 import static org.eclipse.jdt.internal.compiler.parser.TerminalTokens.TokenNamenew;
 import static org.eclipse.jdt.internal.compiler.parser.TerminalTokens.TokenNameRestrictedIdentifierpermits;
 import static org.eclipse.jdt.internal.compiler.parser.TerminalTokens.TokenNamesuper;
+import static org.eclipse.jdt.internal.compiler.parser.TerminalTokens.TokenNameTextBlock;
 import static org.eclipse.jdt.internal.compiler.parser.TerminalTokens.TokenNamethis;
 import static org.eclipse.jdt.internal.compiler.parser.TerminalTokens.TokenNamethrows;
 import static org.eclipse.jdt.internal.compiler.parser.TerminalTokens.TokenNameto;
@@ -1149,6 +1150,7 @@ public class WrapPreparator extends ASTVisitor {
 		int rParen = this.tm.firstIndexAfter(node.getExpression(), TokenNameRPAREN);
 		handleParenthesesPositions(lParen, rParen, this.options.parenthesis_positions_in_switch_statement);
 		handleOneLineEnforcedSwitchCases(node, node.statements());
+		this.aligner.handleCaseStatementsAlign(node.statements());
 		return true;
 	}
 
@@ -1162,6 +1164,7 @@ public class WrapPreparator extends ASTVisitor {
 		List<Statement> caseStatements = statements.stream().filter(SwitchCase.class::isInstance).collect(toList());
 		handleOneLineEnforced(node, caseStatements);
 		handleOneLineEnforcedSwitchCases(node, statements);
+		this.aligner.handleCaseStatementsAlign(statements);
 		return true;
 	}
 
@@ -1566,7 +1569,7 @@ public class WrapPreparator extends ASTVisitor {
 			if (token.getLineBreaksBefore() > 0 || token.getLineBreaksAfter() > 0)
 				isNLSTagInLine = false;
 			if (token.hasNLSTag()) {
-				assert token.tokenType == TokenNameStringLiteral;
+				assert token.tokenType == TokenNameStringLiteral || token.tokenType == TokenNameTextBlock;
 				isNLSTagInLine = true;
 			}
 			List<Token> structure = token.getInternalStructure();

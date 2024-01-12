@@ -22,7 +22,6 @@ package org.eclipse.jdt.internal.codeassist.select;
  *	class X extends java.lang.[start]Object[end]
  *
  *	---> class X extends <SelectOnType:java.lang.Object>
- *
  */
 
 import org.eclipse.jdt.core.compiler.CharOperation;
@@ -67,7 +66,7 @@ protected TypeBinding getTypeBinding(Scope scope) {
 	throw new SelectionNodeFound(binding);
 }
 @Override
-public StringBuffer printExpression(int indent, StringBuffer output) {
+public StringBuilder printExpression(int indent, StringBuilder output) {
 
 	output.append("<SelectOnType:"); //$NON-NLS-1$
 	for (int i = 0, length = this.tokens.length; i < length; i++) {

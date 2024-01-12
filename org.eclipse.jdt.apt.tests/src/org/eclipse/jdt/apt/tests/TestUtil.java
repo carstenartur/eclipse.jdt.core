@@ -136,7 +136,7 @@ public class TestUtil
 					EXTANNOTATIONS_PKG, getPluginExtClassesDir());
 			FileFilter manifestFilter = new PackageFileFilter(
 					"META-INF", getPluginExtSrcDir()); //$NON-NLS-1$
-			Map<File, FileFilter> files = new HashMap<File, FileFilter>(2);
+			Map<File, FileFilter> files = new HashMap<>(2);
 			files.put(new File( getPluginExtClassesDir() ), classFilter);
 			files.put(new File( getPluginExtSrcDir() ), manifestFilter);
 			zip( classesJarPath, files );
@@ -293,25 +293,15 @@ public class TestUtil
 	 * @param input a map of root directories and corresponding filters.  Each
 	 * root directory will be searched, and any files that pass the filter will
 	 * be added to the zip file.
-	 * @throws IOException
 	 */
 	public static void zip(String zipPath, Map<File, FileFilter> input)
 		throws IOException
 	{
-		ZipOutputStream zip = null;
-		try
+		try (ZipOutputStream zip = new ZipOutputStream( new FileOutputStream( zipPath ) ))
 		{
-			zip = new ZipOutputStream( new FileOutputStream( zipPath ) );
 			// +1 for last slash
 			for (Map.Entry<File, FileFilter> e : input.entrySet()) {
 				zip( zip, e.getKey(), e.getKey().getPath().length() + 1, e.getValue() );
-			}
-		}
-		finally
-		{
-			if( zip != null )
-			{
-				zip.close();
 			}
 		}
 	}

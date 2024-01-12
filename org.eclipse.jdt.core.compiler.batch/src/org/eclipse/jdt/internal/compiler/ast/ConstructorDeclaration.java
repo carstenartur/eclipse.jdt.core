@@ -149,8 +149,8 @@ public void analyseCode(ClassScope classScope, InitializationFlowContext initial
 			}
 		}
 
-		// nullity and mark as assigned
-		analyseArguments(classScope.environment(), flowInfo, this.arguments, this.binding);
+		// nullity, owning and mark as assigned
+		analyseArguments(classScope.environment(), flowInfo, initializerFlowContext, this.arguments, this.binding);
 
 		// propagate to constructor call
 		if (this.constructorCall != null) {
@@ -185,7 +185,7 @@ public void analyseCode(ClassScope classScope, InitializationFlowContext initial
 					constructorContext.expireNullCheckedFieldInfo();
 				}
 				if (compilerOptions.analyseResourceLeaks) {
-					FakedTrackingVariable.cleanUpUnassigned(this.scope, stat, flowInfo);
+					FakedTrackingVariable.cleanUpUnassigned(this.scope, stat, flowInfo, false);
 				}
 			}
 		}
@@ -600,7 +600,7 @@ public void parseStatements(Parser parser, CompilationUnitDeclaration unit) {
 }
 
 @Override
-public StringBuffer printBody(int indent, StringBuffer output) {
+public StringBuilder printBody(int indent, StringBuilder output) {
 	output.append(" {"); //$NON-NLS-1$
 	if (this.constructorCall != null) {
 		output.append('\n');

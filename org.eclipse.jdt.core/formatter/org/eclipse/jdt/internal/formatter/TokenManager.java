@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2014, 2022 Mateusz Matela and others.
+ * Copyright (c) 2014, 2023 Mateusz Matela and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -260,7 +260,7 @@ public class TokenManager implements Iterable<Token> {
 				return false;
 			}
 			if (traversed.hasNLSTag()) {
-				assert traversed.tokenType == TokenNameStringLiteral;
+				assert traversed.tokenType == TokenNameStringLiteral || traversed.tokenType == TokenNameTextBlock;
 				this.isNLSTagInLine = true;
 			}
 			if (traversed.getAlign() > 0)
@@ -432,7 +432,7 @@ public class TokenManager implements Iterable<Token> {
 
 	public void addNLSAlignIndex(int index, int align) {
 		if (this.tokenIndexToNLSAlign == null)
-			this.tokenIndexToNLSAlign = new HashMap<Integer, Integer>();
+			this.tokenIndexToNLSAlign = new HashMap<>();
 		this.tokenIndexToNLSAlign.put(index, align);
 	}
 

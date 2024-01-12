@@ -92,6 +92,7 @@ public static Test suite() {
 	standardTests.add(ManifestAnalyzerTest.class);
 	standardTests.add(InitializationTests.class);
 	standardTests.add(ResourceLeakTests.class);
+	standardTests.add(ResourceLeakAnnotatedTests.class);
 	standardTests.add(PackageBindingTest.class);
 
 	// add all javadoc tests
@@ -234,7 +235,10 @@ public static Test suite() {
 	 ArrayList since_21 = new ArrayList();
 	 since_21.add(SwitchPatternTest.class);
 	 since_21.add(RecordPatternTest.class);
-	 since_21.add(NullAnnotationTests18.class);
+//	 since_21.add(UnnammedPatternsAndVarsTest.class); Enable after implementation.
+	 since_21.add(NullAnnotationTests21.class);
+	 since_21.add(StringTemplateTest.class);
+	 since_21.add(BatchCompilerTest_21.class);
 
 	 // Build final test suite
 	TestSuite all = new TestSuite(TestAll.class.getName());

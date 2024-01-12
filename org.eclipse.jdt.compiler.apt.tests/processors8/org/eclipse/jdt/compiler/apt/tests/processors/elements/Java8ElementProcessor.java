@@ -1094,11 +1094,9 @@ public class Java8ElementProcessor extends BaseProcessor {
 	private void createPackageBinary() throws IOException {
 		String path = packageName.replace('.', '/');
 		ClassLoader loader = getClass().getClassLoader();
-		InputStream in = loader.getResourceAsStream(path + "/package-info.class");
-		try {
+		try (InputStream in = loader.getResourceAsStream(path + "/package-info.class")) {
 			Filer filer = processingEnv.getFiler();
-			OutputStream out = filer.createClassFile(packageName + ".package-info").openOutputStream();
-			try {
+			try (OutputStream out = filer.createClassFile(packageName + ".package-info").openOutputStream()) {
 				if (in != null && out != null) {
 					int c = in.read();
 					while (c != -1) {
@@ -1106,16 +1104,12 @@ public class Java8ElementProcessor extends BaseProcessor {
 						c = in.read();
 					}
 				}
-			} finally {
-				out.close();
 			}
-		} finally {
-			in.close();
 		}
 	}
 
 	private String getExceptionStackTrace(Throwable t) {
-		StringBuffer buf = new StringBuffer(t.getMessage());
+		StringBuilder buf = new StringBuilder(t.getMessage());
 		StackTraceElement[] traces = t.getStackTrace();
 		for (int i = 0; i < traces.length; i++) {
 			StackTraceElement trace = traces[i];
@@ -1147,7 +1141,7 @@ public class Java8ElementProcessor extends BaseProcessor {
 	private String getAnnotationString(AnnotationMirror annot) {
 		DeclaredType annotType = annot.getAnnotationType();
 		TypeElement type = (TypeElement) annotType.asElement();
-		StringBuffer buf = new StringBuffer("@" + type.getSimpleName());
+		StringBuilder buf = new StringBuilder("@" + type.getSimpleName());
 		Map<? extends ExecutableElement, ? extends AnnotationValue> values = annot.getElementValues();
 		Set<? extends ExecutableElement> keys = values.keySet();
 		buf.append('(');
@@ -1181,7 +1175,7 @@ public class Java8ElementProcessor extends BaseProcessor {
 
 	public void assertModifiers(Set<Modifier> modifiers, String[] expected) {
 		assertEquals("Incorrect no of modifiers", modifiers.size(), expected.length);
-		Set<String> actual = new HashSet<String>(expected.length);
+		Set<String> actual = new HashSet<>(expected.length);
 		for (Modifier modifier : modifiers) {
 			actual.add(modifier.toString());
 		}
@@ -1244,7 +1238,7 @@ public class Java8ElementProcessor extends BaseProcessor {
 
 	public void assertEquals(String msg, int expected, int actual) {
 		if (expected != actual) {
-			StringBuffer buf = new StringBuffer();
+			StringBuilder buf = new StringBuilder();
 			buf.append(msg);
 			buf.append(", expected " + expected + " but was " + actual);
 			reportError(buf.toString());
@@ -1255,7 +1249,7 @@ public class Java8ElementProcessor extends BaseProcessor {
 
 		}
 	}
-	private class AssertionFailedError extends Error {
+	private static class AssertionFailedError extends Error {
 		private static final long serialVersionUID = 1L;
 
 		public AssertionFailedError(String msg) {

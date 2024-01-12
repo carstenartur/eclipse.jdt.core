@@ -485,8 +485,7 @@ protected static Test suite(File inputDir, String profile, Map directories) {
 				listFileWriter.newLine();
 			} else {
 				System.out.print("stored list in "+listFile.getPath()+"...");
-				BufferedReader listFileReader = new BufferedReader(new InputStreamReader(new FileInputStream(listFile.getAbsolutePath())));
-				try {
+				try (BufferedReader listFileReader = new BufferedReader(new InputStreamReader(new FileInputStream(listFile.getAbsolutePath())))) {
 					// First line is the number of files
 					String line = listFileReader.readLine();
 					int maxFiles = Integer.parseInt(line);
@@ -506,9 +505,6 @@ protected static Test suite(File inputDir, String profile, Map directories) {
 				catch (IOException ioe) {
 					ioe.printStackTrace();
 					return null;
-				}
-				finally {
-					listFileReader.close();
 				}
 			}
 			directories.put(inputDir, allFiles);
@@ -834,7 +830,7 @@ private static void setProfilesDir(int profiles, List subDirs) {
 	}
 }
 
-private static void appendProfiles(int profiles, StringBuffer buffer) {
+private static void appendProfiles(int profiles, StringBuilder buffer) {
 	String joinLines = null;
 	boolean first = true;
 	switch (profiles & PROFILE_JOIN_LINES_MASK) {
@@ -1187,7 +1183,7 @@ public void setUpSuite() throws Exception {
 
 private void print() {
 
-	StringBuffer buffer = new StringBuffer();
+	StringBuilder buffer = new StringBuilder();
 
 	// Log version info
 	buffer.append("Version   : ");

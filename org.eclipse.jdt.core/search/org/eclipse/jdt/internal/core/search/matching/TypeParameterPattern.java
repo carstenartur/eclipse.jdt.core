@@ -49,12 +49,6 @@ public class TypeParameterPattern extends JavaSearchPattern {
 	protected char[] methodDeclaringClassName;
 	protected char[][] methodArgumentTypes;
 
-	/**
-	 * @param findDeclarations
-	 * @param findReferences
-	 * @param typeParameter
-	 * @param matchRule
-	 */
 	public TypeParameterPattern(boolean findDeclarations, boolean findReferences, ITypeParameter typeParameter, int matchRule) {
 		super(TYPE_PARAM_PATTERN, matchRule);
 
@@ -124,7 +118,7 @@ public class TypeParameterPattern extends JavaSearchPattern {
 	}
 
 	@Override
-	protected StringBuffer print(StringBuffer output) {
+	protected StringBuilder print(StringBuilder output) {
 		if (this.findDeclarations) {
 			output.append(this.findReferences
 				? "TypeParamCombinedPattern: " //$NON-NLS-1$

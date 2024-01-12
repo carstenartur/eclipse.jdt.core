@@ -737,7 +737,7 @@ public class ASTConverter17Test extends ConverterTestSetup {
 		CompilationUnit unit = (CompilationUnit) node;
 		assertProblemsSize(unit, 0);
 		class InferredTypeFromExpectedVisitor extends ASTVisitor {
-			StringBuffer buf = new StringBuffer();
+			StringBuilder buf = new StringBuilder();
 			public boolean visit(ClassInstanceCreation creation) {
 				this.buf.append(creation.isResolvedTypeInferredFromExpectedType());
 				return false;
@@ -801,8 +801,6 @@ public class ASTConverter17Test extends ConverterTestSetup {
 	}
 	/**
      * https://bugs.eclipse.org/bugs/show_bug.cgi?id=402673
-     *
-     * @throws JavaModelException
      */
     public void test402673a() throws JavaModelException {
             String contents = "package test402673;"
@@ -831,8 +829,6 @@ public class ASTConverter17Test extends ConverterTestSetup {
     }
     /**
      * https://bugs.eclipse.org/bugs/show_bug.cgi?id=402673
-     *
-     * @throws JavaModelException
      */
     public void test402673b() throws JavaModelException {
             String contents = "package test402673;"
@@ -865,8 +861,6 @@ public class ASTConverter17Test extends ConverterTestSetup {
     }
 	/**
 	 * https://bugs.eclipse.org/bugs/show_bug.cgi?id=402674
-	 *
-	 * @throws JavaModelException
 	 */
 	public void test403444() throws JavaModelException {
 		this.workingCopy = getWorkingCopy("/Converter18/src/test403444/X.java",

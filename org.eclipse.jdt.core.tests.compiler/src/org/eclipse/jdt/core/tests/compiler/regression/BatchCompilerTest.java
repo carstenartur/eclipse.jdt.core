@@ -1035,9 +1035,12 @@ public void test012b(){
 			"		<option key=\"org.eclipse.jdt.core.compiler.annotation.nonnull.secondary\" value=\"\"/>\n" +
 			"		<option key=\"org.eclipse.jdt.core.compiler.annotation.nonnullbydefault\" value=\"org.eclipse.jdt.annotation.NonNullByDefault\"/>\n" +
 			"		<option key=\"org.eclipse.jdt.core.compiler.annotation.nonnullbydefault.secondary\" value=\"\"/>\n" +
+			"		<option key=\"org.eclipse.jdt.core.compiler.annotation.notowning\" value=\"org.eclipse.jdt.annotation.NotOwning\"/>\n" +
 			"		<option key=\"org.eclipse.jdt.core.compiler.annotation.nullable\" value=\"org.eclipse.jdt.annotation.Nullable\"/>\n" +
 			"		<option key=\"org.eclipse.jdt.core.compiler.annotation.nullable.secondary\" value=\"\"/>\n" +
 			"		<option key=\"org.eclipse.jdt.core.compiler.annotation.nullanalysis\" value=\"disabled\"/>\n" +
+			"		<option key=\"org.eclipse.jdt.core.compiler.annotation.owning\" value=\"org.eclipse.jdt.annotation.Owning\"/>\n" +
+			"		<option key=\"org.eclipse.jdt.core.compiler.annotation.resourceanalysis\" value=\"disabled\"/>\n" +
 			"		<option key=\"org.eclipse.jdt.core.compiler.codegen.inlineJsrBytecode\" value=\"disabled\"/>\n" +
 			"		<option key=\"org.eclipse.jdt.core.compiler.codegen.lambda.genericSignature\" value=\"do not generate\"/>\n" +
 			"		<option key=\"org.eclipse.jdt.core.compiler.codegen.methodParameters\" value=\"do not generate\"/>\n" +
@@ -1079,8 +1082,10 @@ public void test012b(){
 			"		<option key=\"org.eclipse.jdt.core.compiler.problem.hiddenCatchBlock\" value=\"warning\"/>\n" +
 			"		<option key=\"org.eclipse.jdt.core.compiler.problem.includeNullInfoFromAsserts\" value=\"disabled\"/>\n" +
 			"		<option key=\"org.eclipse.jdt.core.compiler.problem.incompatibleNonInheritedInterfaceMethod\" value=\"warning\"/>\n" +
+			"		<option key=\"org.eclipse.jdt.core.compiler.problem.incompatibleOwningContract\" value=\"warning\"/>\n" +
 			"		<option key=\"org.eclipse.jdt.core.compiler.problem.incompleteEnumSwitch\" value=\"warning\"/>\n" +
 			"		<option key=\"org.eclipse.jdt.core.compiler.problem.indirectStaticAccess\" value=\"ignore\"/>\n" +
+			"		<option key=\"org.eclipse.jdt.core.compiler.problem.insufficientResourceAnalysis\" value=\"warning\"/>\n" +
 			"		<option key=\"org.eclipse.jdt.core.compiler.problem.invalidJavadoc\" value=\"ignore\"/>\n" +
 			"		<option key=\"org.eclipse.jdt.core.compiler.problem.invalidJavadocTags\" value=\"disabled\"/>\n" +
 			"		<option key=\"org.eclipse.jdt.core.compiler.problem.invalidJavadocTagsDeprecatedRef\" value=\"disabled\"/>\n" +
@@ -3030,8 +3035,7 @@ public void test052(){
 	try {
 		new File(OUTPUT_DIR).mkdirs();
 		File barFile = new File(OUTPUT_DIR +  File.separator + "Bar.java");
-		FileOutputStream barOutput = new FileOutputStream(barFile);
-		try {
+		try (FileOutputStream barOutput = new FileOutputStream(barFile)) {
 			String barContents =
 				"public class Bar	\n" +
 				"{	\n" +
@@ -3040,8 +3044,6 @@ public void test052(){
 				"  }	\n" +
 				"}\n";
 			barOutput.write(barContents.getBytes());
-		} finally {
-			barOutput.close();
 		}
 	} catch(IOException e) {
 		// do nothing, will fail below
@@ -10011,11 +10013,8 @@ public void test275_jar_ref_in_jar(){
 }
 private boolean analyzeManifestContents(ManifestAnalyzer manifestAnalyzer,
 		String string) throws IOException {
-	InputStream stream = new ByteArrayInputStream(string.getBytes());
-	try {
+	try (InputStream stream = new ByteArrayInputStream(string.getBytes())) {
 		return manifestAnalyzer.analyzeManifestContents(stream);
-	} finally {
-		stream.close();
 	}
 }
 // https://bugs.eclipse.org/bugs/show_bug.cgi?id=97332 - jars pointed by jars

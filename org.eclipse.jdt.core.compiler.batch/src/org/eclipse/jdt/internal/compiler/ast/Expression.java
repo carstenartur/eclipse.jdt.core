@@ -51,6 +51,7 @@ import org.eclipse.jdt.internal.compiler.lookup.BaseTypeBinding;
 import org.eclipse.jdt.internal.compiler.lookup.Binding;
 import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
 import org.eclipse.jdt.internal.compiler.lookup.ClassScope;
+import org.eclipse.jdt.internal.compiler.lookup.ExtraCompilerModifiers;
 import org.eclipse.jdt.internal.compiler.lookup.FieldBinding;
 import org.eclipse.jdt.internal.compiler.lookup.InferenceContext18;
 import org.eclipse.jdt.internal.compiler.lookup.LocalVariableBinding;
@@ -247,10 +248,6 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
  * More sophisticated for of the flow analysis used for analyzing expressions, and be able to optimize out
  * portions of expressions where no actual value is required.
  *
- * @param currentScope
- * @param flowContext
- * @param flowInfo
- * @param valueRequired
  * @return The state of initialization after the analysis of the current expression
  */
 public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, FlowInfo flowInfo, boolean valueRequired) {
@@ -825,11 +822,6 @@ public void collectPatternVariablesToScope(LocalVariableBinding[] variables, Blo
 
 /**
  * Default generation of a boolean value
- * @param currentScope
- * @param codeStream
- * @param trueLabel
- * @param falseLabel
- * @param valueRequired
  */
 public void generateOptimizedBoolean(BlockScope currentScope, CodeStream codeStream, BranchLabel trueLabel, BranchLabel falseLabel, boolean valueRequired) {
 	// a label valued to nil means: by default we fall through the case...
@@ -1148,15 +1140,15 @@ public TypeBinding postConversionType(Scope scope) {
 }
 
 @Override
-public StringBuffer print(int indent, StringBuffer output) {
+public StringBuilder print(int indent, StringBuilder output) {
 	printIndent(indent, output);
 	return printExpression(indent, output);
 }
 
-public abstract StringBuffer printExpression(int indent, StringBuffer output);
+public abstract StringBuilder printExpression(int indent, StringBuilder output);
 
 @Override
-public StringBuffer printStatement(int indent, StringBuffer output) {
+public StringBuilder printStatement(int indent, StringBuilder output) {
 	return print(indent, output).append(";"); //$NON-NLS-1$
 }
 
@@ -1171,10 +1163,24 @@ public TypeBinding resolveExpressionType(BlockScope scope) {
 	return resolveType(scope);
 }
 
+public TypeBinding resolveTypeWithPatternVariablesInScope(LocalVariableBinding[] patternVariablesInScope, BlockScope scope) {
+	if (patternVariablesInScope != null) {
+		for (LocalVariableBinding binding : patternVariablesInScope) {
+			binding.modifiers &= ~ExtraCompilerModifiers.AccPatternVariable;
+		}
+	}
+	TypeBinding retVal = this.resolveType(scope);
+	if (patternVariablesInScope != null) {
+		for (LocalVariableBinding binding : patternVariablesInScope) {
+			binding.modifiers |= ExtraCompilerModifiers.AccPatternVariable;
+		}
+	}
+	return retVal;
+}
+
 /**
  * Resolve the type of this expression in the context of a blockScope
  *
- * @param scope
  * @return
  * 	Return the actual type of this expression after resolution
  */
@@ -1186,7 +1192,6 @@ public TypeBinding resolveType(BlockScope scope) {
 /**
  * Resolve the type of this expression in the context of a classScope
  *
- * @param scope
  * @return
  * 	Return the actual type of this expression after resolution
  */
@@ -1351,9 +1356,6 @@ public void tagAsNeedCheckCast() {
 
 /**
  * Record the fact a cast expression got detected as being unnecessary.
- *
- * @param scope
- * @param castType
  */
 public void tagAsUnnecessaryCast(Scope scope, TypeBinding castType) {
     // do nothing by default
@@ -1372,8 +1374,6 @@ public Expression toTypeReference() {
 
 /**
  * Traverse an expression in the context of a blockScope
- * @param visitor
- * @param scope
  */
 @Override
 public void traverse(ASTVisitor visitor, BlockScope scope) {
@@ -1382,8 +1382,6 @@ public void traverse(ASTVisitor visitor, BlockScope scope) {
 
 /**
  * Traverse an expression in the context of a classScope
- * @param visitor
- * @param scope
  */
 public void traverse(ASTVisitor visitor, ClassScope scope) {
 	// nothing to do

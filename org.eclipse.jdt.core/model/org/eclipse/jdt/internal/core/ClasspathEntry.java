@@ -22,6 +22,7 @@ package org.eclipse.jdt.internal.core;
 
 import static org.eclipse.jdt.internal.compiler.util.Util.UTF_8;
 import static org.eclipse.jdt.internal.compiler.util.Util.getInputStreamAsCharArray;
+import static org.eclipse.jdt.internal.core.JavaModelManager.trace;
 
 import java.io.File;
 import java.io.IOException;
@@ -503,12 +504,12 @@ public class ClasspathEntry implements IClasspathEntry {
 		return null;
 	}
 
-	private static void decodeUnknownNode(Node node, StringBuffer buffer, IJavaProject project) {
+	private static void decodeUnknownNode(Node node, StringBuilder buffer, IJavaProject project) {
 		StringWriter writer = new StringWriter();
-		XMLWriter xmlWriter = new XMLWriter(writer, project, false/*don't print XML version*/);
-		decodeUnknownNode(node, xmlWriter, true/*insert new line*/);
-		xmlWriter.flush();
-		xmlWriter.close();
+		try (XMLWriter xmlWriter = new XMLWriter(writer, project, false/*don't print XML version*/)) {
+			decodeUnknownNode(node, xmlWriter, true/*insert new line*/);
+			xmlWriter.flush();
+		}
 		buffer.append(writer.toString());
 	}
 
@@ -803,7 +804,7 @@ public class ClasspathEntry implements IClasspathEntry {
 					if (node.getNodeType() != Node.ELEMENT_NODE) continue;
 					if (unknownChildren == null)
 						unknownChildren = new ArrayList();
-					StringBuffer buffer = new StringBuffer();
+					StringBuilder buffer = new StringBuilder();
 					decodeUnknownNode(node, buffer, project);
 					unknownChildren.add(buffer.toString());
 				}
@@ -983,14 +984,14 @@ public class ClasspathEntry implements IClasspathEntry {
 				String calledFileName = (String) calledFilesIterator.next();
 				if (!directoryPath.isValidPath(calledFileName)) {
 					if (JavaModelManager.CP_RESOLVE_VERBOSE_FAILURE) {
-						Util.verbose("Invalid Class-Path entry " + calledFileName + " in manifest of jar file: " + jarPath.toOSString()); //$NON-NLS-1$ //$NON-NLS-2$
+						trace("Invalid Class-Path entry " + calledFileName + " in manifest of jar file: " + jarPath.toOSString()); //$NON-NLS-1$ //$NON-NLS-2$
 					}
 				} else {
 					IPath calledJar = directoryPath.append(new Path(calledFileName));
 					// Ignore if segment count is Zero (https://bugs.eclipse.org/bugs/show_bug.cgi?id=308150)
 					if (calledJar.segmentCount() == 0) {
 						if (JavaModelManager.CP_RESOLVE_VERBOSE_FAILURE) {
-							Util.verbose("Invalid Class-Path entry " + calledFileName + " in manifest of jar file: " + jarPath.toOSString()); //$NON-NLS-1$ //$NON-NLS-2$
+							trace("Invalid Class-Path entry " + calledFileName + " in manifest of jar file: " + jarPath.toOSString()); //$NON-NLS-1$ //$NON-NLS-2$
 						}
 						continue;
 					}
@@ -1003,7 +1004,6 @@ public class ClasspathEntry implements IClasspathEntry {
 
 	private static char[] getManifestContents(IPath jarPath) throws CoreException, IOException {
 		ZipFile zip = null;
-		InputStream inputStream = null;
 		JavaModelManager manager = JavaModelManager.getJavaModelManager();
 		try {
 			zip = manager.getZipFile(jarPath);
@@ -1011,17 +1011,11 @@ public class ClasspathEntry implements IClasspathEntry {
 			if (manifest == null) {
 				return null;
 			}
-			inputStream = zip.getInputStream(manifest);
-			char[] chars = getInputStreamAsCharArray(inputStream, UTF_8);
-			return chars;
-		} finally {
-			if (inputStream != null) {
-				try {
-					inputStream.close();
-				} catch (IOException e) {
-					// best effort
-				}
+			try (InputStream inputStream = zip.getInputStream(manifest)) {
+				char[] chars = getInputStreamAsCharArray(inputStream, UTF_8);
+				return chars;
 			}
+		} finally {
 			manager.closeZipFile(zip);
 		}
 	}
@@ -1042,20 +1036,19 @@ public class ClasspathEntry implements IClasspathEntry {
 			calledFileNames = analyzer.getCalledFileNames();
 			if (!success || analyzer.getClasspathSectionsCount() == 1 && calledFileNames == null) {
 				if (JavaModelManager.CP_RESOLVE_VERBOSE_FAILURE) {
-					Util.verbose("Invalid Class-Path header in manifest of jar file: " + jarPath.toOSString()); //$NON-NLS-1$
+					trace("Invalid Class-Path header in manifest of jar file: " + jarPath.toOSString()); //$NON-NLS-1$
 				}
 				return null;
 			} else if (analyzer.getClasspathSectionsCount() > 1) {
 				if (JavaModelManager.CP_RESOLVE_VERBOSE_FAILURE) {
-					Util.verbose("Multiple Class-Path headers in manifest of jar file: " + jarPath.toOSString()); //$NON-NLS-1$
+					trace("Multiple Class-Path headers in manifest of jar file: " + jarPath.toOSString()); //$NON-NLS-1$
 				}
 				return null;
 			}
 		} catch (CoreException | IOException e) {
 			// not a zip file
 			if (JavaModelManager.CP_RESOLVE_VERBOSE_FAILURE) {
-				Util.verbose("Could not read Class-Path header in manifest of jar file: " + jarPath.toOSString()); //$NON-NLS-1$
-				e.printStackTrace();
+				trace("Could not read Class-Path header in manifest of jar file: " + jarPath.toOSString(), e); //$NON-NLS-1$
 			}
 		}
 		return calledFileNames;
@@ -1118,7 +1111,7 @@ public class ClasspathEntry implements IClasspathEntry {
 	 */
 	private static void encodePatterns(IPath[] patterns, String tag, Map parameters) {
 		if (patterns != null && patterns.length > 0) {
-			StringBuffer rule = new StringBuffer(10);
+			StringBuilder rule = new StringBuilder(10);
 			for (int i = 0, max = patterns.length; i < max; i++){
 				if (i > 0) rule.append('|');
 				rule.append(patterns[i]);

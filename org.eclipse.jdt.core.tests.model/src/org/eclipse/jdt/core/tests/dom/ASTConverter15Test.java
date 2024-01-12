@@ -1818,9 +1818,6 @@ public class ASTConverter15Test extends ConverterTestSetup {
 		assertNotNull("No javadoc", annotationTypeDeclaration.getJavadoc());
 	}
 
-	/**
-	 *
-	 */
 	public void test0056() throws JavaModelException {
 		ICompilationUnit sourceUnit = getCompilationUnit("Converter15" , "src", "test0056", "X.java"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
 		ASTNode result = runJLS3Conversion(sourceUnit, true, true);
@@ -7558,7 +7555,7 @@ public class ASTConverter15Test extends ConverterTestSetup {
 		IBinding[] bindings= parser.createBindings(new IJavaElement[] { type }, null);
 		if (bindings.length == 1 && bindings[0] instanceof ITypeBinding) {
 			ITypeBinding typeBinding= (ITypeBinding) bindings[0];
-			StringBuffer buffer = new StringBuffer();
+			StringBuilder buffer = new StringBuilder();
 			while (typeBinding != null) {
 				buffer.append(typeBinding.getAnnotations().length);
 				typeBinding= typeBinding.getSuperclass();
@@ -7585,7 +7582,7 @@ public class ASTConverter15Test extends ConverterTestSetup {
 		List types = unit.types();
 		TypeDeclaration typeDeclaration = (TypeDeclaration) types.get(0);
 		ITypeBinding typeBinding = typeDeclaration.resolveBinding();
-		StringBuffer buffer = new StringBuffer();
+		StringBuilder buffer = new StringBuilder();
 		while (typeBinding != null) {
 			buffer.append(typeBinding.getAnnotations().length);
 			typeBinding= typeBinding.getSuperclass();

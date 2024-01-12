@@ -175,11 +175,8 @@ private void assertEncodeDecodeEntry(String projectName, String expectedEncoded,
 }
 protected File createFile(File parent, String name, String content) throws IOException {
 	File file = new File(parent, name);
-	FileOutputStream out = new FileOutputStream(file);
-	try {
+	try (FileOutputStream out = new FileOutputStream(file)) {
 		out.write(content.getBytes());
-	} finally {
-		out.close();
 	}
 	/*
 	 * Need to change the time stamp to realize that the file has been modified
@@ -2988,15 +2985,10 @@ public void testEncoding2() throws Exception {
 		IJavaProject p = createJavaProject("P", new String[] {"src"}, "bin");
 		IFile file = getFile("/P/.classpath");
 		byte[] contents = org.eclipse.jdt.internal.core.util.Util.getResourceContentsAsByteArray(file);
-		FileOutputStream output = null;
-		try {
-			output = new FileOutputStream(file.getLocation().toFile());
+		try (FileOutputStream output = new FileOutputStream(file.getLocation().toFile())) {
 			output.write(IContentDescription.BOM_UTF_8); // UTF-8 BOM
 			output.write(contents);
 			output.flush();
-		} finally {
-			if (output != null)
-				output.close();
 		}
 		file.refreshLocal(IResource.DEPTH_ONE, null);
 
@@ -5027,7 +5019,7 @@ public void testNoResourceChange05() throws CoreException {
  */
 public void testNoResourceChange06() throws CoreException {
 	ILogListener listener = new ILogListener(){
-		private final StringBuffer buffer = new StringBuffer();
+		private final StringBuilder buffer = new StringBuilder();
 		public void logging(IStatus status, String plugin) {
 			this.buffer.append(status);
 			this.buffer.append('\n');
@@ -6031,7 +6023,6 @@ public void testForceNullArgumentsToEmptySet5() throws CoreException {
  *
  * @see "https://bugs.eclipse.org/bugs/show_bug.cgi?id=276373"
  * @see "https://bugs.eclipse.org/bugs/show_bug.cgi?id=280497"
- * @throws Exception
  */
 public void testBug276373() throws Exception {
 	File libDir = null;
@@ -6238,7 +6229,6 @@ public void testBug300136a() throws Exception {
  * Test that duplicate entries are not added to the resolved classpath
  *
  * @see "https://bugs.eclipse.org/bugs/show_bug.cgi?id=294360"
- * @throws Exception
  */
 public void testBug294360a() throws Exception {
 	try {
@@ -6289,7 +6279,6 @@ public void testBug294360a() throws Exception {
  * 			 5) referenced libraries and their attributes are persisted in the .classpath file
  *
  * @see "https://bugs.eclipse.org/bugs/show_bug.cgi?id=252431"
- * @throws Exception
  */
 public void testBug252341a() throws Exception {
 	try {
@@ -6407,7 +6396,6 @@ public void testBug252341a() throws Exception {
  * 4) Passing an empty array as referencedEntries clears the earlier referenced entries
  *
  * @see "https://bugs.eclipse.org/bugs/show_bug.cgi?id=252431"
- * @throws Exception
  */
 public void testBug252341b() throws Exception {
 	try {
@@ -6538,7 +6526,6 @@ public void testBug252341b() throws Exception {
  * {@link IJavaProject#setRawClasspath(IClasspathEntry[], IClasspathEntry[], IPath, IProgressMonitor)}
  *
  * @see "https://bugs.eclipse.org/bugs/show_bug.cgi?id=252431"
- * @throws Exception
  */
 public void testBug252341c() throws Exception {
 	try {
@@ -6603,7 +6590,6 @@ public void testBug252341c() throws Exception {
  * for the referenced classpath entries.
  *
  * @see "https://bugs.eclipse.org/bugs/show_bug.cgi?id=304081"
- * @throws Exception
  */
 public void testBug304081() throws Exception {
 	File libDir = null;
@@ -6654,7 +6640,6 @@ public void testBug304081() throws Exception {
  * for the referenced classpath entries.
  *
  * @see "https://bugs.eclipse.org/bugs/show_bug.cgi?id=304081"
- * @throws Exception
  */
 public void testBug304081a() throws Exception {
 	try {
@@ -6696,7 +6681,6 @@ public void testBug304081a() throws Exception {
  * 3) when a project is deleted, the non-chaining jar cache is reset.
  *
  * @see "https://bugs.eclipse.org/bugs/show_bug.cgi?id=305122"
- * @throws Exception
  */
 public void testBug305122() throws Exception {
 	try {
@@ -6756,7 +6740,6 @@ public void testBug305122() throws Exception {
  * create any exceptions and is NOT added to the resolved classpath.
  *
  *  @see "https://bugs.eclipse.org/bugs/show_bug.cgi?id=308150"
- * @throws Exception
  */
 public void testBug308150() throws Exception {
 	try {
@@ -6790,7 +6773,6 @@ public void testBug308150() throws Exception {
  * and can be retrieved
  *
  * @see "https://bugs.eclipse.org/bugs/show_bug.cgi?id=305037"
- * @throws Exception
  */
 public void testBug305037() throws Exception {
 	File libDir = null;
@@ -6843,7 +6825,6 @@ public void testBug305037() throws Exception {
  * for JARs from containers are resolved.
  *
  * @see "https://bugs.eclipse.org/bugs/show_bug.cgi?id=313965"
- * @throws Exception
  */
 public void testBug313965() throws Exception {
 	try {
@@ -6886,7 +6867,6 @@ public void testBug313965() throws Exception {
  * the referenced libraries for JARs from containers are NOT resolved or added to the project's classpath.
  *
  * @see "https://bugs.eclipse.org/bugs/show_bug.cgi?id=313965"
- * @throws Exception
  */
 public void testBug313965a() throws Exception {
 	try {
@@ -6940,7 +6920,6 @@ public void testBug321170() throws Exception {
  * Test that an invalid archive (JAR) creates a buildpath error
  *
  * @see "https://bugs.eclipse.org/bugs/show_bug.cgi?id=229042"
- * @throws Exception
  */
 public void testBug229042() throws Exception {
 	try {
@@ -6976,7 +6955,6 @@ public void testBug229042() throws Exception {
  * Test that for an external project, relative paths are resolve relative to the project location.
  *
  * @see "https://bugs.eclipse.org/bugs/show_bug.cgi?id=274737"
- * @throws Exception
  */
 public void testBug274737() throws Exception {
 	try {
@@ -7291,7 +7269,6 @@ public void testBug396299() throws Exception {
  * 3) when a project is deleted, the external files cache is reset.
  *
  * @see "https://bugs.eclipse.org/bugs/show_bug.cgi?id=411423"
- * @throws Exception
  */
 public void testBug411423() throws Exception {
 	try {

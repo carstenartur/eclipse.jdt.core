@@ -22,6 +22,7 @@ import static org.eclipse.jdt.internal.compiler.parser.TerminalTokens.TokenNameC
 import static org.eclipse.jdt.internal.compiler.parser.TerminalTokens.TokenNameCOMMENT_LINE;
 import static org.eclipse.jdt.internal.compiler.parser.TerminalTokens.TokenNameNotAToken;
 import static org.eclipse.jdt.internal.compiler.parser.TerminalTokens.TokenNameStringLiteral;
+import static org.eclipse.jdt.internal.compiler.parser.TerminalTokens.TokenNameTextBlock;
 import static org.eclipse.jdt.internal.compiler.parser.TerminalTokens.TokenNameWHITESPACE;
 import static org.eclipse.jdt.internal.compiler.parser.TerminalTokens.TokenNamepackage;
 
@@ -127,7 +128,7 @@ public class CommentsPreparator extends ASTVisitor {
 	private int noFormatOpenTagStartIndex = -1;
 	private int formatCodeOpenTagEndIndex = -1;
 	private int lastFormatCodeClosingTagIndex = -1;
-	private final ArrayList<Integer> commonAttributeAnnotations = new ArrayList<Integer>();
+	private final ArrayList<Integer> commonAttributeAnnotations = new ArrayList<>();
 	private DefaultCodeFormatter preTagCodeFormatter;
 	private DefaultCodeFormatter snippetCodeFormatter;
 
@@ -203,10 +204,14 @@ public class CommentsPreparator extends ASTVisitor {
 
 		List<Token> structure = tokenizeLineComment(commentToken);
 		if (isContinuation) {
-			Token first = structure.get(0);
-			first.breakBefore();
-			first.setWrapPolicy(
-					new WrapPolicy(WrapMode.WHERE_NECESSARY, commentIndex - 1, this.lastLineCommentPosition));
+			if (this.options.join_line_comments) {
+				structure.remove(0);
+			} else {
+				Token first = structure.get(0);
+				first.breakBefore();
+				first.setWrapPolicy(
+						new WrapPolicy(WrapMode.WHERE_NECESSARY, commentIndex - 1, this.lastLineCommentPosition));
+			}
 
 			// merge previous and current line comment
 			Token previous = this.lastLineComment;
@@ -358,7 +363,7 @@ public class CommentsPreparator extends ASTVisitor {
 			Token token = this.tm.get(i);
 			if (this.tm.countLineBreaksBetween(token, previous) > 0)
 				break;
-			if (token.tokenType == TokenNameStringLiteral)
+			if (token.tokenType == TokenNameStringLiteral || token.tokenType == TokenNameTextBlock)
 				stringLiterals.add(token);
 			previous = token;
 		}

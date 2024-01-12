@@ -218,7 +218,7 @@ public abstract class FullSourceWorkspaceTests extends TestCase {
 
 	// Scenario information
 	String scenarioReadableName, scenarioShortName;
-	StringBuffer scenarioComment;
+	StringBuilder scenarioComment;
 	static Map SCENARII_COMMENT = new HashMap();
 
 	// Time measuring
@@ -242,7 +242,6 @@ public abstract class FullSourceWorkspaceTests extends TestCase {
 	 * following options:
 	 *		-DPerformanceMeterFactory=org.eclipse.jdt.core.tests.performance:org.eclipse.jdt.core.tests.performance.util.JdtCorePerformanceMeterFactory
 	 *		-DlogDir=directory where you want to write log files (for example d:/usr/OTI/tests/perfs/stats)
-	 *
 	 */
 	// Store directory where to put files
 	private final static File INVALID_DIR = new File("Invalid");
@@ -361,9 +360,6 @@ public abstract class FullSourceWorkspaceTests extends TestCase {
 		LOG_DIR = dir;
 	}
 
-	/**
-	 * @param name
-	 */
 	public FullSourceWorkspaceTests(String name) {
 		super(name);
 	}
@@ -514,15 +510,15 @@ public abstract class FullSourceWorkspaceTests extends TestCase {
 		}
 
 		// Update comment buffers
-		StringBuffer[] scenarioComments = (StringBuffer[]) SCENARII_COMMENT.get(getClass());
+		StringBuilder[] scenarioComments = (StringBuilder[]) SCENARII_COMMENT.get(getClass());
 		if (scenarioComments == null) {
-			scenarioComments = new StringBuffer[length];
+			scenarioComments = new StringBuilder[length];
 			SCENARII_COMMENT.put(getClass(), scenarioComments);
 		}
 		for (int i=0; i<length; i++) {
 			if (this.scenarioComment != null || comments[i] != null) {
 				if (scenarioComments[i] == null) {
-					scenarioComments[i] = new StringBuffer();
+					scenarioComments[i] = new StringBuilder();
 				} else {
 					scenarioComments[i].append(' ');
 				}
@@ -1024,9 +1020,6 @@ public abstract class FullSourceWorkspaceTests extends TestCase {
 
 	/**
 	 * Returns compilation unit with given name in given project and package.
-	 * @param projectName
-	 * @param packageName
-	 * @param unitName
 	 * @return org.eclipse.jdt.core.ICompilationUnit
 	 */
 	protected ICompilationUnit getCompilationUnit(String projectName, String packageName, String unitName) throws JavaModelException {
@@ -1101,7 +1094,6 @@ public abstract class FullSourceWorkspaceTests extends TestCase {
 
 	/**
 	 * Returns project corresponding to given name or null if none is found.
-	 * @param projectName
 	 * @return IJavaProject
 	 */
 	protected IJavaProject getProject(String projectName) {

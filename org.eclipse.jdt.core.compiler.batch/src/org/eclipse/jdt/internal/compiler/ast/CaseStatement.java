@@ -132,7 +132,7 @@ public boolean containsPatternVariable() {
 	return false;
 }
 @Override
-public StringBuffer printStatement(int tab, StringBuffer output) {
+public StringBuilder printStatement(int tab, StringBuilder output) {
 	printIndent(tab, output);
 	if (this.constantExpressions == null) {
 		output.append("default "); //$NON-NLS-1$
@@ -150,7 +150,6 @@ public StringBuffer printStatement(int tab, StringBuffer output) {
 
 /**
  * Case code generation
- *
  */
 @Override
 public void generateCode(BlockScope currentScope, CodeStream codeStream) {

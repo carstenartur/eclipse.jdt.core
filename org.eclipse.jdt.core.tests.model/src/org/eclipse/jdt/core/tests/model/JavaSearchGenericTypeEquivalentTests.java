@@ -29,9 +29,6 @@ public class JavaSearchGenericTypeEquivalentTests extends JavaSearchGenericTypeT
 
 //	static char[] RESULT_ERASURE_MATCH = "*] ERASURE_*".toCharArray();
 
-	/**
-	 * @param name
-	 */
 	public JavaSearchGenericTypeEquivalentTests(String name) {
 		super(name, EQUIVALENT_RULE);
 	}
@@ -48,7 +45,7 @@ public class JavaSearchGenericTypeEquivalentTests extends JavaSearchGenericTypeT
 	 * Add line to result only if it is not an erasure match rule.
 	 */
 	@Override
-	void addResultLine(StringBuffer buffer, char[] line) {
+	void addResultLine(StringBuilder buffer, char[] line) {
 		if (!CharOperation.match(RESULT_ERASURE_MATCH, line, true)) {
 			super.addResultLine(buffer, line);
 		}

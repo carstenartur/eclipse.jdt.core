@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2014, 2018 Mateusz Matela and others.
+ * Copyright (c) 2014, 2023 Mateusz Matela and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -43,8 +43,8 @@ public class TextEditsBuilder extends TokenTraverser {
 	private final DefaultCodeFormatterOptions options;
 	private final StringBuilder buffer;
 
-	private final List<Token> stringLiteralsInLine = new ArrayList<Token>();
-	private final List<TextEdit> edits = new ArrayList<TextEdit>();
+	private final List<Token> stringLiteralsInLine = new ArrayList<>();
+	private final List<TextEdit> edits = new ArrayList<>();
 
 	private final List<IRegion> regions;
 	private int currentRegion = 0;
@@ -80,7 +80,7 @@ public class TextEditsBuilder extends TokenTraverser {
 
 	private List<IRegion> adaptRegions(List<IRegion> givenRegions) {
 		// make sure regions don't begin or end inside multiline comments
-		ArrayList<IRegion> result = new ArrayList<IRegion>();
+		ArrayList<IRegion> result = new ArrayList<>();
 		IRegion previous = null;
 		for (IRegion region : givenRegions) {
 			int start = region.getOffset();
@@ -136,7 +136,7 @@ public class TextEditsBuilder extends TokenTraverser {
 			}
 		}
 
-		if (token.tokenType == TokenNameStringLiteral)
+		if (token.tokenType == TokenNameStringLiteral || token.tokenType == TokenNameTextBlock)
 			this.stringLiteralsInLine.add(token);
 
 		if (getNext() == null) {

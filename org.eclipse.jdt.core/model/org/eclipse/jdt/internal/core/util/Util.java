@@ -15,6 +15,8 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.core.util;
 
+import static org.eclipse.jdt.internal.core.JavaModelManager.trace;
+
 import java.io.*;
 import java.net.URI;
 import java.util.*;
@@ -445,7 +447,9 @@ public class Util {
 			edit.apply(document, TextEdit.NONE);
 			return document.get();
 		} catch (MalformedTreeException | BadLocationException e) {
-			e.printStackTrace();
+			if (JavaModelManager.VERBOSE) {
+				trace("", e); //$NON-NLS-1$
+			}
 		}
 		return original;
 	}
@@ -1042,7 +1046,7 @@ public class Util {
 	 * Put all the arguments in one String.
 	 */
 	public static String getProblemArgumentsForMarker(String[] arguments){
-		StringBuffer args = new StringBuffer(10);
+		StringBuilder args = new StringBuilder(10);
 
 		args.append(arguments.length);
 		args.append(':');
@@ -1070,7 +1074,7 @@ public class Util {
 	 * @param argument the given argument
 	 * @param buffer the buffer in which the encoded argument is stored
 	 */
-	private static void encodeArgument(String argument, StringBuffer buffer) {
+	private static void encodeArgument(String argument, StringBuilder buffer) {
 		for (int i = 0, max = argument.length(); i < max; i++) {
 			char charAt = argument.charAt(i);
 			switch(charAt) {
@@ -1116,7 +1120,7 @@ public class Util {
 		}
 		String[] result = new String[length];
 		int count = 0;
-		StringBuffer buffer = new StringBuffer();
+		StringBuilder buffer = new StringBuilder();
 		for (int i = 0, max = argumentsString.length(); i < max; i++) {
 			char current = argumentsString.charAt(i);
 			switch(current) {
@@ -1167,22 +1171,12 @@ public class Util {
 	 * Returns the given file's contents as a byte array.
 	 */
 	public static byte[] getResourceContentsAsByteArray(IFile file) throws JavaModelException {
-		InputStream stream= null;
-		try {
-			stream = file.getContents(true);
+		try (InputStream stream = file.getContents(true)) {
+			return org.eclipse.jdt.internal.compiler.util.Util.getInputStreamAsByteArray(stream);
 		} catch (CoreException e) {
 			throw new JavaModelException(e);
-		}
-		try {
-			return org.eclipse.jdt.internal.compiler.util.Util.getInputStreamAsByteArray(stream);
 		} catch (IOException e) {
 			throw new JavaModelException(e, IJavaModelStatusConstants.IO_EXCEPTION);
-		} finally {
-			try {
-				stream.close();
-			} catch (IOException e) {
-				// ignore
-			}
 		}
 	}
 
@@ -1203,22 +1197,12 @@ public class Util {
 
 	public static char[] getResourceContentsAsCharArray(IFile file, String encoding) throws JavaModelException {
 		// Get resource contents
-		InputStream stream= null;
-		try {
-			stream = file.getContents(true);
-		} catch (CoreException e) {
-			throw new JavaModelException(e, IJavaModelStatusConstants.ELEMENT_DOES_NOT_EXIST);
-		}
-		try {
+		try (InputStream stream = file.getContents(true)) {
 			return org.eclipse.jdt.internal.compiler.util.Util.getInputStreamAsCharArray(stream, encoding);
 		} catch (IOException e) {
 			throw new JavaModelException(e, IJavaModelStatusConstants.IO_EXCEPTION);
-		} finally {
-			try {
-				stream.close();
-			} catch (IOException e) {
-				// ignore
-			}
+		} catch (CoreException e) {
+			throw new JavaModelException(e, IJavaModelStatusConstants.ELEMENT_DOES_NOT_EXIST);
 		}
 	}
 
@@ -1226,7 +1210,7 @@ public class Util {
 	 * Returns the signature of the given type.
 	 */
 	public static String getSignature(Type type) {
-		StringBuffer buffer = new StringBuffer();
+		StringBuilder buffer = new StringBuilder();
 		getFullyQualifiedName(type, buffer);
 		return Signature.createTypeSignature(buffer.toString(), false/*not resolved in source*/);
 	}
@@ -1268,7 +1252,9 @@ public class Util {
 		try {
 			ResourcesPlugin.getWorkspace().getRoot().setPersistentProperty(getSourceAttachmentPropertyName(path), property);
 		} catch (CoreException e) {
-			e.printStackTrace();
+			if (JavaModelManager.VERBOSE) {
+				trace("", e); //$NON-NLS-1$
+			}
 		}
 	}
 
@@ -1287,7 +1273,7 @@ public class Util {
 	/*
 	 * Appends to the given buffer the fully qualified name (as it appears in the source) of the given type
 	 */
-	private static void getFullyQualifiedName(Type type, StringBuffer buffer) {
+	private static void getFullyQualifiedName(Type type, StringBuilder buffer) {
 		switch (type.getNodeType()) {
 			case ASTNode.ARRAY_TYPE:
 				ArrayType arrayType = (ArrayType) type;
@@ -1650,7 +1636,6 @@ public class Util {
 
 	/**
 	 * Returns whether the given resource is read-only or not.
-	 * @param resource
 	 * @return <code>true</code> if the resource is read-only, <code>false</code> if it is not or
 	 * 	if the file system does not support the read-only attribute.
 	 */
@@ -2495,7 +2480,7 @@ public class Util {
 		int length = signature.length;
 		if (length <= 1)
 			return signature;
-		StringBuffer buffer = new StringBuffer(length);
+		StringBuilder buffer = new StringBuilder(length);
 		toUnresolvedTypeSignature(signature, 0, length, buffer);
 		int bufferLength = buffer.length();
 		char[] result = new char[bufferLength];
@@ -2503,7 +2488,7 @@ public class Util {
 		return result;
 	}
 
-	private static int toUnresolvedTypeSignature(char[] signature, int start, int length, StringBuffer buffer) {
+	private static int toUnresolvedTypeSignature(char[] signature, int start, int length, StringBuilder buffer) {
 		if (signature[start] == Signature.C_RESOLVED)
 			buffer.append(Signature.C_UNRESOLVED);
 		else
@@ -2529,7 +2514,7 @@ public class Util {
 		}
 		return length;
 	}
-	private static void appendArrayTypeSignature(char[] string, int start, StringBuffer buffer, boolean compact) {
+	private static void appendArrayTypeSignature(char[] string, int start, StringBuilder buffer, boolean compact) {
 		int length = string.length;
 		// need a minimum 2 char
 		if (start >= length - 1) {
@@ -2556,7 +2541,7 @@ public class Util {
 			buffer.append('[').append(']');
 		}
 	}
-	private static void appendClassTypeSignature(char[] string, int start, StringBuffer buffer, boolean compact) {
+	private static void appendClassTypeSignature(char[] string, int start, StringBuilder buffer, boolean compact) {
 		char c = string[start];
 		if (c != Signature.C_RESOLVED) {
 			return;
@@ -2593,7 +2578,7 @@ public class Util {
 			p++;
 		}
 	}
-	static void appendTypeSignature(char[] string, int start, StringBuffer buffer, boolean compact) {
+	static void appendTypeSignature(char[] string, int start, StringBuilder buffer, boolean compact) {
 		char c = string[start];
 		switch (c) {
 			case Signature.C_ARRAY :
@@ -2642,7 +2627,7 @@ public class Util {
 			return ""; //$NON-NLS-1$
 		}
 
-		StringBuffer buffer = new StringBuffer(methodSignature.length + 10);
+		StringBuilder buffer = new StringBuilder(methodSignature.length + 10);
 
 		// decode declaring class name
 		// it can be either an array signature or a type signature
@@ -2758,20 +2743,6 @@ public class Util {
 	 */
 	public static void validateTypeSignature(String sig, boolean allowVoid) {
 		Assert.isTrue(isValidTypeSignature(sig, allowVoid));
-	}
-	public static void verbose(String log) {
-		verbose(log, System.out);
-	}
-	public static synchronized void verbose(String log, PrintStream printStream) {
-		int start = 0;
-		do {
-			int end = log.indexOf('\n', start);
-			printStream.print(Thread.currentThread());
-			printStream.print(" "); //$NON-NLS-1$
-			printStream.print(log.substring(start, end == -1 ? log.length() : end+1));
-			start = end+1;
-		} while (start != 0);
-		printStream.println();
 	}
 
 	/**
@@ -3044,7 +3015,7 @@ public class Util {
 			throw new IllegalArgumentException(String.valueOf(methodSignature));
 		}
 
-		StringBuffer buffer = new StringBuffer(methodSignature.length + 10);
+		StringBuilder buffer = new StringBuilder(methodSignature.length + 10);
 
 		// selector
 		if (methodName != null) {
@@ -3071,7 +3042,7 @@ public class Util {
 		return result;
 	}
 
-	private static int appendTypeSignatureForAnchor(char[] string, int start, StringBuffer buffer, boolean isVarArgs) {
+	private static int appendTypeSignatureForAnchor(char[] string, int start, StringBuilder buffer, boolean isVarArgs) {
 		// need a minimum 1 char
 		if (start >= string.length) {
 			throw newIllegalArgumentException(string, start);
@@ -3149,7 +3120,7 @@ public class Util {
 		}
 	}
 
-	private static int appendTypeArgumentSignatureForAnchor(char[] string, int start, StringBuffer buffer) {
+	private static int appendTypeArgumentSignatureForAnchor(char[] string, int start, StringBuilder buffer) {
 		// need a minimum 1 char
 		if (start >= string.length) {
 			throw newIllegalArgumentException(string, start);
@@ -3166,7 +3137,7 @@ public class Util {
 				return appendTypeSignatureForAnchor(string, start, buffer, false);
 		}
 	}
-	private static int appendCaptureTypeSignatureForAnchor(char[] string, int start, StringBuffer buffer) {
+	private static int appendCaptureTypeSignatureForAnchor(char[] string, int start, StringBuilder buffer) {
 		// need a minimum 2 char
 		if (start >= string.length - 1) {
 			throw newIllegalArgumentException(string, start);
@@ -3177,7 +3148,7 @@ public class Util {
 		}
 		return appendTypeArgumentSignatureForAnchor(string, start + 1, buffer);
 	}
-	private static int appendArrayTypeSignatureForAnchor(char[] string, int start, StringBuffer buffer, boolean isVarArgs) {
+	private static int appendArrayTypeSignatureForAnchor(char[] string, int start, StringBuilder buffer, boolean isVarArgs) {
 		int length = string.length;
 		// need a minimum 2 char
 		if (start >= length - 1) {
@@ -3211,7 +3182,7 @@ public class Util {
 		}
 		return e;
 	}
-	private static int appendClassTypeSignatureForAnchor(char[] string, int start, StringBuffer buffer) {
+	private static int appendClassTypeSignatureForAnchor(char[] string, int start, StringBuilder buffer) {
 		// need a minimum 3 chars "Lx;"
 		if (start >= string.length - 2) {
 			throw newIllegalArgumentException(string, start);
@@ -3337,7 +3308,6 @@ public class Util {
 	 * @param paramTypeSignatures the type signatures of the method arguments
 	 * @param isConstructor whether we're looking for a constructor
 	 * @return an IMethod if found, otherwise null
-	 * @throws JavaModelException
 	 */
 	public static IMethod findMethod(IType type, char[] selector, String[] paramTypeSignatures, boolean isConstructor) throws JavaModelException {
 		IMethod method = null;

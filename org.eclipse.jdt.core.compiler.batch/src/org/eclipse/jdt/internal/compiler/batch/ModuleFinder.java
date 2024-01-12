@@ -154,7 +154,6 @@ public class ModuleFinder {
 	 * element, first being the source module and second being the target module.
 	 * The expected format is:
 	 *  --add-reads <source-module>=<target-module>
-	 * @param option
 	 * @return a String[] with source and target module of the "reads" clause.
 	 */
 	protected static String[] extractAddonRead(String option) {
@@ -241,9 +240,7 @@ public class ModuleFinder {
 		return null;
 	}
 	private static IModule extractModuleFromArchive(File file, Classpath pathEntry, String path, String release) {
-		ZipFile zipFile = null;
-		try {
-			zipFile = new ZipFile(file);
+		try (ZipFile zipFile = new ZipFile(file)) {
 			if (release != null) {
 				String releasePath = "META-INF/versions/" + release + "/" + path; //$NON-NLS-1$ //$NON-NLS-2$
 				ZipEntry entry = zipFile.getEntry(releasePath);
@@ -266,14 +263,6 @@ public class ModuleFinder {
 			} else {
 				System.err.println(error);
 				e.printStackTrace();
-			}
-		} finally {
-			if (zipFile != null) {
-				try {
-					zipFile.close();
-				} catch (IOException e) {
-					// Nothing much to do here
-				}
 			}
 		}
 		return null;

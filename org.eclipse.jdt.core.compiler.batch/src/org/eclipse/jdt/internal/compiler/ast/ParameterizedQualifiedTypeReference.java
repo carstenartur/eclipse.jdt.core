@@ -40,11 +40,6 @@ public class ParameterizedQualifiedTypeReference extends ArrayQualifiedTypeRefer
 	public TypeReference[][] typeArguments;
 	ReferenceBinding[] typesPerToken;
 
-	/**
-	 * @param tokens
-	 * @param dim
-	 * @param positions
-	 */
 	public ParameterizedQualifiedTypeReference(char[][] tokens, TypeReference[][] typeArguments, int dim, long[] positions) {
 
 		super(tokens, dim, positions);
@@ -394,7 +389,7 @@ public class ParameterizedQualifiedTypeReference extends ArrayQualifiedTypeRefer
 	}
 
 	@Override
-	public StringBuffer printExpression(int indent, StringBuffer output) {
+	public StringBuilder printExpression(int indent, StringBuilder output) {
 		int length = this.tokens.length;
 		for (int i = 0; i < length - 1; i++) {
 			if (this.annotations != null && this.annotations[i] != null) {

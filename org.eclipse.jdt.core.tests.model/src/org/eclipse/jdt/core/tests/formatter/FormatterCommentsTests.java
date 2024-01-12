@@ -16,12 +16,14 @@ package org.eclipse.jdt.core.tests.formatter;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import junit.framework.ComparisonFailure;
 import junit.framework.Test;
 
 import org.eclipse.core.runtime.IPath;
@@ -252,8 +254,21 @@ void formatUnit(String packageName, String unitName) throws JavaModelException{
 void formatUnit(String packageName, String unitName, int kind, int indentationLevel, boolean checkNull, int offset, int length, String lineSeparator) throws JavaModelException{
 	this.workingCopies = new ICompilationUnit[1];
 	this.workingCopies[0] = getCompilationUnit(JAVA_PROJECT.getElementName() , "", "test."+packageName, unitName); //$NON-NLS-1$ //$NON-NLS-2$
-	String outputSource = getOutputSource(this.workingCopies[0]);
-	formatSource(this.workingCopies[0].getSource(), outputSource, kind, indentationLevel, offset, length, lineSeparator, true);
+	File expectedFile = getExpectedOutput(this.workingCopies[0]);
+	String expectedOutput;
+	try {
+		expectedOutput = expectedFile == null ? null : Files.readString(expectedFile.toPath());
+	} catch (IOException e) {
+		throw new RuntimeException(e);
+	}
+	try {
+		formatSource(this.workingCopies[0].getSource(), expectedOutput, kind, indentationLevel, offset, length,
+				lineSeparator, true);
+	} catch (ComparisonFailure e) {
+		e.addSuppressed(new RuntimeException("Happend when formating: \n\"" + this.workingCopies[0].getPath()
+				+ "\"\nExpected output:\n\"" + expectedFile + "\""));
+		throw e;
+	}
 }
 
 /**
@@ -277,7 +292,7 @@ protected List getProjectCompilationUnits(IJavaProject javaProject) throws JavaM
 	return allUnits;
 }
 
-private String getOutputSource(ICompilationUnit unit) throws JavaModelException {
+private File getExpectedOutput(ICompilationUnit unit) throws JavaModelException {
 	IPath outputPath = JAVA_PROJECT.getProject().getLocation().removeLastSegments(1)
 		.append(unit.getParent().getPath())
 		.append(getOutputFolder())
@@ -295,14 +310,7 @@ private String getOutputSource(ICompilationUnit unit) throws JavaModelException 
 			return null;
 		}
 	}
-	try {
-		return new String(org.eclipse.jdt.internal.compiler.util.Util.getFileCharContent(outputFile, null));
-	}
-	catch (IOException e) {
-		// should never happen
-		throw new RuntimeException(e);
-	}
-
+	return outputFile;
 }
 
 IPath getOutputFolder() {
@@ -1395,5 +1403,82 @@ public void testSnippet06() {
 		"public class T {\n" +
 		"}"
 	);
+}
+public void testJoinLineComment01() {
+	this.formatterPrefs.join_line_comments = true;
+	String source =
+		"""
+		class A {
+		int a = 5; // one  two
+		            // three
+		}
+		""";
+	formatSource(source,
+		"""
+		class A {
+			int a = 5; // one two three
+		}
+		""");
+}
+public void testJoinLineComment02() {
+	this.formatterPrefs.join_line_comments = true;
+	String source =
+		"""
+		class A {
+		int a = 5; // one  two
+		// three
+		}
+		""";
+	formatSource(source,
+		"""
+		class A {
+			int a = 5; // one two
+		// three
+		}
+		""");
+}
+public void testJoinLineComment03() {
+	this.formatterPrefs.join_line_comments = true;
+	String source =
+		"""
+		class A {
+		 int a = 5; // one  two
+		 // three
+		}
+		""";
+	formatSource(source,
+		"""
+		class A {
+			int a = 5; // one two
+			// three
+		}
+		""");
+}
+public void testJoinLineComment04() {
+	this.formatterPrefs.join_line_comments = true;
+	String source =
+		"""
+		class A {
+			int a = 5; // one  two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen
+						// one  two three four five six seven
+						// eight nine ten eleven twelve
+						// thirteen fourteen fifteen sixteen
+						// seventeen eighteen nineteen
+						// one  two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen
+			// one  two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen
+		}
+		""";
+	formatSource(source,
+		"""
+		class A {
+			int a = 5; // one two three four five six seven eight nine ten eleven twelve thirteen
+						// fourteen fifteen sixteen seventeen eighteen nineteen one two three four five
+						// six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen
+						// seventeen eighteen nineteen one two three four five six seven eight nine ten
+						// eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen
+			// one two three four five six seven eight nine ten eleven twelve thirteen
+			// fourteen fifteen sixteen seventeen eighteen nineteen
+		}
+		""");
 }
 }

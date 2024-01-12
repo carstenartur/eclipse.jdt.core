@@ -27,9 +27,6 @@ import junit.framework.TestSuite;
 @SuppressWarnings("rawtypes")
 public class JavaSearchGenericMethodEquivalentTests extends JavaSearchGenericMethodTests {
 
-	/**
-	 * @param name
-	 */
 	public JavaSearchGenericMethodEquivalentTests(String name) {
 		super(name, EQUIVALENT_RULE);
 	}
@@ -47,7 +44,7 @@ public class JavaSearchGenericMethodEquivalentTests extends JavaSearchGenericMet
 	 * Add line to result only if it is not an erasure match rule.
 	 */
 	@Override
-	void addResultLine(StringBuffer buffer, char[] line) {
+	void addResultLine(StringBuilder buffer, char[] line) {
 		if (!CharOperation.match(RESULT_ERASURE_MATCH, line, true) &&
 			!CharOperation.match(RESULT_POTENTIAL_MATCH, line, true)) {
 			super.addResultLine(buffer, line);

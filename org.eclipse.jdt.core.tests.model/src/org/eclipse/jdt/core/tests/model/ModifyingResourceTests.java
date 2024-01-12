@@ -150,8 +150,7 @@ public static void generateClassFile(String className, String javaSource) throws
 	String cu = "d:/temp/" + className + ".java";
 	Util.createFile(cu, javaSource);
 	BatchCompiler.compile(cu + " -d d:/temp -classpath " + System.getProperty("java.home") + "/lib/rt.jar", new PrintWriter(System.out), new PrintWriter(System.err), null/*progress*/);
-	FileInputStream input = new FileInputStream("d:/temp/" + className + ".class");
-	try {
+	try (FileInputStream input = new FileInputStream("d:/temp/" + className + ".class")) {
 		System.out.println("{");
 		byte[] buffer = new byte[80];
 		int read = 0;
@@ -165,8 +164,6 @@ public static void generateClassFile(String className, String javaSource) throws
 			if (read != -1) System.out.println();
 		}
 		System.out.print("}");
-	} finally {
-		input.close();
 	}
 }
 
@@ -234,11 +231,11 @@ protected IFile editFile(String path, String content) throws CoreException {
  * of the tree.
  */
 protected String expandAll(IJavaElement element) throws CoreException {
-	StringBuffer buffer = new StringBuffer();
+	StringBuilder buffer = new StringBuilder();
 	this.expandAll(element, 0, buffer);
 	return buffer.toString();
 }
-private void expandAll(IJavaElement element, int tab, StringBuffer buffer) throws CoreException {
+private void expandAll(IJavaElement element, int tab, StringBuilder buffer) throws CoreException {
 	IJavaElement[] children = null;
 	// force opening of element by getting its children
 	if (element instanceof IParent) {

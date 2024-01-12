@@ -29,7 +29,6 @@ package org.eclipse.jdt.internal.codeassist.select;
  *           <SelectOnMessageSend:this.bar(1, 2)>
  *         }
  *       }
- *
  */
 
 import org.eclipse.jdt.internal.compiler.ast.MessageSend;
@@ -80,7 +79,7 @@ public class SelectionOnMessageSend extends MessageSend {
 	}
 
 	@Override
-	public StringBuffer printExpression(int indent, StringBuffer output) {
+	public StringBuilder printExpression(int indent, StringBuilder output) {
 
 		output.append("<SelectOnMessageSend:"); //$NON-NLS-1$
 		if (!this.receiver.isImplicitThis()) this.receiver.printExpression(0, output).append('.');

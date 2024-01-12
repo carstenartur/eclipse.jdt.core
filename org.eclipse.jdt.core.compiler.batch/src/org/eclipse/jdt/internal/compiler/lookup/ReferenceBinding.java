@@ -56,7 +56,6 @@ import java.util.Arrays;
 import java.util.Comparator;
 
 import org.eclipse.jdt.core.compiler.CharOperation;
-import org.eclipse.jdt.core.compiler.InvalidInputException;
 import org.eclipse.jdt.internal.compiler.ast.LambdaExpression;
 import org.eclipse.jdt.internal.compiler.ast.MethodDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.NullAnnotationMatching;
@@ -98,7 +97,7 @@ abstract public class ReferenceBinding extends TypeBinding {
 		public boolean hasTypeBit(int bit) { return false; }
 	};
 
-	private static final Comparator<FieldBinding> FIELD_COMPARATOR = new Comparator<FieldBinding>() {
+	private static final Comparator<FieldBinding> FIELD_COMPARATOR = new Comparator<>() {
 		@Override
 		public int compare(FieldBinding o1, FieldBinding o2) {
 			char[] n1 = o1.name;
@@ -106,7 +105,7 @@ abstract public class ReferenceBinding extends TypeBinding {
 			return ReferenceBinding.compare(n1, n2, n1.length, n2.length);
 		}
 	};
-	private static final Comparator<MethodBinding> METHOD_COMPARATOR = new Comparator<MethodBinding>() {
+	private static final Comparator<MethodBinding> METHOD_COMPARATOR = new Comparator<>() {
 		@Override
 		public int compare(MethodBinding m1, MethodBinding m2) {
 			char[] s1 = m1.selector;
@@ -174,8 +173,6 @@ public static FieldBinding binarySearch(char[] name, FieldBinding[] sortedFields
  * (remember methods are sorted alphabetically on selectors), and end is the index of last contiguous methods with same
  * selector.
  * -1 means no method got found
- * @param selector
- * @param sortedMethods
  * @return (start + (end<<32)) or -1 if no method found
  */
 public static long binarySearch(char[] selector, MethodBinding[] sortedMethods) {
@@ -1869,7 +1866,7 @@ public char[] readableName(boolean showGenerics) /*java.lang.Object,  p.X<T> */ 
 	return readableName;
 }
 
-protected void appendNullAnnotation(StringBuffer nameBuffer, CompilerOptions options) {
+protected void appendNullAnnotation(StringBuilder nameBuffer, CompilerOptions options) {
 	if (options.isAnnotationBasedNullAnalysisEnabled) {
 		if (options.usesNullTypeAnnotations()) {
 			for (AnnotationBinding annotation : this.typeAnnotations) {
@@ -1924,7 +1921,7 @@ public char[] nullAnnotatedReadableName(CompilerOptions options, boolean shortNa
 }
 
 char[] nullAnnotatedReadableName(CompilerOptions options) {
-    StringBuffer nameBuffer = new StringBuffer(10);
+    StringBuilder nameBuffer = new StringBuilder(10);
 	if (isMemberType()) {
 		nameBuffer.append(enclosingType().nullAnnotatedReadableName(options, false));
 		nameBuffer.append('.');
@@ -1963,7 +1960,7 @@ char[] nullAnnotatedReadableName(CompilerOptions options) {
 }
 
 char[] nullAnnotatedShortReadableName(CompilerOptions options) {
-    StringBuffer nameBuffer = new StringBuffer(10);
+    StringBuilder nameBuffer = new StringBuilder(10);
 	if (isMemberType()) {
 		nameBuffer.append(enclosingType().nullAnnotatedReadableName(options, true));
 		nameBuffer.append('.');
@@ -2037,7 +2034,7 @@ public char[] sourceName() {
  * Perform an upwards type projection as per JLS 4.10.5
  * @param scope Relevant scope for evaluating type projection
  * @param mentionedTypeVariables Filter for mentioned type variabled
- * @returns Upwards type projection of 'this', or null if downwards projection is undefined
+ * @return Upwards type projection of 'this', or null if downwards projection is undefined
 */
 @Override
 public ReferenceBinding upwardsProjection(Scope scope, TypeBinding[] mentionedTypeVariables) {
@@ -2048,7 +2045,7 @@ public ReferenceBinding upwardsProjection(Scope scope, TypeBinding[] mentionedTy
  * Perform a downwards type projection as per JLS 4.10.5
  * @param scope Relevant scope for evaluating type projection
  * @param mentionedTypeVariables Filter for mentioned type variabled
- * @returns Downwards type projection of 'this', or null if downwards projection is undefined
+ * @return Downwards type projection of 'this', or null if downwards projection is undefined
 */
 @Override
 public ReferenceBinding downwardsProjection(Scope scope, TypeBinding[] mentionedTypeVariables) {
@@ -2166,6 +2163,11 @@ protected int applyCloseableClassWhitelists(CompilerOptions options) {
 			return TypeIds.BitWrapperCloseable;
 	}
 	if (options.analyseResourceLeaks) {
+		if (options.isAnnotationBasedResourceAnalysisEnabled) {
+			if ((this.getAnnotationTagBits() & TagBits.AnnotationNotOwning) != 0) {
+				return TypeIds.BitResourceFreeCloseable;
+			}
+		}
 		ReferenceBinding mySuper = this.superclass();
 		if (mySuper != null && mySuper.id != TypeIds.T_JavaLangObject) {
 			if (hasMethodWithNumArgs(TypeConstants.CLOSE, 0))
@@ -2190,7 +2192,7 @@ protected boolean hasMethodWithNumArgs(char[] selector, int numArgs) {
  * If a type - known to be a Closeable - is mentioned in one of our white lists
  * answer the typeBit for the white list (BitWrapperCloseable or BitResourceFreeCloseable).
  */
-protected int applyCloseableInterfaceWhitelists() {
+protected int applyCloseableInterfaceWhitelists(CompilerOptions options) {
 	switch (this.compoundName.length) {
 		case 4:
 			if (CharOperation.equals(this.compoundName[0], TypeConstants.JAVA_UTIL_STREAM[0])) {
@@ -2218,13 +2220,49 @@ protected int applyCloseableInterfaceWhitelists() {
 			}
 			break;
 	}
+	if (options.isAnnotationBasedResourceAnalysisEnabled) {
+		if ((this.getAnnotationTagBits() & TagBits.AnnotationNotOwning) != 0) {
+			return TypeIds.BitResourceFreeCloseable;
+		}
+	}
 	return 0;
 }
 
-protected MethodBinding [] getInterfaceAbstractContracts(Scope scope, boolean replaceWildcards, boolean filterDefaultMethods) throws InvalidInputException {
+public void detectWrapperResource() {
+	if (hasTypeBit(TypeIds.BitAutoCloseable|TypeIds.BitCloseable)
+			&& !hasTypeBit(TypeIds.BitResourceFreeCloseable|TypeIds.BitWrapperCloseable)) {
+		int numResourceFields = 0;
+		for (FieldBinding field : fields()) {
+			if (field.type != null
+					&& field.type.hasTypeBit(TypeIds.BitAutoCloseable|TypeIds.BitCloseable)
+					&& (field.tagBits & TagBits.AnnotationOwning) != 0) {
+				numResourceFields++;
+			}
+		}
+		if (numResourceFields == 1) {
+			boolean nonPrivateCtorsReceiveResource = false;
+			for (MethodBinding method : methods()) {
+				if (method.isConstructor() && !method.isPrivate() && method.parameters.length > 0) {
+					TypeBinding param = method.parameters[0];
+					if (param.hasTypeBit(TypeIds.BitAutoCloseable|TypeIds.BitCloseable) && method.ownsParameter(0)) {
+						nonPrivateCtorsReceiveResource = true;
+					} else {
+						nonPrivateCtorsReceiveResource = false;
+						break;
+					}
+				}
+			}
+			if (nonPrivateCtorsReceiveResource) {
+				this.typeBits |= TypeIds.BitWrapperCloseable;
+			}
+		}
+	}
+}
+
+protected MethodBinding [] getInterfaceAbstractContracts(Scope scope, boolean replaceWildcards, boolean filterDefaultMethods) throws InvalidBindingException {
 
 	if (!isInterface() || !isValidBinding()) {
-		throw new InvalidInputException("Not a functional interface"); //$NON-NLS-1$
+		throw new InvalidBindingException("Not a functional interface"); //$NON-NLS-1$
 	}
 
 	MethodBinding [] methods = methods();
@@ -2251,7 +2289,7 @@ protected MethodBinding [] getInterfaceAbstractContracts(Scope scope, boolean re
 		if (method == null || method.isStatic() || method.redeclaresPublicObjectMethod(scope) || method.isPrivate())
 			continue;
 		if (!method.isValidBinding())
-			throw new InvalidInputException("Not a functional interface"); //$NON-NLS-1$
+			throw new InvalidBindingException("Not a functional interface"); //$NON-NLS-1$
 		for (int j = 0; j < contractsCount;) {
 			if ( contracts[j] != null && MethodVerifier.doesMethodOverride(method, contracts[j], environment)) {
 				contractsCount--;
@@ -2344,7 +2382,7 @@ public MethodBinding getSingleAbstractMethod(Scope scope, boolean replaceWildcar
 					return this.singleAbstractMethod[index] = samProblemBinding;
 			}
 		}
-	} catch (InvalidInputException e) {
+	} catch (InvalidBindingException e) {
 		return this.singleAbstractMethod[index] = samProblemBinding;
 	}
 	if (methods.length == 1)
@@ -2491,5 +2529,12 @@ public boolean hasEnclosingInstanceContext() {
 	if (enclosingMethod != null)
 		return !enclosingMethod.isStatic();
 	return false;
+}
+static class InvalidBindingException extends Exception {
+	private static final long serialVersionUID = 1L;
+
+	InvalidBindingException(String message) {
+		super(message);
+	}
 }
 }

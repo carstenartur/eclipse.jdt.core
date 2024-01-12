@@ -157,6 +157,8 @@ public class ReferenceExpression extends FunctionalExpression implements IPolyEx
 		copy.sourceStart = this.sourceStart;
 		copy.sourceEnd = this.sourceEnd;
 		copy.text = this.text;
+		copy.lhs.addPatternVariablesWhenTrue(this.lhs.getPatternVariablesWhenTrue());
+		copy.lhs.addPatternVariablesWhenFalse(this.lhs.getPatternVariablesWhenFalse());
 		return copy;
 	}
 
@@ -210,6 +212,7 @@ public class ReferenceExpression extends FunctionalExpression implements IPolyEx
 			argv[i] = new SingleNameReference(name, 0);
 		}
 		boolean generateSecretReceiverVariable = shouldGenerateSecretReceiverVariable();
+		LocalVariableBinding[] patternVariablesInScope = null;
 		if (isMethodReference()) {
 			if (generateSecretReceiverVariable) {
 				this.lhs.generateCode(currentScope, codeStream, true);
@@ -219,6 +222,13 @@ public class ReferenceExpression extends FunctionalExpression implements IPolyEx
 			MessageSend message = new MessageSend();
 			message.selector = this.selector;
 			Expression receiver = generateSecretReceiverVariable ? new SingleNameReference(this.receiverVariable.name, 0) : copy.lhs;
+			if (this.lhs instanceof NameReference nr
+					&& nr.binding instanceof LocalVariableBinding receiverLocal
+					&& receiverLocal.isValidBinding()
+					&& (receiverLocal.modifiers & ExtraCompilerModifiers.AccPatternVariable) != 0) {
+				// what was in scope during initial resolve must be in scope during resolve of synthetic AST, too:
+				patternVariablesInScope = new LocalVariableBinding[] { receiverLocal };
+			}
 			message.receiver = this.receiverPrecedesParameters ?
 					new SingleNameReference(CharOperation.append(ImplicitArgName, Integer.toString(0).toCharArray()), 0) : receiver;
 			message.typeArguments = copy.typeArguments;
@@ -259,7 +269,7 @@ public class ReferenceExpression extends FunctionalExpression implements IPolyEx
 		BlockScope lambdaScope = this.receiverVariable != null ? this.receiverVariable.declaringScope : currentScope;
 		IErrorHandlingPolicy oldPolicy = lambdaScope.problemReporter().switchErrorHandlingPolicy(silentErrorHandlingPolicy);
 		try {
-			implicitLambda.resolveType(lambdaScope, true);
+			implicitLambda.resolveWithPatternVariablesInScope(patternVariablesInScope, lambdaScope, true);
 			implicitLambda.analyseCode(lambdaScope,
 					new FieldInitsFakingFlowContext(null, this, Binding.NO_EXCEPTIONS, null, lambdaScope, FlowInfo.DEAD_END),
 					UnconditionalFlowInfo.fakeInitializedFlowInfo(implicitLambda.firstLocalLocal, lambdaScope.referenceType().maxFieldCount));
@@ -524,7 +534,8 @@ public class ReferenceExpression extends FunctionalExpression implements IPolyEx
 				}
 			}
 		}
-		if (currentScope.compilerOptions().isAnyEnabled(IrritantSet.UNLIKELY_ARGUMENT_TYPE) && this.binding.isValidBinding()
+		CompilerOptions compilerOptions = currentScope.compilerOptions();
+		if (compilerOptions.isAnyEnabled(IrritantSet.UNLIKELY_ARGUMENT_TYPE) && this.binding.isValidBinding()
 				&& this.binding != null && this.binding.parameters != null) {
 			if (this.binding.parameters.length == 1
 					&& this.descriptor.parameters.length == (this.receiverPrecedesParameters ? 2 : 1)
@@ -551,9 +562,9 @@ public class ReferenceExpression extends FunctionalExpression implements IPolyEx
 			}
 		}
 
-		if (currentScope.compilerOptions().analyseResourceLeaks) {
+		if (compilerOptions.analyseResourceLeaks) {
 			if (this.haveReceiver && CharOperation.equals(this.selector, TypeConstants.CLOSE)) {
-				FakedTrackingVariable trackingVariable = FakedTrackingVariable.getCloseTrackingVariable(this.lhs, flowInfo, flowContext);
+				FakedTrackingVariable trackingVariable = FakedTrackingVariable.getCloseTrackingVariable(this.lhs, flowInfo, flowContext, compilerOptions.isAnnotationBasedResourceAnalysisEnabled);
 				if (trackingVariable != null) { // null happens if target is not a local variable or not an AutoCloseable
 					trackingVariable.markClosedInNestedMethod(); // there is a close()-call, but we don't know if it will be invoked
 				}
@@ -802,6 +813,7 @@ public class ReferenceExpression extends FunctionalExpression implements IPolyEx
         	}
         } else {
         	this.binding = null;
+        	this.exactMethodBinding = null;
         	this.bits &= ~ASTNode.DepthMASK;
         }
 
@@ -992,7 +1004,7 @@ public class ReferenceExpression extends FunctionalExpression implements IPolyEx
 			copy.resolveType(this.enclosingScope);
 
 			if (this.copiesPerTargetType == null)
-				this.copiesPerTargetType = new HashMap<TypeBinding, ReferenceExpression>();
+				this.copiesPerTargetType = new HashMap<>();
 			this.copiesPerTargetType.put(targetType, copy);
 
 			return copy;
@@ -1003,7 +1015,7 @@ public class ReferenceExpression extends FunctionalExpression implements IPolyEx
 
 	public void registerInferenceContext(ParameterizedGenericMethodBinding method, InferenceContext18 context) {
 		if (this.inferenceContexts == null)
-			this.inferenceContexts = new HashMap<ParameterizedGenericMethodBinding, InferenceContext18>();
+			this.inferenceContexts = new HashMap<>();
 		this.inferenceContexts.put(method, context);
 	}
 
@@ -1097,7 +1109,7 @@ public class ReferenceExpression extends FunctionalExpression implements IPolyEx
 	}
 
 	@Override
-	public StringBuffer printExpression(int tab, StringBuffer output) {
+	public StringBuilder printExpression(int tab, StringBuilder output) {
 
 		this.lhs.print(0, output);
 		output.append("::"); //$NON-NLS-1$

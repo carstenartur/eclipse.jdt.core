@@ -16,7 +16,6 @@ package org.eclipse.jdt.internal.compiler.parser;
 import static org.eclipse.jdt.internal.compiler.parser.TerminalTokens.TokenNameEOF;
 
 import java.io.IOException;
-import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
@@ -683,7 +682,7 @@ public abstract class AbstractCommentParser implements JavadocTagConstants {
 			}
 
 			// Something wrong happened => Invalid input
-			throw new InvalidInputException();
+			throw Scanner.invalidInput();
 		} finally {
 			// we have to make sure that this is reset to the previous value even if an exception occurs
 			this.scanner.tokenizeWhiteSpace = tokenWhiteSpace;
@@ -1175,11 +1174,11 @@ public abstract class AbstractCommentParser implements JavadocTagConstants {
 					break;
 
 				case TerminalTokens.TokenNameRestrictedIdentifierYield:
-					throw new InvalidInputException(); // unexpected.
+					throw Scanner.invalidInput(); // unexpected.
 
 				case TerminalTokens.TokenNameDOT :
 					if ((iToken & 1) == 0) { // dots must be even tokens
-						throw new InvalidInputException();
+						throw Scanner.invalidInput();
 					}
 					consumeToken();
 					break;
@@ -1246,7 +1245,7 @@ public abstract class AbstractCommentParser implements JavadocTagConstants {
 				case TerminalTokens.TokenNameDIVIDE:
 					if (parsingJava15Plus && lookForModule) {
 						if (((iToken & 1) == 0) || (moduleRefTokenCount > 0)) { // '/' must be even token
-							throw new InvalidInputException();
+							throw Scanner.invalidInput();
 						}
 						moduleRefTokenCount = (iToken+1) / 2;
 						consumeToken();
@@ -1284,7 +1283,7 @@ public abstract class AbstractCommentParser implements JavadocTagConstants {
 								}
 								// $FALL-THROUGH$ - fall through default case to raise exception
 							default:
-								throw new InvalidInputException();
+								throw Scanner.invalidInput();
 						}
 					}
 					break nextToken;
@@ -1505,7 +1504,7 @@ public abstract class AbstractCommentParser implements JavadocTagConstants {
 		boolean parsingJava18Plus = this.scanner != null ? this.scanner.sourceLevel >= ClassFileConstants.JDK18 : false;
 		boolean valid = true;
 		if (!parsingJava18Plus) {
-			throw new InvalidInputException();
+			throw Scanner.invalidInput();
 		}
 		Object snippetTag = null;
 		this.nonRegionTagCount = 0;
@@ -1788,7 +1787,7 @@ public abstract class AbstractCommentParser implements JavadocTagConstants {
 		ArrayList<String> sourceClassPaths = (ArrayList<String>) this.srcClasspath;
 		Path filePath = null;
 		for (String iPath : sourceClassPaths) {
-			filePath = FileSystems.getDefault().getPath(this.projectPath, iPath, fileName);
+			filePath = Path.of(this.projectPath, iPath, fileName);
 			if(filePath.toFile().exists())
 				break;
 		}

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2022 IBM Corporation and others.
+ * Copyright (c) 2000, 2023 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -13337,5 +13337,61 @@ public void testIssue369() {
 		"@JsonPropertyOrder({ \"position\", \"value\" })\n" +
 		"public record ValueWithPosition( String position, String value ) {\n" +
 		"}");
+}
+/**
+ * https://github.com/eclipse-jdt/eclipse.jdt.core/issues/1510
+ */
+public void testIssue1510() {
+	setComplianceLevel(CompilerOptions.VERSION_15);
+	this.formatterPrefs.comment_format_line_comment = true;
+	String source =
+			"class A {\n" +
+			"\tpublic void foo() {\n" +
+			"\t\tString x=\"\"\"\n" +
+			"\tabc\n" +
+			"\t\"\"\"; //$NON-NLS-1$\n" +
+			"\t}\n" +
+			"}";
+
+	formatSource(source,
+		"class A {\n" +
+		"\tpublic void foo() {\n" +
+		"\t\tString x = \"\"\"\n" +
+		"\t\t\t\tabc\n" +
+		"\t\t\t\t\"\"\"; //$NON-NLS-1$\n" +
+		"\t}\n" +
+		"}");
+}
+/**
+ * https://github.com/eclipse-jdt/eclipse.jdt.core/issues/1624
+ */
+public void testIssue1624() {
+	this.formatterPrefs.use_tabs_only_for_leading_indentations = true;
+	this.formatterPrefs.alignment_for_logical_operator = Alignment.M_ONE_PER_LINE_SPLIT | Alignment.M_FORCE;
+	String source =
+		"""
+		class A {
+			private void foo(String a) {
+				boolean b = "GET".equals(a) || "POST".equals(a); //$NON-NLS-1$//$NON-NLS-2$
+				if (a == null)
+					a = "W"; //$NON-NLS-1$
+				// foo
+				// bar
+			}
+		}
+		""";
+	formatSource(source,
+		"""
+		class A {
+			private void foo(String a) {
+				boolean b = "GET".equals(a) //$NON-NLS-1$
+				        || "POST".equals(a); //$NON-NLS-1$
+				if (a == null)
+					a = "W"; //$NON-NLS-1$
+				// foo
+				// bar
+			}
+		}
+		""");
 }
 }

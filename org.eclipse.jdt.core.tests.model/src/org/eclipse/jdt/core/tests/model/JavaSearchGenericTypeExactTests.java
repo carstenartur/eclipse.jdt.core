@@ -27,9 +27,6 @@ import junit.framework.TestSuite;
 @SuppressWarnings("rawtypes")
 public class JavaSearchGenericTypeExactTests extends JavaSearchGenericTypeTests {
 
-	/**
-	 * @param name
-	 */
 	public JavaSearchGenericTypeExactTests(String name) {
 		super(name, EXACT_RULE);
 	}
@@ -55,7 +52,7 @@ public class JavaSearchGenericTypeExactTests extends JavaSearchGenericTypeTests 
 	 * Do not add line if this is not an exact match rule.
 	 */
 	@Override
-	void addResultLine(StringBuffer buffer, char[] line) {
+	void addResultLine(StringBuilder buffer, char[] line) {
 		if (CharOperation.match(RESULT_EXACT_MATCH, line, true)) {
 			super.addResultLine(buffer, line);
 		}

@@ -120,8 +120,6 @@ public class FileSystem implements IModuleAwareNameEnvironment, SuffixConstants 
 		boolean hasAnnotationFileFor(String qualifiedTypeName);
 		/**
 		 * Accepts to represent a module location with the given module description.
-		 *
-		 * @param module
 		 */
 		public void acceptModule(IModule module);
 		public String getDestinationPath();
@@ -642,7 +640,7 @@ private char[][] filterModules(char[][] declaringModules) {
 	return filtered;
 }
 private Parser getParser() {
-	Map<String,String> opts = new HashMap<String, String>();
+	Map<String,String> opts = new HashMap<>();
 	opts.put(CompilerOptions.OPTION_Source, CompilerOptions.VERSION_9);
 	return new Parser(
 			new ProblemReporter(DefaultErrorHandlingPolicies.exitOnFirstError(), new CompilerOptions(opts), new DefaultProblemFactory(Locale.getDefault())),
@@ -654,7 +652,7 @@ public boolean hasCompilationUnit(char[][] qualifiedPackageName, char[] moduleNa
 	String moduleNameString = String.valueOf(moduleName);
 	LookupStrategy strategy = LookupStrategy.get(moduleName);
 	Parser parser = checkCUs ? getParser() : null;
-	Function<CompilationUnit, String> pkgNameExtractor = (sourceUnit) -> {
+	Function<CompilationUnit, String> pkgNameExtractor = sourceUnit -> {
 		String pkgName = null;
 		CompilationResult compilationResult = new CompilationResult(sourceUnit, 0, 0, 1);
 		char[][] name = parser.parsePackageDeclaration(sourceUnit.getContents(), compilationResult);

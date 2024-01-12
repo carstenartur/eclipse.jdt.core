@@ -15,11 +15,11 @@
   <parent>
     <artifactId>tests-pom</artifactId>
     <groupId>org.eclipse.jdt</groupId>
-    <version>4.30.0-SNAPSHOT</version>
+    <version>4.31.0-SNAPSHOT</version>
     <relativePath>../tests-pom/</relativePath>
   </parent>
   <artifactId>org.eclipse.jdt.core.tests.model</artifactId>
-  <version>3.12.200-SNAPSHOT</version>
+  <version>3.12.300-SNAPSHOT</version>
   <packaging>eclipse-test-plugin</packaging>
 
   <properties>
@@ -40,6 +40,31 @@
       	  	<include>org/eclipse/jdt/core/tests/RunFormatterTests.class</include>
       	  </includes>
          </configuration>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>test-standalone</id>
+            <goals><goal>test</goal></goals>
+            <phase>integration-test</phase>
+            <configuration>
+              <testClassesDirectory>${project.build.outputDirectory}</testClassesDirectory>
+              <includes>
+                <include>org/eclipse/jdt/core/tests/model/JavaCoreStandaloneTest.*</include>
+              </includes>
+            </configuration>
+          </execution>
+        </executions>
+        <dependencies>
+          <dependency>
+            <groupId>org.apache.maven.surefire</groupId>
+            <artifactId>surefire-junit47</artifactId>
+            <version>${surefire.version}</version>
+          </dependency>
+        </dependencies>
       </plugin>
     </plugins>
   </build>

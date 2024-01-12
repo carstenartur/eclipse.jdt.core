@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2022 IBM Corporation and others.
+ * Copyright (c) 2000, 2024 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -24,9 +24,7 @@ import java.util.Hashtable;
 import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
-
 import junit.framework.Test;
-
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.resources.IWorkspaceDescription;
 import org.eclipse.core.resources.IWorkspaceRoot;
@@ -2104,8 +2102,6 @@ public class FormatterRegressionTests extends AbstractJavaModelTests {
 		runTest(codeFormatter, "test185", "A.java", CodeFormatter.K_COMPILATION_UNIT);//$NON-NLS-1$ //$NON-NLS-2$
 	}
 
-	/**
-	 */
 	public void _test186() {
 		DefaultCodeFormatterOptions preferences = new DefaultCodeFormatterOptions(DefaultCodeFormatterConstants.getEclipse21Settings());
 		preferences.tab_char = DefaultCodeFormatterOptions.TAB;
@@ -2146,8 +2142,6 @@ public class FormatterRegressionTests extends AbstractJavaModelTests {
 		runTest(codeFormatter, "test189", "A.java", CodeFormatter.K_COMPILATION_UNIT);//$NON-NLS-1$ //$NON-NLS-2$
 	}
 
-	/**
-	 */
 	public void test190() {
 		Map options = DefaultCodeFormatterConstants.getEclipse21Settings();
 		options.put(DefaultCodeFormatterConstants.FORMATTER_NUMBER_OF_EMPTY_LINES_TO_PRESERVE, "1");
@@ -2157,8 +2151,6 @@ public class FormatterRegressionTests extends AbstractJavaModelTests {
 		runTest(codeFormatter, "test190", "A.java", CodeFormatter.K_COMPILATION_UNIT);//$NON-NLS-1$ //$NON-NLS-2$
 	}
 
-	/**
-	 */
 	public void test191() {
 		DefaultCodeFormatterOptions preferences = new DefaultCodeFormatterOptions(DefaultCodeFormatterConstants.getEclipse21Settings());
 		preferences.number_of_empty_lines_to_preserve = 0;
@@ -16264,5 +16256,77 @@ public void testGH59() {
 		}
 		""");
 }
+/**
+ * https://github.com/eclipse-jdt/eclipse.jdt/pull/1817 - [formatter] Align arrows on column in switch statements/expressions
+ */
+public void testGH1817a() {
+	this.formatterPrefs.align_arrows_in_switch_on_columns = true;
+	String source =
+		"""
+		class A {
+			void foo(int i) {
+				switch(i){
+				case 0 -> theInt++;
+				case 1234567890 -> theInt--;
 
+				case theInt -> theInt = 0;
+				default -> theInt = -1;
+				}
+			}
+		}
+		""";
+	formatSource(source,
+		"""
+		class A {
+			void foo(int i) {
+				switch (i) {
+				case 0			-> theInt++;
+				case 1234567890	-> theInt--;
+
+				case theInt		-> theInt = 0;
+				default			-> theInt = -1;
+				}
+			}
+		}
+		""");
+}
+/**
+ * https://github.com/eclipse-jdt/eclipse.jdt/pull/1817 - [formatter] Align arrows on column in switch statements/expressions
+ */
+public void testGH1817b() {
+	setComplianceLevel(CompilerOptions.VERSION_14);
+	this.formatterPrefs.align_arrows_in_switch_on_columns = true;
+	this.formatterPrefs.align_fields_grouping_blank_lines = 1;
+	this.formatterPrefs.align_with_spaces = true;
+	String source =
+		"""
+		class A {
+			void foo(int i) {
+				int j = switch(i){
+				case 0 -> { yield theInt++; }
+				case 1234567890 -> theInt--;
+
+				case theInt -> theInt = 0;
+				default -> theInt = -1;
+				};
+			}
+		}
+		""";
+	formatSource(source,
+		"""
+		class A {
+			void foo(int i) {
+				int j = switch (i) {
+				case 0          -> {
+					yield theInt++;
+				}
+				case 1234567890 -> theInt--;
+
+				case theInt -> theInt = 0;
+				default     -> theInt = -1;
+				};
+			}
+		}
+		""");
+}
 }

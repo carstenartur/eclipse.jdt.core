@@ -71,6 +71,10 @@ public class DOMASTUtil {
 				return apiLevel >= AST.JLS18;
 			case ASTNode.RECORD_PATTERN:
 				return apiLevel >= AST.JLS21;
+			case ASTNode.STRING_FRAGMENT:
+			case ASTNode.STRING_TEMPLATE_COMPONENT:
+			case ASTNode.STRING_TEMPLATE_EXPRESSION:
+				return apiLevel >= AST.JLS21 && previewEnabled;
 		}
 		return false;
 	}
@@ -184,6 +188,9 @@ public class DOMASTUtil {
 	public static boolean isPatternSupported(int apiLevel, boolean previewEnabled) {
 		return isNodeTypeSupportedinAST(apiLevel, previewEnabled, ASTNode.TYPE_PATTERN);
 	}
+	public static boolean isStringTemplateSupported(int apiLevel, boolean previewEnabled) {
+		return isNodeTypeSupportedinAST(apiLevel, previewEnabled, ASTNode.STRING_TEMPLATE_EXPRESSION);
+	}
 
 	public static boolean isJavaDocCodeSnippetSupported(int apiLevel) {
 		return isNodeTypeSupportedinAST(apiLevel, true, ASTNode.TAG_PROPERTY);
@@ -212,7 +219,6 @@ public class DOMASTUtil {
 	 * Calculates the JavaCore Option value string corresponding to the input ast level.
 	 * AST Level 4 is used for Java versions 1.4 to 1.7 and is converted to compliance level 7
 	 * if input ast level is out of boundary, latest compliance will be returned
-	 * @param astLevel
 	 * @return JavaCore Option value string corresponding to the ast level
 	 */
 	public static String getCompliance(int astLevel) {

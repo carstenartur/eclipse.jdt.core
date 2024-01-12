@@ -445,7 +445,7 @@ protected Integer getChildIndex(Key key) {
 		return null;
 	}
 	if (this.childIndex == null) {
-		this.childIndex = new HashMap<Key, Integer>();
+		this.childIndex = new HashMap<>();
 		for (int i = 0; i < length; i++) {
 			this.childIndex.put(new Key(this.affectedChildren[i].getElement()), i);
 		}
@@ -663,7 +663,7 @@ public void sourceDetached(IJavaElement element) {
  * @see #toString()
  */
 public String toDebugString(int depth) {
-	StringBuffer buffer = new StringBuffer();
+	StringBuilder buffer = new StringBuilder();
 	for (int i= 0; i < depth; i++) {
 		buffer.append('\t');
 	}
@@ -718,7 +718,7 @@ public String toDebugString(int depth) {
 	return buffer.toString();
 }
 @Override
-protected boolean toDebugString(StringBuffer buffer, int flags) {
+protected boolean toDebugString(StringBuilder buffer, int flags) {
 	boolean prev = super.toDebugString(buffer, flags);
 
 	if ((flags & IJavaElementDelta.F_CHILDREN) != 0) {

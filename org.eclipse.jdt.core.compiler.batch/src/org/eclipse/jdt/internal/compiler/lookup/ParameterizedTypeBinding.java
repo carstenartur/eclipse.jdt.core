@@ -53,7 +53,6 @@ import java.util.List;
 import java.util.Set;
 
 import org.eclipse.jdt.core.compiler.CharOperation;
-import org.eclipse.jdt.core.compiler.InvalidInputException;
 import org.eclipse.jdt.internal.compiler.ast.ASTNode;
 import org.eclipse.jdt.internal.compiler.ast.NullAnnotationMatching;
 import org.eclipse.jdt.internal.compiler.ast.ParameterizedSingleTypeReference;
@@ -1385,7 +1384,7 @@ public class ParameterizedTypeBinding extends ReferenceBinding implements Substi
 
 	@Override
 	char[] nullAnnotatedReadableName(CompilerOptions options) {
-	    StringBuffer nameBuffer = new StringBuffer(10);
+	    StringBuilder nameBuffer = new StringBuilder(10);
 		if (isMemberType()) {
 			nameBuffer.append(enclosingType().nullAnnotatedReadableName(options, false));
 			nameBuffer.append('.');
@@ -1424,7 +1423,7 @@ public class ParameterizedTypeBinding extends ReferenceBinding implements Substi
 
 	@Override
 	char[] nullAnnotatedShortReadableName(CompilerOptions options) {
-	    StringBuffer nameBuffer = new StringBuffer(10);
+	    StringBuilder nameBuffer = new StringBuilder(10);
 		if (isMemberType()) {
 			nameBuffer.append(enclosingType().nullAnnotatedReadableName(options, true));
 			nameBuffer.append('.');
@@ -1534,7 +1533,7 @@ public class ParameterizedTypeBinding extends ReferenceBinding implements Substi
 	    		for (int i = this.superInterfaces.length; --i >= 0;) {
 	    			this.typeBits |= (this.superInterfaces[i].typeBits & TypeIds.InheritableBits);
 	    			if ((this.typeBits & (TypeIds.BitAutoCloseable|TypeIds.BitCloseable)) != 0) // avoid the side-effects of hasTypeBit()!
-	    				this.typeBits |= applyCloseableInterfaceWhitelists();
+	    				this.typeBits |= applyCloseableInterfaceWhitelists(this.environment.globalOptions);
 	    		}
     		}
 	    }
@@ -1702,7 +1701,7 @@ public class ParameterizedTypeBinding extends ReferenceBinding implements Substi
 	}
 
 	@Override
-	protected MethodBinding[] getInterfaceAbstractContracts(Scope scope, boolean replaceWildcards, boolean filterDefaultMethods) throws InvalidInputException {
+	protected MethodBinding[] getInterfaceAbstractContracts(Scope scope, boolean replaceWildcards, boolean filterDefaultMethods) throws InvalidBindingException {
 		if (replaceWildcards) {
 			TypeBinding[] types = getNonWildcardParameters(scope);
 			if (types == null)

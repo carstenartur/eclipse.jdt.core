@@ -171,7 +171,9 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
 					localVariableBinding = (LocalVariableBinding) ((NameReference) resource).binding;
 				}
 				resolvedType = ((Expression) resource).resolvedType;
-				recordCallingClose(currentScope, flowContext, tryInfo, (Expression)resource);
+				if (currentScope.compilerOptions().analyseResourceLeaks) {
+					recordCallingClose(currentScope, handlingContext, tryInfo, (Expression)resource);
+				}
 			}
 			if (localVariableBinding != null) {
 				localVariableBinding.useFlag = LocalVariableBinding.USED; // Is implicitly used anyways.
@@ -382,7 +384,8 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
 	}
 }
 private void recordCallingClose(BlockScope currentScope, FlowContext flowContext, FlowInfo flowInfo, Expression closeTarget) {
-	FakedTrackingVariable trackingVariable = FakedTrackingVariable.getCloseTrackingVariable(closeTarget, flowInfo, flowContext);
+	FakedTrackingVariable trackingVariable = FakedTrackingVariable.getCloseTrackingVariable(closeTarget, flowInfo, flowContext,
+			currentScope.compilerOptions().isAnnotationBasedResourceAnalysisEnabled);
 	if (trackingVariable != null) { // null happens if target is not a local variable or not an AutoCloseable
 		if (trackingVariable.methodScope == currentScope.methodScope()) {
 			trackingVariable.markClose(flowInfo, flowContext);
@@ -598,7 +601,9 @@ public void generateCode(BlockScope currentScope, CodeStream codeStream) {
 		if (resourceCount > 0) {
 			for (int i = resourceCount; i >= 0; i--) {
 				BranchLabel exitLabel = new BranchLabel(codeStream);
-				this.resourceExceptionLabels[i].placeEnd(); // outer handler if any is the one that should catch exceptions out of close()
+				if (this.resourceExceptionLabels[i].getCount() % 2 != 0) {
+					this.resourceExceptionLabels[i].placeEnd(); // outer handler if any is the one that should catch exceptions out of close()
+				}
 
 				Statement stmt = i > 0 ? this.resources[i - 1] : null;
 				if ((this.bits & ASTNode.IsTryBlockExiting) == 0) {
@@ -993,6 +998,8 @@ public boolean generateSubRoutineInvocation(BlockScope currentScope, CodeStream 
 	switch(finallyMode) {
 		case FINALLY_DOES_NOT_COMPLETE :
 			if (this.switchExpression != null) {
+				exitAnyExceptionHandler();
+				exitDeclaredExceptionHandlers(codeStream);
 				this.finallyBlock.generateCode(currentScope, codeStream);
 				return true;
 			}
@@ -1000,9 +1007,7 @@ public boolean generateSubRoutineInvocation(BlockScope currentScope, CodeStream 
 			return true;
 
 		case NO_FINALLY :
-			if (this.switchExpression == null) { // already taken care at Yield
-				exitDeclaredExceptionHandlers(codeStream);
-			}
+			exitDeclaredExceptionHandlers(codeStream);
 			return false;
 	}
 	// optimize subroutine invocation sequences, using the targetLocation (if any)
@@ -1076,7 +1081,7 @@ public boolean isSubRoutineEscaping() {
 }
 
 @Override
-public StringBuffer printStatement(int indent, StringBuffer output) {
+public StringBuilder printStatement(int indent, StringBuilder output) {
 	int length = this.resources.length;
 	printIndent(indent, output).append("try" + (length == 0 ? "\n" : " (")); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
 	for (int i = 0; i < length; i++) {

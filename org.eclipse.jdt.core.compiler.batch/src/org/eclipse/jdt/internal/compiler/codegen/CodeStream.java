@@ -2614,12 +2614,14 @@ public void generateReturnBytecode(Expression expression) {
 public void invokeDynamicForStringConcat(StringBuilder recipe, List<TypeBinding> arguments) {
 	int invokeDynamicNumber = this.classFile.recordBootstrapMethod(recipe.toString());
 	StringBuilder signature = new StringBuilder("("); //$NON-NLS-1$
-	for(int i = 0; i < arguments.size(); i++) {
-		signature.append(arguments.get(i).signature());
+	int argsSize = 0;
+	for (TypeBinding argument : arguments) {
+		signature.append(argument.signature());
+		argsSize += TypeIds.getCategory(argument.id);
 	}
 	signature.append(")Ljava/lang/String;"); //$NON-NLS-1$
 	this.invokeDynamic(invokeDynamicNumber,
-			2,
+			argsSize,
 			1, // int
 			ConstantPool.ConcatWithConstants,
 			signature.toString().toCharArray(),
@@ -3759,10 +3761,6 @@ final public byte[] getContents() {
 
 /**
  * Returns the type that should be substituted to original binding declaring class as the proper receiver type
- * @param currentScope
- * @param codegenBinding
- * @param actualReceiverType
- * @param isImplicitThisReceiver
  * @return the receiver type to use in constant pool
  */
 public static TypeBinding getConstantPoolDeclaringClass(Scope currentScope, FieldBinding codegenBinding, TypeBinding actualReceiverType, boolean isImplicitThisReceiver) {
@@ -3789,10 +3787,6 @@ public static TypeBinding getConstantPoolDeclaringClass(Scope currentScope, Fiel
 
 /**
  * Returns the type that should be substituted to original binding declaring class as the proper receiver type
- * @param currentScope
- * @param codegenBinding
- * @param actualReceiverType
- * @param isImplicitThisReceiver
  * @return the receiver type to use in constant pool
  */
 public static TypeBinding getConstantPoolDeclaringClass(Scope currentScope, MethodBinding codegenBinding, TypeBinding actualReceiverType, boolean isImplicitThisReceiver) {
@@ -7869,7 +7863,7 @@ public void addPatternAccessorExceptionHandler(BlockScope scope, boolean addTarg
 		this.exitUserScope(scope);
 	}
 	pushExceptionOnStack(TypeBinding.wellKnownType(scope, TypeIds.T_JavaLangThrowable));
-	patternExceptionLabels.forEach(e -> e.place());
+	patternExceptionLabels.forEach(ExceptionLabel::place);
 
 	LocalVariableBinding catchVar = this.scopeToCatchVar.get(scope);
 

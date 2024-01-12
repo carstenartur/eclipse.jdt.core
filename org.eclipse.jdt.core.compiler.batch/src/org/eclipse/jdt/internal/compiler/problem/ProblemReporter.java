@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2023 IBM Corporation and others.
+ * Copyright (c) 2000, 2024 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -81,13 +81,11 @@
 package org.eclipse.jdt.internal.compiler.problem;
 
 import java.io.CharConversionException;
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Set;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -692,12 +690,22 @@ public static int getIrritant(int problemID) {
 
 		case IProblem.UnclosedCloseable:
 		case IProblem.UnclosedCloseableAtExit:
+		case IProblem.MandatoryCloseNotShown:
+		case IProblem.MandatoryCloseNotShownAtExit:
 			return CompilerOptions.UnclosedCloseable;
 		case IProblem.PotentiallyUnclosedCloseable:
 		case IProblem.PotentiallyUnclosedCloseableAtExit:
 			return CompilerOptions.PotentiallyUnclosedCloseable;
 		case IProblem.ExplicitlyClosedAutoCloseable:
 			return CompilerOptions.ExplicitlyClosedAutoCloseable;
+		case IProblem.ShouldMarkMethodAsOwning:
+		case IProblem.NotOwningResourceField:
+		case IProblem.OwningFieldInNonResourceClass:
+		case IProblem.OwningFieldShouldImplementClose:
+			return CompilerOptions.InsufficientResourceManagement;
+		case IProblem.OverrideReducingParamterOwning:
+		case IProblem.OverrideAddingReturnOwning:
+			return CompilerOptions.IncompatibleOwningContract;
 
 		case IProblem.RedundantSpecificationOfTypeArguments:
 			return CompilerOptions.RedundantSpecificationOfTypeArguments;
@@ -731,7 +739,6 @@ public static int getIrritant(int problemID) {
 }
 /**
  * Compute problem category ID based on problem ID
- * @param problemID
  * @return a category ID
  * @see CategorizedProblem
  */
@@ -783,6 +790,8 @@ public static int getProblemCategory(int severity, int problemID) {
 			case CompilerOptions.UnusedObjectAllocation :
 			case CompilerOptions.UnclosedCloseable :
 			case CompilerOptions.PotentiallyUnclosedCloseable :
+			case CompilerOptions.IncompatibleOwningContract:
+			case CompilerOptions.InsufficientResourceManagement:
 			case CompilerOptions.PessimisticNullAnalysisForFreeTypeVariables :
 			case CompilerOptions.NonNullTypeVariableFromLegacyInvocation :
 			case CompilerOptions.UnlikelyCollectionMethodArgumentType :
@@ -1455,18 +1464,10 @@ public void cannotReadSource(CompilationUnitDeclaration unit, AbortCompilationUn
 				0);
 		return;
 	}
-	StringWriter stringWriter = new StringWriter();
-	PrintWriter writer = new PrintWriter(stringWriter);
 	if (verbose) {
-		abortException.exception.printStackTrace(writer);
-		System.err.println(stringWriter.toString());
-		stringWriter = new StringWriter();
-		writer = new PrintWriter(stringWriter);
+		System.err.println(Util.getStackTrace(abortException.exception));
 	}
-	writer.print(abortException.exception.getClass().getName());
-	writer.print(':');
-	writer.print(abortException.exception.getMessage());
-	String exceptionTrace = stringWriter.toString();
+	String exceptionTrace = abortException.exception.getClass().getName() + ':' + abortException.exception.getMessage();
 	String[] arguments = new String[]{ fileName, exceptionTrace };
 	this.handle(
 			IProblem.CannotReadSource,
@@ -3227,7 +3228,7 @@ public void illegalStaticModifierForMemberType(SourceTypeBinding type) {
 		type.sourceEnd());
 }
 public void illegalUsageOfQualifiedTypeReference(QualifiedTypeReference qualifiedTypeReference) {
-	StringBuffer buffer = new StringBuffer();
+	StringBuilder buffer = new StringBuilder();
 	char[][] tokens = qualifiedTypeReference.tokens;
 	for (int i = 0; i < tokens.length; i++) {
 		if (i > 0) buffer.append('.');
@@ -10240,8 +10241,8 @@ public void redundantSpecificationOfTypeArguments(ASTNode location, TypeBinding[
 }
 public void potentiallyUnclosedCloseable(FakedTrackingVariable trackVar, ASTNode location) {
 	String[] args = { trackVar.nameForReporting(location, this.referenceContext) };
-	if (location == null || trackVar.acquisition != null) {
-		// if acquisition is set, the problem is not location specific
+	if (location == null || trackVar.originalBinding == null) {
+		// if no original local is known (unassigned Closeable), the problem is not location specific
 		this.handle(
 			IProblem.PotentiallyUnclosedCloseable,
 			args,
@@ -10258,17 +10259,18 @@ public void potentiallyUnclosedCloseable(FakedTrackingVariable trackVar, ASTNode
 	}
 }
 public void unclosedCloseable(FakedTrackingVariable trackVar, ASTNode location) {
-	String[] args = { String.valueOf(trackVar.name) };
-	if (location == null) {
+	String[] args = { trackVar.nameForReporting(location, this.referenceContext) };
+	boolean shared = trackVar.isShared();
+	if (location == null || trackVar.originalBinding == null) { // unassigned has no doubt about location
 		this.handle(
-			IProblem.UnclosedCloseable,
+			shared ? IProblem.MandatoryCloseNotShown : IProblem.UnclosedCloseable,
 			args,
 			args,
 			trackVar.sourceStart,
 			trackVar.sourceEnd);
 	} else {
 		this.handle(
-			IProblem.UnclosedCloseableAtExit,
+			shared ? IProblem.MandatoryCloseNotShownAtExit : IProblem.UnclosedCloseableAtExit,
 			args,
 			args,
 			location.sourceStart,
@@ -10284,7 +10286,69 @@ public void explicitlyClosedAutoCloseable(FakedTrackingVariable trackVar) {
 		trackVar.sourceStart,
 		trackVar.sourceEnd);
 }
+public void shouldMarkMethodAsOwning(ASTNode location) {
+	char[] name = this.options.owningAnnotationName[this.options.owningAnnotationName.length-1];
+	String[] args = { String.valueOf(name) };
+	this.handle(
+		IProblem.ShouldMarkMethodAsOwning,
+		args,
+		args,
+		location.sourceStart,
+		location.sourceEnd);
+}
+public void shouldMarkFieldAsOwning(ASTNode location) {
+	char[] name = this.options.owningAnnotationName[this.options.owningAnnotationName.length-1];
+	String[] args = { String.valueOf(name) };
+	this.handle(
+		IProblem.NotOwningResourceField,
+		args,
+		args,
+		location.sourceStart,
+		location.sourceEnd);
+}
+public void shouldImplementAutoCloseable(ASTNode location) {
+	char[] name = this.options.owningAnnotationName[this.options.owningAnnotationName.length-1];
+	String[] args = { String.valueOf(name) };
+	this.handle(
+		IProblem.OwningFieldInNonResourceClass,
+		args,
+		args,
+		location.sourceStart,
+		location.sourceEnd);
+}
+public void missingImplementationOfClose(FieldDeclaration fieldDeclaration) {
+	char[] name = this.options.owningAnnotationName[this.options.owningAnnotationName.length-1];
+	String[] args = { String.valueOf(name) };
+	this.handle(
+		IProblem.OwningFieldShouldImplementClose,
+		args,
+		args,
+		fieldDeclaration.sourceStart,
+		fieldDeclaration.sourceEnd);
+}
+public void overrideReducingParamterOwning(Argument argument) {
+	char[] name = this.options.owningAnnotationName[this.options.owningAnnotationName.length-1];
+	String[] args = { String.valueOf(name) };
+	this.handle(
+		IProblem.OverrideReducingParamterOwning,
+		args,
+		args,
+		argument.sourceStart,
+		argument.sourceEnd);
+}
 
+public void overrideAddingReturnOwning(AbstractMethodDeclaration method) {
+	char[] name = this.options.owningAnnotationName[this.options.owningAnnotationName.length-1];
+	Annotation annotation = findAnnotation(method.annotations, TypeIds.BitOwningAnnotation);
+	ASTNode location = annotation != null ? annotation : method;
+	String[] args = { String.valueOf(name) };
+	this.handle(
+		IProblem.OverrideAddingReturnOwning,
+		args,
+		args,
+		location.sourceStart,
+		location.sourceEnd);
+}
 public void nullityMismatch(Expression expression, TypeBinding providedType, TypeBinding requiredType, int nullStatus, char[][] annotationName) {
 	if ((nullStatus & FlowInfo.NULL) != 0) {
 		nullityMismatchIsNull(expression, requiredType);
@@ -10559,11 +10623,11 @@ public void referenceExpressionArgumentNullityMismatch(ReferenceExpression locat
 }
 public void illegalReturnRedefinition(ASTNode location, MethodBinding descriptorMethod,
 			boolean isUnchecked, TypeBinding providedType) {
-	StringBuffer methodSignature = new StringBuffer()
+	StringBuilder methodSignature = new StringBuilder()
 		.append(descriptorMethod.declaringClass.readableName())
 		.append('.')
 		.append(descriptorMethod.readableName());
-	StringBuffer shortSignature = new StringBuffer()
+	StringBuilder shortSignature = new StringBuilder()
 		.append(descriptorMethod.declaringClass.shortReadableName())
 		.append('.')
 		.append(descriptorMethod.shortReadableName());

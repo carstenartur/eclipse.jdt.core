@@ -114,7 +114,7 @@ public class ASTMatcherTest extends org.eclipse.jdt.core.tests.junit.extension.T
 	EnumConstantDeclaration EC2;
 	Type T3;
 	Type T4;
-	final StringBuffer b = new StringBuffer();
+	final StringBuilder b = new StringBuilder();
 
 	int API_LEVEL;
 
@@ -133,7 +133,6 @@ public class ASTMatcherTest extends org.eclipse.jdt.core.tests.junit.extension.T
 	/**
 	 * @deprecated (not really - just suppressing the warnings
 	 * that come from testing Javadoc.getComment())
-	 *
 	 */
 	protected void setUp() throws Exception {
 		super.setUp();
@@ -1047,7 +1046,6 @@ public class ASTMatcherTest extends org.eclipse.jdt.core.tests.junit.extension.T
 	/**
 	 * @deprecated (not really - just suppressing the warnings
 	 * that come from testing Javadoc.getComment())
-	 *
 	 */
 	public void testJavadoc() {
 		Javadoc x1 = this.ast.newJavadoc();
@@ -1154,6 +1152,8 @@ public class ASTMatcherTest extends org.eclipse.jdt.core.tests.junit.extension.T
 		ParenthesizedExpression x1 = this.ast.newParenthesizedExpression();
 		basicMatch(x1);
 	}
+
+	@SuppressWarnings("deprecation")
 	public void testPatternInstanceofExpression() {
 		if (this.ast.apiLevel() < AST.JLS17) {
 			return;

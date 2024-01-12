@@ -140,7 +140,6 @@ public class AptPlugin extends Plugin implements DebugOptionsListener {
 
 	/**
 	 * Log a status message to the platform log.  Use this for reporting exceptions.
-	 * @param status
 	 */
 	public static void log(IStatus status) {
 		thePlugin.getLog().log(status);
@@ -196,7 +195,7 @@ public class AptPlugin extends Plugin implements DebugOptionsListener {
 
 	public static void trace(final String msg){
 		if (DEBUG) {
-			StringBuffer sb = new StringBuffer();
+			StringBuilder sb = new StringBuilder();
 			sb.append('[');
 			// SimpleDateFormat is not thread-safe, according to javadoc
 			synchronized(TRACE_DATE_FORMAT) {

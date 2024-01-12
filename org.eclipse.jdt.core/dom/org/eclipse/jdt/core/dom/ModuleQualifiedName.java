@@ -31,7 +31,6 @@ import java.util.List;
  *
  * @noinstantiate This class is not intended to be instantiated by clients.
  * @since 3.24
- *
  */
 @SuppressWarnings("rawtypes")
 public class ModuleQualifiedName extends Name {
@@ -228,7 +227,7 @@ public class ModuleQualifiedName extends Name {
 	}
 
 	@Override
-	void appendName(StringBuffer buffer) {
+	void appendName(StringBuilder buffer) {
 		getModuleQualifier().appendName(buffer);
 		buffer.append('/');
 		if (getName() != null) {

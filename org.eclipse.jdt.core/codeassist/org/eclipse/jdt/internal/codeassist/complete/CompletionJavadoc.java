@@ -37,8 +37,6 @@ public class CompletionJavadoc extends Javadoc {
 	/**
 	 * Resolve selected node if not null and throw exception to let clients know
 	 * that it has been found.
-	 *
-	 * @throws CompletionNodeFound
 	 */
 	private void internalResolve(Scope scope) {
 		if (this.completionNode != null) {
@@ -103,11 +101,8 @@ public class CompletionJavadoc extends Javadoc {
 		}
 	}
 
-	/*
-	 * @see org.eclipse.jdt.internal.compiler.ast.ASTNode#print(int, java.lang.StringBuffer)
-	 */
 	@Override
-	public StringBuffer print(int indent, StringBuffer output) {
+	public StringBuilder print(int indent, StringBuilder output) {
 		printIndent(indent, output).append("/**\n"); //$NON-NLS-1$
 		boolean nodePrinted = false;
 		if (this.paramReferences != null) {
@@ -161,8 +156,6 @@ public class CompletionJavadoc extends Javadoc {
 	/**
 	 * Resolve completion node if not null and throw exception to let clients know
 	 * that it has been found.
-	 *
-	 * @throws CompletionNodeFound
 	 */
 	@Override
 	public void resolve(ClassScope scope) {
@@ -173,8 +166,6 @@ public class CompletionJavadoc extends Javadoc {
 	/**
 	 * Resolve completion node if not null and throw exception to let clients know
 	 * that it has been found.
-	 *
-	 * @throws CompletionNodeFound
 	 */
 	@Override
 	public void resolve(CompilationUnitScope scope) {
@@ -184,8 +175,6 @@ public class CompletionJavadoc extends Javadoc {
 	/**
 	 * Resolve completion node if not null and throw exception to let clients know
 	 * that it has been found.
-	 *
-	 * @throws CompletionNodeFound
 	 */
 	@Override
 	public void resolve(MethodScope scope) {

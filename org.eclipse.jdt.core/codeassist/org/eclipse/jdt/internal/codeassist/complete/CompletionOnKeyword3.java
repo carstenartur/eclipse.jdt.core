@@ -18,8 +18,8 @@ import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
 import org.eclipse.jdt.internal.compiler.lookup.TypeBinding;
 
 public class CompletionOnKeyword3 extends SingleNameReference implements CompletionOnKeyword {
-	private char[][] possibleKeywords;
-	private boolean tryOrCatch;
+	private final char[][] possibleKeywords;
+	private final boolean tryOrCatch;
 	public CompletionOnKeyword3(char[] token, long pos, char[] possibleKeyword) {
 		this(token, pos, new char[][]{possibleKeyword}, false);
 	}
@@ -41,7 +41,7 @@ public class CompletionOnKeyword3 extends SingleNameReference implements Complet
 		return this.tryOrCatch;
 	}
 	@Override
-	public StringBuffer printExpression(int indent, StringBuffer output) {
+	public StringBuilder printExpression(int indent, StringBuilder output) {
 
 		return output.append("<CompleteOnKeyword:").append(this.token).append('>'); //$NON-NLS-1$
 	}

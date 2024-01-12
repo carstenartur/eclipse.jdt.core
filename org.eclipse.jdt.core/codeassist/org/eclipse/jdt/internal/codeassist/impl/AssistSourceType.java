@@ -29,8 +29,8 @@ import org.eclipse.jdt.internal.core.ResolvedSourceType;
 
 @SuppressWarnings("rawtypes")
 public class AssistSourceType extends ResolvedSourceType {
-	private Map bindingCache;
-	private Map infoCache;
+	private final Map bindingCache;
+	private final Map infoCache;
 
 	private String uniqueKey;
 	private boolean isResolved;
@@ -81,7 +81,7 @@ public class AssistSourceType extends ResolvedSourceType {
 	}
 
 	@Override
-	protected void toStringInfo(int tab, StringBuffer buffer, Object info,boolean showResolvedInfo) {
+	protected void toStringInfo(int tab, StringBuilder buffer, Object info,boolean showResolvedInfo) {
 		super.toStringInfo(tab, buffer, info, showResolvedInfo && isResolved());
 	}
 

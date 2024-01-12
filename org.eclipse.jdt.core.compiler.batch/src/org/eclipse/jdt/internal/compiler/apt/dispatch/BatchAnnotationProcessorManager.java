@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2005, 2017 IBM Corporation and others.
+ * Copyright (c) 2005, 2023 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -35,7 +35,6 @@ import org.eclipse.jdt.internal.compiler.problem.AbortCompilation;
 /**
  * Java 6 annotation processor manager used when compiling from the command line
  * or via the javax.tools.JavaCompiler interface.
- * @see org.eclipse.jdt.internal.apt.pluggable.core.dispatch.IdeAnnotationProcessorManager
  */
 public class BatchAnnotationProcessorManager extends BaseAnnotationProcessorManager
 {
@@ -78,7 +77,7 @@ public class BatchAnnotationProcessorManager extends BaseAnnotationProcessorMana
 		}
 		BatchProcessingEnvImpl processingEnv = new BatchProcessingEnvImpl(this, (Main) batchCompiler, commandLineArguments);
 		this._processingEnv = processingEnv;
-		@SuppressWarnings("resource") // fileManager is not opened here
+		// @SuppressWarnings("resource") // fileManager is not opened here
 		JavaFileManager fileManager = processingEnv.getFileManager();
 		if (fileManager instanceof StandardJavaFileManager) {
 			Iterable<? extends File> location = null;

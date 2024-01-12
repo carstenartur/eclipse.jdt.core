@@ -31,11 +31,11 @@ class MemberValuePairBinding implements IMemberValuePairBinding {
 	private static final Object NoValue = new Object();
 	private static final Object[] EmptyArray = new Object[0];
 
-	private ElementValuePair internalPair;
+	private final ElementValuePair internalPair;
 	protected Object value = null;
 	protected BindingResolver bindingResolver;
 
-	static void appendValue(Object value, StringBuffer buffer) {
+	static void appendValue(Object value, StringBuilder buffer) {
 		if (value instanceof Object[]) {
 			Object[] values = (Object[]) value;
 			buffer.append('{');
@@ -245,7 +245,7 @@ class MemberValuePairBinding implements IMemberValuePairBinding {
 
 	@Override
 	public String toString() {
-		StringBuffer buffer = new StringBuffer();
+		StringBuilder buffer = new StringBuilder();
 		buffer.append(getName());
 		buffer.append(" = "); //$NON-NLS-1$
 		appendValue(getValue(), buffer);

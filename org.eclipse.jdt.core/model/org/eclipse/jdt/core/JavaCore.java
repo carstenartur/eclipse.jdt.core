@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2023 IBM Corporation and others.
+ * Copyright (c) 2000, 2024 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -113,6 +113,8 @@
  *******************************************************************************/
 
 package org.eclipse.jdt.core;
+
+import static org.eclipse.jdt.internal.core.JavaModelManager.trace;
 
 import java.io.File;
 import java.io.IOException;
@@ -1512,8 +1514,8 @@ public final class JavaCore extends Plugin {
 	/**
 	 * Compiler option ID: Reporting a resource that is not closed properly.
 	 * <p>When enabled, the compiler will issue an error or a warning if
-	 *    a local variable holds a value of type <code>java.lang.AutoCloseable</code> (compliance>=1.7)
-	 *    or a value of type <code>java.io.Closeable</code> (compliance<=1.6) and if
+	 *    a local variable holds a value of type <code>java.lang.AutoCloseable</code> (compliance&gt;=1.7)
+	 *    or a value of type <code>java.io.Closeable</code> (compliance&lt;=1.6) and if
 	 *    flow analysis shows that the method <code>close()</code> is not invoked locally on that value.</p>
 	 * <dl>
 	 * <dt>Option id:</dt><dd><code>"org.eclipse.jdt.core.compiler.problem.unclosedCloseable"</code></dd>
@@ -1528,7 +1530,7 @@ public final class JavaCore extends Plugin {
 	 * Compiler option ID: Reporting a resource that may not be closed properly.
 	 * <p>When enabled, the compiler will issue an error or a warning if
 	 *    a local variable holds a value of type <code>java.lang.AutoCloseable</code> (compliance>=1.7)
-	 *    or a value of type <code>java.io.Closeable</code> (compliance<=1.6) and if
+	 *    or a value of type <code>java.io.Closeable</code> (compliance&lt;=1.6) and if
 	 *    flow analysis shows that the method <code>close()</code> is
 	 *    not invoked locally on that value for all execution paths.</p>
 	 * <dl>
@@ -1555,6 +1557,114 @@ public final class JavaCore extends Plugin {
 	 * @category CompilerOptionID
 	 */
 	public static final String COMPILER_PB_EXPLICITLY_CLOSED_AUTOCLOSEABLE = PLUGIN_ID + ".compiler.problem.explicitlyClosedAutoCloseable"; //$NON-NLS-1$
+
+	/**
+	 * Compiler option ID: Enable the use of specific annotations for more precise analysis of resource leaks.
+	 * <p>When enabled, the compiler will respect annotations by the names specified in {@link #COMPILER_OWNING_ANNOTATION_NAME}
+	 * and {@link #COMPILER_NOTOWNING_ANNOTATION_NAME}</p>
+	 * <dl>
+	 * <dt>Option id:</dt><dd><code>"org.eclipse.jdt.core.compiler.annotation.resourceanalysis"</code></dd>
+	 * <dt>Possible values:</dt><dd><code>{ "enabled", "disabled" }</code></dd>
+	 * <dt>Default:</dt><dd><code>"disabled"</code></dd>
+	 * </dl>
+	 * @since 3.37
+	 * @category CompilerOptionID
+	 */
+	public static final String COMPILER_ANNOTATION_RESOURCE_ANALYSIS = PLUGIN_ID + ".compiler.annotation.resourceanalysis"; //$NON-NLS-1$
+
+	/**
+	 * Compiler option ID: Name of annotation type for "owned" resource values.
+	 * <p>The annotation specified here should only be used on an element of type {@link AutoCloseable} or a subtype.
+	 *  It can be used in the following locations: </p>
+	 * <dl>
+	 * <dt>Method parameter</dt><dd>Signify that the receiving method is responsible for closing any resource value passed via this argument.
+	 * 	At the caller side, passing an unclosed resource into this parameter satisfies any responsibility for this resource.</dd>
+	 * <dt>Method</dt><dd>Signify that every caller is responsible for closing any resource values received as return from this method.
+	 * 	The method itself is entitled to return unclosed resources.</dd>
+	 * <dt>Field:</dt><dd>The enclosing class should implement {@link AutoCloseable}, and its {@link AutoCloseable#close()} method
+	 * 	should close each field thusly annotated.
+	 * 	Conversely, a constructor receiving an unclosed resource may satisfy its responsibility by assigning the resource
+	 * 	to a field marked with this annotation.</dd>
+	 * <p>This option only has an effect if the option {@link #COMPILER_ANNOTATION_RESOURCE_ANALYSIS} is enabled.</p>
+	 * <dl>
+	 * <dt>Option id:</dt><dd><code>"org.eclipse.jdt.core.compiler.annotation.owning"</code></dd>
+	 * <dt>Possible values:</dt><dd>A fully qualified name of an annotation declaration</dd>
+	 * <dt>Default:</dt><dd><code>"org.eclipse.jdt.annotation.Owning"</code></dd>
+	 * </dl>
+	 * @since 3.37
+	 * @category CompilerOptionID
+	 */
+	public static final String COMPILER_OWNING_ANNOTATION_NAME = PLUGIN_ID + ".compiler.annotation.owning"; //$NON-NLS-1$
+
+	/**
+	 * Compiler option ID: Name of annotation type for "not-owned" resource values.
+	 * 	This annotations is then inverse of {@link #COMPILER_OWNING_ANNOTATION_NAME}.
+	 * <p>The annotation specified here should only be used on an element of type {@link AutoCloseable} or a subtype.
+	 *  It can be used in the following locations: </p>
+	 * <dl>
+	 * <dt>Method parameter</dt><dd>Signify that passing a resource into this parameter does not affect the caller's responsibility
+	 * 	to close that resource. The receiving method has no obligations in this regard.</dd>
+	 * <dt>Method</dt><dd>Signify that returning a resource value from this method does not affect the responsibility to close.
+	 * 	Given that the method can not close the resource after returning, the resource should therefore be stored in a field,
+	 * 	for closing at a later point.</dd>
+	 * <dt>Field:</dt><dd>Storing a resource value in a field with this annotation does not affect responsibility to close.
+	 * 	Storing an unclosed resource does not satisfy the responsibility, reading from such field does not create
+	 * 	any responsibility.</dd>
+	 * <p>This option only has an effect if the option {@link #COMPILER_ANNOTATION_RESOURCE_ANALYSIS} is enabled.</p>
+	 * <dl>
+	 * <dt>Option id:</dt><dd><code>"org.eclipse.jdt.core.compiler.annotation.notowning"</code></dd>
+	 * <dt>Possible values:</dt><dd>A fully qualified name of an annotation declaration</dd>
+	 * <dt>Default:</dt><dd><code>"org.eclipse.jdt.annotation.NotOwning"</code></dd>
+	 * </dl>
+	 * @since 3.37
+	 * @category CompilerOptionID
+	 */
+	public static final String COMPILER_NOTOWNING_ANNOTATION_NAME = PLUGIN_ID + ".compiler.annotation.notowning"; //$NON-NLS-1$
+
+	/**
+	 * Compiler option ID: Reporting a resource that is not managed by recommended strategies.
+	 * <p>When enabled, the compiler will issue an error or a warning or an info if a value of type {@link AutoCloseable} or subtype
+	 * 	is managed in ways that impede static analysis.</p>
+	 * <p>The following recommendations apply:</p>
+	 * <ul>
+	 * <li>Any field of a resource type should be annotated as owning ({@link #COMPILER_OWNING_ANNOTATION_NAME}).</li>
+	 * <li>Any class declaring one or more fields annotated as owning should itself implement {@link AutoCloseable}.</li>
+	 * <li>Any class implementing {@link AutoCloseable} that declares one or more owned resource fields should implement
+	 * 	{@link AutoCloseable#close()} and ensure that each owned resource field is always closed when <code>close()</code> is executed.</li>
+	 * <li>A method returning a locally owned resource should be tagged as owning ({@link #COMPILER_OWNING_ANNOTATION_NAME}).</li>
+	 * </ul>
+	 * <p>This option only has an effect if the option {@link #COMPILER_ANNOTATION_RESOURCE_ANALYSIS} is enabled.</p>
+	 * <dl>
+	 * <dt>Option id:</dt><dd><code>"org.eclipse.jdt.core.compiler.problem.insufficientResourceAnalysis"</code></dd>
+	 * <dt>Possible values:</dt><dd><code>{ "error", "warning", "info", "ignore" }</code></dd>
+	 * <dt>Default:</dt><dd><code>"warning"</code></dd>
+	 * </dl>
+	 * @since 3.37
+	 * @category CompilerOptionID
+	 */
+	public static final String COMPILER_PB_RECOMMENDED_RESOURCE_MANAGEMENT = PLUGIN_ID + ".compiler.problem.insufficientResourceAnalysis"; //$NON-NLS-1$
+
+	/**
+	 * Compiler option ID: Reporting when a method override incompatibly changes the owning contract.
+	 * <p>When enabled, the compiler will issue an error or a warning or an info if a method signature is incompatible
+	 *  with an overridden method from a super type in terms of resource ownership.</p>
+	 * <p>Incompatibility occurs if:</p>
+	 * <ul>
+	 * <li>A super parameter is tagged as owning ({@link #COMPILER_OWNING_ANNOTATION_NAME}) but the corresponding
+	 *  parameter of the current method does not repeat this annotation.</li>
+	 * <li>The current method is tagged as owning (affecting the method return), but an overridden super method does not
+	 *  have this annotation.</li>
+	 * </ul>
+	 * <p>This option only has an effect if the option {@link #COMPILER_ANNOTATION_RESOURCE_ANALYSIS} is enabled.</p>
+	 * <dl>
+	 * <dt>Option id:</dt><dd><code>"org.eclipse.jdt.core.compiler.problem.incompatibleOwningContract"</code></dd>
+	 * <dt>Possible values:</dt><dd><code>{ "error", "warning", "info", "ignore" }</code></dd>
+	 * <dt>Default:</dt><dd><code>"warning"</code></dd>
+	 * </dl>
+	 * @since 3.37
+	 * @category CompilerOptionID
+	 */
+	public static final String COMPILER_PB_INCOMPATIBLE_OWNING_CONTRACT = PLUGIN_ID + ".compiler.problem.incompatibleOwningContract";  //$NON-NLS-1$
 
 	/**
 	 * Compiler option ID: Reporting a method invocation providing an argument of an unlikely type.
@@ -2919,7 +3029,7 @@ public final class JavaCore extends Plugin {
 	 *    one of the proposed suffixes.</p>
 	 * <dl>
 	 * <dt>Option id:</dt><dd><code>"org.eclipse.jdt.core.codeComplete.staticFieldSuffixes"</code></dd>
-	 * <dt>Possible values:</dt><dd><code>{ "&lt;suffix&gt;[,&lt;suffix&gt;]*" }</code>< where <code>&lt;suffix&gt;</code> is a String without any wild-card</dd>
+	 * <dt>Possible values:</dt><dd>{@code  "<suffix>[,<suffix>]*" }&lt; where {@code <suffix> } is a String without any wild-card</dd>
 	 * <dt>Default:</dt><dd><code>""</code></dd>
 	 * </dl>
 	 * @since 2.1
@@ -2932,7 +3042,7 @@ public final class JavaCore extends Plugin {
 	 *    one of the proposed suffixes.</p>
 	 * <dl>
 	 * <dt>Option id:</dt><dd><code>"org.eclipse.jdt.core.codeComplete.staticFinalFieldSuffixes"</code></dd>
-	 * <dt>Possible values:</dt><dd><code>{ "&lt;suffix&gt;[,&lt;suffix&gt;]*" }</code>< where <code>&lt;suffix&gt;</code> is a String without any wild-card</dd>
+	 * <dt>Possible values:</dt><dd>{@code "<suffix>[<suffix>]*" }&lt; where {@code <suffix>} is a String without any wild-card</dd>
 	 * <dt>Default:</dt><dd><code>""</code></dd>
 	 * </dl>
 	 * @since 3.5
@@ -3878,8 +3988,7 @@ public final class JavaCore extends Plugin {
 						} catch(CoreException e) {
 							// executable extension could not be created: ignore this initializer
 							if (JavaModelManager.CP_RESOLVE_VERBOSE || JavaModelManager.CP_RESOLVE_VERBOSE_FAILURE) {
-								verbose_failed_to_instanciate_container_initializer(containerID, configurationElement);
-								e.printStackTrace();
+								verbose_failed_to_instanciate_container_initializer(containerID, configurationElement, e);
 							}
 						}
 					}
@@ -3889,16 +3998,16 @@ public final class JavaCore extends Plugin {
 		return null;
 	}
 
-	private static void verbose_failed_to_instanciate_container_initializer(String containerID, IConfigurationElement configurationElement) {
-		Util.verbose(
+	private static void verbose_failed_to_instanciate_container_initializer(String containerID, IConfigurationElement configurationElement, CoreException e) {
+		trace(
 			"CPContainer INIT - failed to instanciate initializer\n" + //$NON-NLS-1$
 			"	container ID: " + containerID + '\n' + //$NON-NLS-1$
 			"	class: " + configurationElement.getAttribute("class"), //$NON-NLS-1$ //$NON-NLS-2$
-			System.err);
+			e);
 	}
 
 	private static void verbose_found_container_initializer(String containerID, IConfigurationElement configurationElement) {
-		Util.verbose(
+		trace(
 			"CPContainer INIT - found initializer\n" + //$NON-NLS-1$
 			"	container ID: " + containerID + '\n' + //$NON-NLS-1$
 			"	class: " + configurationElement.getAttribute("class")); //$NON-NLS-1$ //$NON-NLS-2$
@@ -3959,7 +4068,7 @@ public final class JavaCore extends Plugin {
 				ok = true;
 			} catch (RuntimeException | Error e) {
 				if (JavaModelManager.CP_RESOLVE_VERBOSE || JavaModelManager.CP_RESOLVE_VERBOSE_FAILURE)
-					e.printStackTrace();
+					trace("", new Exception(e)); //$NON-NLS-1$
 				throw e;
 			} finally {
 				if (!ok) JavaModelManager.getJavaModelManager().variablePut(variableName, null); // flush cache
@@ -3972,36 +4081,34 @@ public final class JavaCore extends Plugin {
 	}
 
 	private static void verbose_no_variable_initializer_found(String variableName) {
-		Util.verbose(
+		trace(
 			"CPVariable INIT - no initializer found\n" + //$NON-NLS-1$
 			"	variable: " + variableName); //$NON-NLS-1$
 	}
 
 	private static void verbose_variable_value_after_initialization(String variableName, IPath variablePath) {
-		Util.verbose(
+		trace(
 			"CPVariable INIT - after initialization\n" + //$NON-NLS-1$
 			"	variable: " + variableName +'\n' + //$NON-NLS-1$
 			"	variable path: " + variablePath); //$NON-NLS-1$
 	}
 
 	private static void verbose_triggering_variable_initialization(String variableName, ClasspathVariableInitializer initializer) {
-		Util.verbose(
+		trace(
 			"CPVariable INIT - triggering initialization\n" + //$NON-NLS-1$
 			"	variable: " + variableName + '\n' + //$NON-NLS-1$
 			"	initializer: " + initializer); //$NON-NLS-1$
 	}
 
 	private static void verbose_triggering_variable_initialization_invocation_trace() {
-		Util.verbose(
+		trace(
 			"CPVariable INIT - triggering initialization\n" + //$NON-NLS-1$
-			"	invocation trace:"); //$NON-NLS-1$
-		new Exception("<Fake exception>").printStackTrace(System.out); //$NON-NLS-1$
+			"	invocation trace:", new Exception("<Fake exception>")); //$NON-NLS-1$ //$NON-NLS-2$
 	}
 
 	/**
 	 * Returns deprecation message of a given classpath variable.
 	 *
-	 * @param variableName
 	 * @return A string if the classpath variable is deprecated, <code>null</code> otherwise.
 	 * @since 3.3
 	 */
@@ -4088,8 +4195,7 @@ public final class JavaCore extends Plugin {
 					} catch(CoreException e){
 						// executable extension could not be created: ignore this initializer
 						if (JavaModelManager.CP_RESOLVE_VERBOSE || JavaModelManager.CP_RESOLVE_VERBOSE_FAILURE) {
-							verbose_failed_to_instanciate_variable_initializer(variable, configElement);
-							e.printStackTrace();
+							verbose_failed_to_instanciate_variable_initializer(variable, configElement, e);
 						}
 					}
 				}
@@ -4098,16 +4204,16 @@ public final class JavaCore extends Plugin {
 		return null;
 	}
 
-	private static void verbose_failed_to_instanciate_variable_initializer(String variable, IConfigurationElement configElement) {
-		Util.verbose(
+	private static void verbose_failed_to_instanciate_variable_initializer(String variable, IConfigurationElement configElement, CoreException e) {
+		trace(
 			"CPContainer INIT - failed to instanciate initializer\n" + //$NON-NLS-1$
 			"	variable: " + variable + '\n' + //$NON-NLS-1$
 			"	class: " + configElement.getAttribute("class"), //$NON-NLS-1$ //$NON-NLS-2$
-			System.err);
+			e);
 	}
 
 	private static void verbose_found_variable_initializer(String variable, IConfigurationElement configElement) {
-		Util.verbose(
+		trace(
 			"CPVariable INIT - found initializer\n" + //$NON-NLS-1$
 			"	variable: " + variable + '\n' + //$NON-NLS-1$
 			"	class: " + configElement.getAttribute("class")); //$NON-NLS-1$ //$NON-NLS-2$
@@ -4251,7 +4357,9 @@ public final class JavaCore extends Plugin {
 					outputLocation = entryOutputLocation;
 				}
 			} catch (JavaModelException e) {
-				e.printStackTrace();
+				if (JavaModelManager.VERBOSE) {
+					trace("", e); //$NON-NLS-1$
+				}
 			}
 			if (outputLocation == null) continue;
 			IContainer container = (IContainer) project.getWorkspace().getRoot().findMember(outputLocation);
@@ -4710,16 +4818,18 @@ public final class JavaCore extends Plugin {
 		String newVersionNumber = Byte.toString(State.VERSION);
 		if (!newVersionNumber.equals(versionNumber)) {
 			// build state version number has changed: touch every projects to force a rebuild
-			if (JavaBuilder.DEBUG)
-				System.out.println("Build state version number has changed"); //$NON-NLS-1$
+			if (JavaBuilder.DEBUG) {
+				trace("Build state version number has changed"); //$NON-NLS-1$
+			}
 			IWorkspaceRunnable runnable = new IWorkspaceRunnable() {
 				@Override
 				public void run(IProgressMonitor progressMonitor2) throws CoreException {
 					for (int i = 0, length = projects.length; i < length; i++) {
 						IJavaProject project = projects[i];
 						try {
-							if (JavaBuilder.DEBUG)
-								System.out.println("Touching " + project.getElementName()); //$NON-NLS-1$
+							if (JavaBuilder.DEBUG) {
+								trace("Touching " + project.getElementName()); //$NON-NLS-1$
+							}
 							new ClasspathValidation((JavaProject) project).validate(); // https://bugs.eclipse.org/bugs/show_bug.cgi?id=287164
 							project.getProject().touch(progressMonitor2);
 						} catch (CoreException e) {
@@ -4781,7 +4891,6 @@ public final class JavaCore extends Plugin {
 	/**
 	 * Returns whether a given classpath variable is read-only or not.
 	 *
-	 * @param variableName
 	 * @return <code>true</code> if the classpath variable is read-only,
 	 * 	<code>false</code> otherwise.
 	 * @since 3.3
@@ -5881,7 +5990,6 @@ public final class JavaCore extends Plugin {
 	 *
 	 * @param monitor a progress monitor, or <code>null</code> if progress
 	 *    reporting and cancellation are not desired
-	 * @throws CoreException
 	 * @since 3.13
 	 */
 	public static void rebuildIndex(IProgressMonitor monitor) throws CoreException {
@@ -5963,6 +6071,7 @@ public final class JavaCore extends Plugin {
 	 * @since 3.0
 	 */
 	public static void run(IWorkspaceRunnable action, ISchedulingRule rule, IProgressMonitor monitor) throws CoreException {
+		JavaModelManager.assertModelModifiable();
 		IWorkspace workspace = ResourcesPlugin.getWorkspace();
 		if (workspace.isTreeLocked()) {
 			new BatchOperation(action).run(monitor);
@@ -5971,6 +6080,68 @@ public final class JavaCore extends Plugin {
 			workspace.run(new BatchOperation(action), rule, IWorkspace.AVOID_UPDATE, monitor);
 		}
 	}
+	/**
+	 * @since 3.37
+	 */
+	@FunctionalInterface
+	public static interface JavaCallable<V, E extends Exception> {
+		/**
+		 * Computes a value or throws an exception.
+		 *
+		 * @return the result
+		 * @throws E the Exception of given type
+		 */
+		V call() throws E;
+	}
+	/**
+	 * @since 3.37
+	 */
+	@FunctionalInterface
+	public static interface JavaRunnable<E extends Exception> {
+		/**
+		 * Runs or throws an exception.
+		 *
+		 * @throws E the Exception of given type
+		 */
+		void run() throws E;
+	}
+
+
+	/**
+	 * Calls the argument and returns its result or its Exception. The argument's {@code call()} is supposed to query
+	 * Java model and must not modify it. This method will try to run Java Model queries in optimized way (Using caches
+	 * during the operation). It is safe to nest multiple calls - but not necessary.
+	 *
+	 *
+	 * @param callable
+	 *            A JavaCallable that can throw an Exception
+	 * @return the result
+	 * @exception E
+	 *                An {@link Exception} that is thrown by the {@code callable}.
+	 * @since 3.37
+	 */
+	public static <T, E extends Exception> T callReadOnly(JavaCallable<T, E> callable) throws E {
+		return JavaModelManager.callReadOnly(callable);
+	}
+
+	/**
+	 * Runs the argument and will forward its Exception. The argument's {@code run()} is supposed to query Java model
+	 * and must not modify it. This method will try to run Java Model queries in optimized way (caching things during
+	 * the operation). It is safe to nest multiple calls - but not necessary.
+	 *
+	 * @param runnable
+	 *            A JavaRunnable that can throw an Exception
+	 * @exception E
+	 *                An {@link Exception} that is thrown by the {@code runnable}.
+	 * @since 3.37
+	 */
+	public static <T, E extends Exception> void runReadOnly(JavaRunnable<E> runnable) throws E {
+		callReadOnly(() -> {
+			runnable.run();
+			return null;
+		});
+	}
+
 	/**
 	 * Bind a container reference path to some actual containers (<code>IClasspathContainer</code>).
 	 * This API must be invoked whenever changes in container need to be reflected onto the JavaModel.
@@ -6016,7 +6187,6 @@ public final class JavaCore extends Plugin {
 	 * @param affectedProjects - the set of projects for which this container is being bound
 	 * @param respectiveContainers - the set of respective containers for the affected projects
 	 * @param monitor a monitor to report progress
-	 * @throws JavaModelException
 	 * @see ClasspathContainerInitializer
 	 * @see #getClasspathContainer(IPath, IJavaProject)
 	 * @see IClasspathContainer
@@ -6054,7 +6224,6 @@ public final class JavaCore extends Plugin {
 	 *
 	 * @param variableName the name of the classpath variable
 	 * @param path the path
-	 * @throws JavaModelException
 	 * @see #getClasspathVariable(String)
 	 *
 	 * @deprecated Use {@link #setClasspathVariable(String, IPath, IProgressMonitor)} instead
@@ -6083,7 +6252,6 @@ public final class JavaCore extends Plugin {
 	 * @param variableName the name of the classpath variable
 	 * @param path the path
 	 * @param monitor a monitor to report progress
-	 * @throws JavaModelException
 	 * @see #getClasspathVariable(String)
 	 */
 	public static void setClasspathVariable(
@@ -6122,7 +6290,6 @@ public final class JavaCore extends Plugin {
 	 * @param paths an array of path updates for the modified classpath variables (null
 	 *       meaning that the corresponding value will be removed
 	 * @param monitor a monitor to report progress
-	 * @throws JavaModelException
 	 * @see #getClasspathVariable(String)
 	 * @since 2.0
 	 */
@@ -6311,7 +6478,6 @@ public final class JavaCore extends Plugin {
 	 * @param project
 	 *            the project whose referenced modules to be computed
 	 * @return an array of String containing module names
-	 * @throws CoreException
 	 * @since 3.14
 	 */
 	public static String[] getReferencedModules(IJavaProject project) throws CoreException {
@@ -6329,7 +6495,6 @@ public final class JavaCore extends Plugin {
 	 *
 	 * @return the <code>IModuleDescription</code> representing this java element as an automatic module,
 	 * 		never <code>null</code>.
-	 * @throws JavaModelException
 	 * @throws IllegalArgumentException if the provided element is neither <code>IPackageFragmentRoot</code>
 	 * 	nor <code>IJavaProject</code>
 	 * @since 3.14
@@ -6379,7 +6544,6 @@ public final class JavaCore extends Plugin {
 	 * @param classFileAttributes map of attribute names and values to be used during class file generation
 	 * @return the compiled byte code
 	 *
-	 * @throws JavaModelException
 	 * @throws IllegalArgumentException if the map of classFileAttributes contains an unsupported key.
 	 * @since 3.14
 	 */
@@ -6478,7 +6642,6 @@ public final class JavaCore extends Plugin {
 	 * Registers the JavaModelManager as a resource changed listener and save participant.
 	 * Starts the background indexing, and restore saved classpath variable values.
 	 * </p>
-	 * @throws Exception
 	 * @see org.eclipse.core.runtime.Plugin#start(BundleContext)
 	 */
 	@Override

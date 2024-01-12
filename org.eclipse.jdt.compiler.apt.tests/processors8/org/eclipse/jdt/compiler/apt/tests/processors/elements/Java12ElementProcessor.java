@@ -161,8 +161,8 @@ public class Java12ElementProcessor extends BaseProcessor {
 				mod3 = mod;
 			}
 		}
-		Collections.sort(types, (x, y) -> x.compareTo(y)); //unused as of now
-		Collections.sort(modules, (x, y) -> x.compareTo(y));
+		Collections.sort(types, String::compareTo); //unused as of now
+		Collections.sort(modules, String::compareTo);
 		assertEquals("incorrect no of modules in root elements in in "+ this.mode + " mode", 3, modules.size());
 		assertEquals("incorrect modules among root elements in "+ this.mode + " mode", "[module.main, module.readable.one, module.readable.two]", modules.toString());
 		assertNotNull("module should not be null in "+ this.mode + " mode", mod1);
@@ -208,8 +208,8 @@ public class Java12ElementProcessor extends BaseProcessor {
 				mod3 = mod;
 			}
 		}
-		Collections.sort(types, (x, y) -> x.compareTo(y)); //unused as of now
-		Collections.sort(modules, (x, y) -> x.compareTo(y));
+		Collections.sort(types, String::compareTo); //unused as of now
+		Collections.sort(modules, String::compareTo);
 		assertEquals("incorrect no of modules in root elements in "+ this.mode + " mode", this.isBinaryMode ? 2 : 3, modules.size());
 		assertEquals("incorrect modules among root elements in "+ this.mode + " mode", "[module.main, module.readable.one" +
 							(this.isBinaryMode ? "" : ", module.readable.two") + "]", modules.toString());
@@ -257,8 +257,8 @@ public class Java12ElementProcessor extends BaseProcessor {
 				mod3 = mod;
 			}
 		}
-		Collections.sort(types, (x, y) -> x.compareTo(y)); //unused as of now
-		Collections.sort(modules, (x, y) -> x.compareTo(y));
+		Collections.sort(types, String::compareTo); //unused as of now
+		Collections.sort(modules, String::compareTo);
 		assertEquals("incorrect no of modules in root elements in "+ this.mode + " mode", 3, modules.size());
 		assertEquals("incorrect modules among root elements in "+ this.mode + " mode", "[module.main, module.readable.one, module.readable.two]", modules.toString());
 		assertNotNull("module should not be null in "+ this.mode + " mode", mod1);
@@ -271,7 +271,7 @@ public class Java12ElementProcessor extends BaseProcessor {
 	public void testRootElements4() throws IOException {
 		Set<? extends Element> rootElements = this.roundEnv.getRootElements();
 		List<String> names = new ArrayList<>();
-		Set<Element> modules = new HashSet<Element>();
+		Set<Element> modules = new HashSet<>();
 		for (Element element : rootElements) {
 			Element root = getRoot(element);
 			String modName = null;
@@ -300,7 +300,7 @@ public class Java12ElementProcessor extends BaseProcessor {
 	public void testRootElements5() throws IOException {
 		Set<? extends Element> rootElements = this.roundEnv.getRootElements();
 		List<String> names = new ArrayList<>();
-		Set<Element> modules = new HashSet<Element>();
+		Set<Element> modules = new HashSet<>();
 		for (Element element : rootElements) {
 			Element root = getRoot(element);
 			String modName = null;
@@ -346,7 +346,7 @@ public class Java12ElementProcessor extends BaseProcessor {
 		throw new AssertionFailedError(msg);
 	}
 	private String getExceptionStackTrace(Throwable t) {
-		StringBuffer buf = new StringBuffer(t.getMessage());
+		StringBuilder buf = new StringBuilder(t.getMessage());
 		StackTraceElement[] traces = t.getStackTrace();
 		for (int i = 0; i < traces.length; i++) {
 			StackTraceElement trace = traces[i];
@@ -375,7 +375,7 @@ public class Java12ElementProcessor extends BaseProcessor {
 	}
 	public void assertModifiers(Set<Modifier> modifiers, String[] expected) {
 		assertEquals("Incorrect no of modifiers", modifiers.size(), expected.length);
-		Set<String> actual = new HashSet<String>(expected.length);
+		Set<String> actual = new HashSet<>(expected.length);
 		for (Modifier modifier : modifiers) {
 			actual.add(modifier.toString());
 		}
@@ -438,7 +438,7 @@ public class Java12ElementProcessor extends BaseProcessor {
 
 	public void assertEquals(String msg, int expected, int actual) {
 		if (expected != actual) {
-			StringBuffer buf = new StringBuffer();
+			StringBuilder buf = new StringBuilder();
 			buf.append(msg);
 			buf.append(", expected " + expected + " but was " + actual);
 			reportError(buf.toString());
@@ -449,7 +449,7 @@ public class Java12ElementProcessor extends BaseProcessor {
 
 		}
 	}
-	private class AssertionFailedError extends Error {
+	private static class AssertionFailedError extends Error {
 		private static final long serialVersionUID = 1L;
 
 		public AssertionFailedError(String msg) {

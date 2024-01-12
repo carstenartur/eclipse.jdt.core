@@ -51,7 +51,7 @@ public class MirroredTypesException extends RuntimeException {
     private static final long serialVersionUID = 1;
 
     private transient Collection<TypeMirror> types;	// cannot be serialized
-    private Collection<String> names;		// types' qualified "names"
+    private final Collection<String> names;		// types' qualified "names"
 
     /**
      * Constructs a new MirroredTypesException for the specified types.
@@ -61,7 +61,7 @@ public class MirroredTypesException extends RuntimeException {
     public MirroredTypesException(Collection<TypeMirror> types) {
 	super("Attempt to access Class objects for TypeMirrors " + types); //$NON-NLS-1$
 	this.types = types;
-	names = new ArrayList<String>();
+	names = new ArrayList<>();
 	for (TypeMirror t : types) {
 	    names.add(t.toString());
 	}

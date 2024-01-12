@@ -101,7 +101,7 @@ public class ASTConverterJavadocTest_18 extends ConverterTestSetup {
 	// Debug
 	protected String prefix = "";
 	protected boolean debug = false;
-	protected StringBuffer problems;
+	protected StringBuilder problems;
 	protected String compilerOption = JavaCore.IGNORE;
 	protected List failures;
 	protected boolean stopOnFailure = true;
@@ -110,9 +110,6 @@ public class ASTConverterJavadocTest_18 extends ConverterTestSetup {
 
 	private static String SNIPPET_TAG = '@' + new String(JavadocTagConstants.TAG_SNIPPET);
 
-	/**
-	 * @param name
-	 */
 	public ASTConverterJavadocTest_18(String name) {
 		super(name);
 	}
@@ -160,7 +157,7 @@ public class ASTConverterJavadocTest_18 extends ConverterTestSetup {
 		super.setUp();
 		TEST_COUNTERS[0]++;
 		this.failures = new ArrayList();
-		this.problems = new StringBuffer();
+		this.problems = new StringBuilder();
 		this.workingCopies = null;
 		this.savedLevel = this.astLevel;
 	}

@@ -19,7 +19,6 @@ import junit.framework.Test;
 import junit.framework.TestSuite;
 
 import org.eclipse.core.resources.IProject;
-import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.jdt.apt.core.internal.util.FactoryContainer;
 import org.eclipse.jdt.apt.core.internal.util.FactoryPath;
@@ -96,7 +95,6 @@ public class MixedModeTesting extends APTTestBase{
 	/**
 	 * What this tests test.
 	 * This makes sure the internal apt rounding occurs correctly in batch mode.
-	 * @throws CoreException
 	 */
 	public void testAPTRoundingInMixedMode0()
 	{

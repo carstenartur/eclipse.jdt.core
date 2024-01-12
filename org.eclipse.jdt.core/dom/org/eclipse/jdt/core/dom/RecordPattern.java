@@ -22,8 +22,10 @@ import org.eclipse.jdt.internal.core.dom.util.DOMASTUtil;
  * TypePattern pattern AST node type.
  *
  * <pre>
+ * {@code
  * RecordPattern:
  *      Pattern<Pattern<Patterns....>> Type SimpleName
+ * }
  * </pre>
  *
  * @since 3.31
@@ -80,7 +82,7 @@ public class RecordPattern extends Pattern {
 	 * (element type: {@link Pattern}).
 	 * Defaults to an empty list.
 	 */
-	private ASTNode.NodeList patterns =
+	private final ASTNode.NodeList patterns =
 		new ASTNode.NodeList(PATTERNS_PROPERTY);
 
 	/**

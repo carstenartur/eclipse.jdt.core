@@ -116,7 +116,7 @@ public class ASTConverterJavadocTest_15 extends ConverterTestSetup {
 	// Debug
 	protected String prefix = "";
 	protected boolean debug = false;
-	protected StringBuffer problems;
+	protected StringBuilder problems;
 	protected String compilerOption = JavaCore.IGNORE;
 	protected List failures;
 	protected boolean stopOnFailure = true;
@@ -125,18 +125,11 @@ public class ASTConverterJavadocTest_15 extends ConverterTestSetup {
 
 
 
-	/**
-	 * @param name
-	 * @param support
-	 */
 	public ASTConverterJavadocTest_15(String name, String support, String unix) {
 		super(name);
 		this.docCommentSupport = support;
 		this.unix = "true".equals(unix);
 	}
-	/**
-	 * @param name
-	 */
 	public ASTConverterJavadocTest_15(String name) {
 		this(name.substring(0, name.indexOf(" - ")),
 				name.substring(name.indexOf(" - Doc ") + 7, name.lastIndexOf("abled") + 5),
@@ -222,7 +215,7 @@ public class ASTConverterJavadocTest_15 extends ConverterTestSetup {
 		super.setUp();
 		TEST_COUNTERS[0]++;
 		this.failures = new ArrayList();
-		this.problems = new StringBuffer();
+		this.problems = new StringBuilder();
 		this.workingCopies = null;
 		this.savedLevel = this.astLevel;
 	}

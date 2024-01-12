@@ -28,7 +28,7 @@ import org.eclipse.core.runtime.Path;
 public class JarIndexLocation extends IndexLocation {
 	private JarFile jarFile = null;
 	private JarEntry jarEntry = null;
-	private URL localUrl;
+	private final URL localUrl;
 
 	public JarIndexLocation(URL url, URL localUrl2) {
 		super(url);
@@ -69,10 +69,11 @@ public class JarIndexLocation extends IndexLocation {
 			if (this.jarFile == null) {
 				JarURLConnection connection = (JarURLConnection) this.localUrl.openConnection();
 				connection.setUseCaches(false);
-				JarFile file = connection.getJarFile();
-				if (file == null)
-					return false;
-				file.close();
+				try (JarFile file = connection.getJarFile()) {
+					if (file == null) {
+						return false;
+					}
+				}
 			}
 		} catch (IOException e) {
 			return false;

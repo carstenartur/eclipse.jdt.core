@@ -18,7 +18,7 @@ import org.eclipse.jdt.internal.compiler.lookup.Scope;
 import org.eclipse.jdt.internal.compiler.lookup.TypeBinding;
 
 public class CompletionOnKeyword1 extends SingleTypeReference implements CompletionOnKeyword {
-	private char[][] possibleKeywords;
+	private final char[][] possibleKeywords;
 
 	public CompletionOnKeyword1(char[] token, long pos, char[] possibleKeyword) {
 		this(token, pos, new char[][]{possibleKeyword});
@@ -44,7 +44,7 @@ public class CompletionOnKeyword1 extends SingleTypeReference implements Complet
 		throw new CompletionNodeFound(this, scope);
 	}
 	@Override
-	public StringBuffer printExpression(int indent, StringBuffer output){
+	public StringBuilder printExpression(int indent, StringBuilder output){
 
 		return output.append("<CompleteOnKeyword:").append(this.token).append('>');  //$NON-NLS-1$
 	}

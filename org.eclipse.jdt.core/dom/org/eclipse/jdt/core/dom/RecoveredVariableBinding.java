@@ -20,8 +20,8 @@ import org.eclipse.jdt.core.IJavaElement;
  */
 class RecoveredVariableBinding implements IVariableBinding {
 
-	private VariableDeclaration variableDeclaration;
-	private BindingResolver resolver;
+	private final VariableDeclaration variableDeclaration;
+	private final BindingResolver resolver;
 
 	RecoveredVariableBinding(BindingResolver resolver, VariableDeclaration variableDeclaration) {
 		this.resolver = resolver;
@@ -103,7 +103,7 @@ class RecoveredVariableBinding implements IVariableBinding {
 
 	@Override
 	public String getKey() {
-		StringBuffer buffer = new StringBuffer();
+		StringBuilder buffer = new StringBuilder();
 		buffer.append("Recovered#"); //$NON-NLS-1$
 		if (this.variableDeclaration != null) {
 			buffer

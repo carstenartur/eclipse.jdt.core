@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2005, 2017 IBM Corporation and others.
+ * Copyright (c) 2005, 2023 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -124,7 +124,7 @@ public class AnnotationValueImpl implements AnnotationValue, TypeIds {
 	 * BaseTypeBinding, this is ignored and the value is inspected to determine type.
 	 * @param kind an int array whose first element will be set to the type of the
 	 * converted object, represented with T_* values from TypeIds or from this class.
-	 * @return
+	 * @return converted mirror type
 	 */
 	private Object convertToMirrorType(Object value, TypeBinding type, int kind[]) {
 		if (type == null) {
@@ -266,7 +266,7 @@ public class AnnotationValueImpl implements AnnotationValue, TypeIds {
 			return "null"; //$NON-NLS-1$
 		} else if (this._value instanceof String) {
 			String value = (String) this._value;
-			StringBuffer sb = new StringBuffer();
+			StringBuilder sb = new StringBuilder();
 			sb.append('"');
 			for (int i = 0; i < value.length(); i++) {
 				Util.appendEscapedChar(sb, value.charAt(i), true);
@@ -274,7 +274,7 @@ public class AnnotationValueImpl implements AnnotationValue, TypeIds {
 			sb.append('"');
 			return sb.toString();
 		} else if (this._value instanceof Character) {
-			StringBuffer sb = new StringBuffer();
+			StringBuilder sb = new StringBuilder();
 			sb.append('\'');
 			Util.appendEscapedChar(sb, ((Character) this._value).charValue(), false);
 			sb.append('\'');

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2020 IBM Corporation and others.
+ * Copyright (c) 2000, 2023 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -112,6 +112,7 @@ private static Class[] getAllTestClasses() {
 		ResolveTests9.class,
 		ResolveTests10.class,
 		ResolveTests12To15.class,
+		ResolveTests21.class,
 		SelectionJavadocModelTests.class,
 
 		// Support for completion tests
@@ -226,6 +227,7 @@ private static Class[] getAllTestClasses() {
 		JavaElement8Tests.class,
 
 		Java9ElementTests.class,
+		Java21ElementTests.class,
 
 		NullAnnotationModelTests9.class,
 
@@ -254,6 +256,7 @@ private static Class[] getAllTestClasses() {
 /**
  * @deprecated JDOM is obsolete
  */
+@Deprecated
 private static Class[] getDeprecatedJDOMTestClasses() {
 	return new Class[] {
 		//Create type source tests

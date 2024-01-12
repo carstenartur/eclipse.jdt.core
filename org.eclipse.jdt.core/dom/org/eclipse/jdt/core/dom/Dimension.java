@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2013, 2014 IBM Corporation and others.
+ * Copyright (c) 2013, 2023 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -75,7 +75,7 @@ public class Dimension extends ASTNode {
 	 * The list of annotations for this dimension (element type: {@link Annotation}).
 	 * Defaults to an empty list.
 	 */
-	private ASTNode.NodeList annotations = new ASTNode.NodeList(ANNOTATIONS_PROPERTY);
+	private final ASTNode.NodeList annotations = new ASTNode.NodeList(ANNOTATIONS_PROPERTY);
 
 	/**
 	 * Creates a new dimension node (supported only in level JLS8 or above).
@@ -114,6 +114,7 @@ public class Dimension extends ASTNode {
 	@Override
 	ASTNode clone0(AST target) {
 		Dimension result = new Dimension(target);
+		result.setSourceRange(getStartPosition(), getLength());
 		result.annotations().addAll(
 				ASTNode.copySubtrees(target, annotations()));
 		return result;

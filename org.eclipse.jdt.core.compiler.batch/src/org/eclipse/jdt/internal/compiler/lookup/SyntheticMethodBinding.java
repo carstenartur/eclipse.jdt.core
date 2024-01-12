@@ -329,7 +329,7 @@ public class SyntheticMethodBinding extends MethodBinding {
 	public SyntheticMethodBinding(SourceTypeBinding declaringEnum, int startIndex, int endIndex) {
 		this.declaringClass = declaringEnum;
 		this.index = nextSmbIndex();
-		StringBuffer buffer = new StringBuffer();
+		StringBuilder buffer = new StringBuilder();
 		buffer.append(TypeConstants.SYNTHETIC_ENUM_CONSTANT_INITIALIZATION_METHOD_PREFIX).append(this.index);
 		this.selector = String.valueOf(buffer).toCharArray();
 		this.modifiers = ClassFileConstants.AccPrivate | ClassFileConstants.AccStatic;
@@ -390,10 +390,10 @@ public class SyntheticMethodBinding extends MethodBinding {
 		this.tagBits |= (TagBits.AnnotationResolved | TagBits.DeprecatedAnnotationResolved) | (lambda.binding.tagBits & TagBits.HasParameterAnnotations);
 	    this.returnType = lambda.binding.returnType;
 	    this.parameters = lambda.binding.parameters;
-        if (this.returnType.isNonDenotable() || Stream.of(this.parameters).anyMatch(p -> p.isNonDenotable())) {
+        if (this.returnType.isNonDenotable() || Stream.of(this.parameters).anyMatch(TypeBinding::isNonDenotable)) {
         	this.modifiers &= ~ExtraCompilerModifiers.AccGenericSignature;
         }
-	    TypeVariableBinding[] vars = Stream.of(this.parameters).filter(param -> param.isTypeVariable()).toArray(TypeVariableBinding[]::new);
+	    TypeVariableBinding[] vars = Stream.of(this.parameters).filter(TypeBinding::isTypeVariable).toArray(TypeVariableBinding[]::new);
 	    if (vars != null && vars.length > 0)
 	    	this.typeVariables = vars;
 	    this.thrownExceptions = lambda.binding.thrownExceptions;

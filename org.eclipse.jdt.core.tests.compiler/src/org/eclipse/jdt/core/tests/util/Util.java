@@ -163,7 +163,7 @@ public class Util {
 		OUTPUT_DIRECTORY = pathDir;
    }
 
-public static void appendProblem(StringBuffer problems, IProblem problem, char[] source, int problemCount) {
+public static void appendProblem(StringBuilder problems, IProblem problem, char[] source, int problemCount) {
     problems.append(problemCount + (problem.isError() ? ". ERROR" : problem.isWarning() ? ". WARNING" : ". INFO"));
     problems.append(" in " + new String(problem.getOriginatingFileName()));
     if (source != null) {
@@ -292,7 +292,7 @@ public static void compile(String[] pathsAndContents, Map options, String[] clas
 	        System.err.print(requestor.problemLog); // problem log empty if no problems
 }
 private static Parser createParser9() {
-	Map<String,String> opts = new HashMap<String, String>();
+	Map<String,String> opts = new HashMap<>();
 	opts.put(CompilerOptions.OPTION_Source, CompilerOptions.VERSION_9);
 	return new Parser(
 			new ProblemReporter(new IErrorHandlingPolicy() {
@@ -429,11 +429,8 @@ public static void copy(String sourcePath, String destPath) {
     }
 }
 public static void createFile(String path, String contents) throws IOException {
-    FileOutputStream output = new FileOutputStream(path);
-    try {
+    try (FileOutputStream output = new FileOutputStream(path)) {
         output.write(contents.getBytes());
-    } finally {
-        output.close();
     }
 }
 public static void createClassFolder(String[] pathsAndContents, String folderPath, String compliance) throws IOException {
@@ -1516,8 +1513,7 @@ public static void zipFiles(File[] files, String zipPath) throws IOException {
 	} else {
 		zipFile.getParentFile().mkdirs();
 	}
-	ZipOutputStream zip = new ZipOutputStream(new FileOutputStream(zipFile));
-	try {
+	try (ZipOutputStream zip = new ZipOutputStream(new FileOutputStream(zipFile))) {
 		for (int i = 0, length = files.length; i < length; i++) {
 			File file = files[i];
 			ZipEntry entry = new ZipEntry(file.getName());
@@ -1525,16 +1521,12 @@ public static void zipFiles(File[] files, String zipPath) throws IOException {
 			zip.write(org.eclipse.jdt.internal.compiler.util.Util.getFileByteContent(file));
 			zip.closeEntry();
 		}
-	} finally {
-		zip.close();
 	}
 }
 /**
  * Returns the compilation errors / warnings for the given CompilationResult.
  *
  * @param compilationResult the compilation result
- * @param showCategory
- * @param showWarningToken
  * @return String the problem log
  */
 public static String getProblemLog(CompilationResult compilationResult, boolean showCategory, boolean showWarningToken) {

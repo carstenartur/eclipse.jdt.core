@@ -65,7 +65,7 @@ public class PackageFragment extends Openable implements IPackageFragment, Suffi
 
 	public String[] names;
 
-	private boolean isValidPackageName;
+	private final boolean isValidPackageName;
 
 protected PackageFragment(PackageFragmentRoot root, String[] names) {
 	super(root);
@@ -536,7 +536,7 @@ public void rename(String newName, boolean force, IProgressMonitor monitor) thro
  * Debugging purposes
  */
 @Override
-protected void toStringChildren(int tab, StringBuffer buffer, Object info) {
+protected void toStringChildren(int tab, StringBuilder buffer, Object info) {
 	if (tab == 0) {
 		super.toStringChildren(tab, buffer, info);
 	}
@@ -545,7 +545,7 @@ protected void toStringChildren(int tab, StringBuffer buffer, Object info) {
  * Debugging purposes
  */
 @Override
-protected void toStringInfo(int tab, StringBuffer buffer, Object info, boolean showResolvedInfo) {
+protected void toStringInfo(int tab, StringBuilder buffer, Object info, boolean showResolvedInfo) {
 	buffer.append(tabString(tab));
 	if (this.names.length == 0) {
 		buffer.append("<default>"); //$NON-NLS-1$
@@ -575,7 +575,7 @@ public String getAttachedJavadoc(IProgressMonitor monitor) throws JavaModelExcep
 	if (baseLocation == null) {
 		return null;
 	}
-	StringBuffer pathBuffer = new StringBuffer(baseLocation.toExternalForm());
+	StringBuilder pathBuffer = new StringBuilder(baseLocation.toExternalForm());
 
 	if (!(pathBuffer.charAt(pathBuffer.length() - 1) == '/')) {
 		pathBuffer.append('/');

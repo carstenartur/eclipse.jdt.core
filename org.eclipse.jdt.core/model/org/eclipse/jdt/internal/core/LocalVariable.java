@@ -47,8 +47,8 @@ public class LocalVariable extends SourceRefElement implements ILocalVariable {
 	public int nameStart, nameEnd;
 	String typeSignature;
 	public IAnnotation[] annotations;
-	private int flags;
-	private boolean isParameter;
+	private final int flags;
+	private final boolean isParameter;
 	public IAnnotation[][] annotationsOnDimensions;
 
 	public LocalVariable(
@@ -278,11 +278,11 @@ public class LocalVariable extends SourceRefElement implements ILocalVariable {
 	}
 
 	@Override
-	protected void getHandleMemento(StringBuffer buff) {
+	protected void getHandleMemento(StringBuilder buff) {
 		getHandleMemento(buff, true);
 	}
 
-	protected void getHandleMemento(StringBuffer buff, boolean memoizeParent) {
+	protected void getHandleMemento(StringBuilder buff, boolean memoizeParent) {
 		if (memoizeParent)
 			getParent().getHandleMemento(buff);
 		buff.append(getHandleMementoDelimiter());
@@ -519,7 +519,7 @@ public class LocalVariable extends SourceRefElement implements ILocalVariable {
 	}
 
 	@Override
-	protected void toStringInfo(int tab, StringBuffer buffer, Object info, boolean showResolvedInfo) {
+	protected void toStringInfo(int tab, StringBuilder buffer, Object info, boolean showResolvedInfo) {
 		buffer.append(tabString(tab));
 		if (info != NO_INFO) {
 			buffer.append(Signature.toString(getTypeSignature()));

@@ -70,8 +70,6 @@ import org.eclipse.test.performance.Performance;
 
 import junit.framework.Test;
 
-/**
- */
 @SuppressWarnings({"rawtypes", "unchecked"})
 public class FullSourceWorkspaceModelTests extends FullSourceWorkspaceTests implements IJavaSearchConstants {
 
@@ -96,9 +94,6 @@ public class FullSourceWorkspaceModelTests extends FullSourceWorkspaceTests impl
 	static IPath BIG_PROJECT_TYPE_PATH;
 	static ICompilationUnit WORKING_COPY;
 
-/**
- * @param name
- */
 public FullSourceWorkspaceModelTests(String name) {
 	super(name);
 }
@@ -342,7 +337,7 @@ protected void assertElementsEqual(String message, String expected, IJavaElement
  * @see org.eclipse.jdt.core.tests.model.AbstractJavaModelTests#assertElementsEqual(String, String, IJavaElement[], boolean)
  */
 protected void assertElementsEqual(String message, String expected, IJavaElement[] elements, boolean showResolvedInfo) {
-	StringBuffer buffer = new StringBuffer();
+	StringBuilder buffer = new StringBuilder();
 	if (elements != null) {
 		for (int i = 0, length = elements.length; i < length; i++){
 			JavaElement element = (JavaElement)elements[i];
@@ -651,7 +646,6 @@ public void testProjectFindUnknownType() throws CoreException {
 /*
  * Performance tests for model: Find Unknown type after resetting the classpath
  * (regression test for https://bugs.eclipse.org/bugs/show_bug.cgi?id=217059 )
- *
  */
 public void testProjectFindUnknownTypeAfterSetClasspath() throws CoreException {
 	tagAsSummary("Find unknown type in project after resetting classpath", false); // do NOT put in fingerprint
@@ -766,7 +760,7 @@ public void testPerfReconcileBigFileWithSyntaxError() throws JavaModelException 
 		"	 \"}\\n\"" +
 		"  );\n" +
 		"}\n";
-	StringBuffer bigContents = new StringBuffer();
+	StringBuilder bigContents = new StringBuilder();
 	bigContents.append("public class BigCU {\n");
 	int fooIndex = 0;
 	while (fooIndex < 2000) { // add 2000 methods (so that source is close to 1MB)
@@ -817,7 +811,7 @@ public void testReconcileDuplicates() throws JavaModelException {
 	tagAsSummary("Reconcile editor change on file with lots of duplicates", false); // do NOT put in fingerprint
 
 	// build big file contents
-	StringBuffer contents = new StringBuffer();
+	StringBuilder contents = new StringBuilder();
 	contents.append("public class CUWithDuplicates {\n");
 	int fooIndex = 0;
 	while (fooIndex < 2000) { // add 2000 duplicate methods
@@ -867,7 +861,7 @@ public void testPerfDeleteLotsOfMembersAndReconcile() throws JavaModelException 
 	tagAsSummary("Reconcile editor change after deleting lots of members", false); // do NOT put in fingerprint
 
 	// build big file contents
-	StringBuffer contents = new StringBuffer();
+	StringBuilder contents = new StringBuilder();
 	contents.append("public class LotsOfMembers {\n");
 	int fooIndex = 0;
 	while (fooIndex < 15000) { // add 15000 methods

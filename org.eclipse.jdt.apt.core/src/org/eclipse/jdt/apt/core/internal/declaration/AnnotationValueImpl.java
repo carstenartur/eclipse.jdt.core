@@ -37,7 +37,7 @@ public class AnnotationValueImpl implements EclipseMirrorObject, AnnotationValue
 	 * Either the annotation that directly contains this annotation value
 	 * or an annotation method, which indicates that this is its default value.
 	 */
-	private EclipseMirrorObject _parent;
+	private final EclipseMirrorObject _parent;
 	private final BaseProcessorEnv _env;
 	/** the annotation value */
 	private final Object _value;
@@ -58,7 +58,6 @@ public class AnnotationValueImpl implements EclipseMirrorObject, AnnotationValue
 	 * @param element the annotation element declaration.
 	 * @param index zero-based index into the array if the this value is an array element.
 	 *        <code>-1</code> otherwise.
-	 * @param env
 	 */
     public AnnotationValueImpl( final Object value,
 								final int index,
@@ -82,7 +81,6 @@ public class AnnotationValueImpl implements EclipseMirrorObject, AnnotationValue
 	 * @param index zero-based index into the array if the this value is an array element.
 	 *        <code>-1</code> otherwise.
 	 * @param annotation the annotation containing this value
-	 * @param env
 	 */
 	public AnnotationValueImpl( final Object value,
 								final String name,
@@ -208,7 +206,7 @@ public class AnnotationValueImpl implements EclipseMirrorObject, AnnotationValue
 			return "null"; //$NON-NLS-1$
 		} else if (_value instanceof String) {
 			String value = (String) _value;
-			StringBuffer sb = new StringBuffer();
+			StringBuilder sb = new StringBuilder();
 			sb.append('"');
 			for (int i = 0; i < value.length(); i++) {
 				Util.appendEscapedChar(sb, value.charAt(i), true);
@@ -216,7 +214,7 @@ public class AnnotationValueImpl implements EclipseMirrorObject, AnnotationValue
 			sb.append('"');
 			return sb.toString();
 		} else if (_value instanceof Character) {
-			StringBuffer sb = new StringBuffer();
+			StringBuilder sb = new StringBuilder();
 			sb.append('\'');
 			Util.appendEscapedChar(sb, ((Character) _value).charValue(), false);
 			sb.append('\'');

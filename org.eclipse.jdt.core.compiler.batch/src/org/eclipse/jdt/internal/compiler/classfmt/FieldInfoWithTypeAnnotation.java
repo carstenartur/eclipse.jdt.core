@@ -17,7 +17,7 @@ package org.eclipse.jdt.internal.compiler.classfmt;
 import org.eclipse.jdt.internal.compiler.env.IBinaryTypeAnnotation;
 
 public final class FieldInfoWithTypeAnnotation extends FieldInfoWithAnnotation {
-	private TypeAnnotationInfo[] typeAnnotations;
+	private final TypeAnnotationInfo[] typeAnnotations;
 
 FieldInfoWithTypeAnnotation(FieldInfo info, AnnotationInfo[] annos, TypeAnnotationInfo[] typeAnnos) {
 	super(info, annos);
@@ -42,7 +42,7 @@ protected void reset() {
 }
 @Override
 public String toString() {
-	StringBuffer buffer = new StringBuffer(getClass().getName());
+	StringBuilder buffer = new StringBuilder(getClass().getName());
 	if (this.typeAnnotations != null) {
 		buffer.append('\n');
 		buffer.append("type annotations:"); //$NON-NLS-1$

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2022 IBM Corporation and others.
+ * Copyright (c) 2000, 2023 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -55,7 +55,7 @@ public class ASTMatcher {
 	 * Indicates whether doc tags should be matched.
 	 * @since 3.0
 	 */
-	private boolean matchDocTags;
+	private final boolean matchDocTags;
 
 	/**
 	 * Creates a new AST matcher instance.
@@ -1982,9 +1982,14 @@ public class ASTMatcher {
 			return false;
 		}
 		PatternInstanceofExpression o = (PatternInstanceofExpression) other;
-		return
-			safeSubtreeMatch(node.getLeftOperand(), o.getLeftOperand())
-			&& safeSubtreeMatch(node.getRightOperand(), o.getRightOperand());
+		AST ast= node.getAST();
+		if (ast.apiLevel() <= 20) {
+			return
+					safeSubtreeMatch(node.getLeftOperand(), o.getLeftOperand())
+					&& safeSubtreeMatch(node.getRightOperand(), o.getRightOperand());
+		}
+		return safeSubtreeMatch(node.getLeftOperand(), o.getLeftOperand())
+				&& safeSubtreeMatch(node.getPattern(), o.getPattern());
 	}
 
 	/**
@@ -3173,4 +3178,75 @@ public class ASTMatcher {
 		return	safeSubtreeMatch(node.getExpression(), o.getExpression());
 	}
 
+	/**
+	 * Returns whether the given node and the other object match.
+	 * <p>
+	 * The default implementation provided by this class tests whether the
+	 * other object is a node of the same type with structurally isomorphic
+	 * child subtrees. Subclasses may override this method as needed.
+	 * </p>
+	 *
+	 * @since 3.37
+	 *
+	 * @param node the node
+	 * @param other the other object, or <code>null</code>
+	 * @return <code>true</code> if the subtree matches, or
+	 *   <code>false</code> if they do not match or the other object has a
+	 *   different node type or is <code>null</code>
+	 * @noreference This method is not intended to be referenced by clients as it is a part of Java preview feature.
+	 */
+	public boolean match(StringTemplateExpression node, Object other) {
+		if ((other instanceof StringTemplateExpression exp)) {
+			return	node.isMultiline() == exp.isMultiline() &&
+					safeSubtreeMatch(node.getProcessor(), exp.getProcessor()) &&
+					safeSubtreeMatch(node.getFirstFragment(), exp.getFirstFragment()) &&
+					safeSubtreeListMatch(node.components(), exp.components());
+		}
+		return false;
+	}
+
+	/**
+	 * Returns whether the given node and the other object match.
+	 * <p>
+	 * The default implementation provided by this class tests whether the
+	 * other object is a node of the same type with structurally isomorphic
+	 * child subtrees. Subclasses may override this method as needed.
+	 * </p>
+	 *
+	 * @param node the node
+	 * @param other the other object, or <code>null</code>
+	 * @return <code>true</code> if the subtree matches, or
+	 *   <code>false</code> if they do not match or the other object has a
+	 *   different node type or is <code>null</code>
+	 * @since 3.37
+	 */
+	public boolean match(StringFragment node, Object other) {
+		if (!(other instanceof StringFragment)) {
+			return false;
+		}
+		StringFragment o = (StringFragment) other;
+		return safeEquals(node.getEscapedValue(), o.getEscapedValue());
+	}
+	/**
+	 * Returns whether the given node and the other object match.
+	 * <p>
+	 * The default implementation provided by this class tests whether the
+	 * other object is a node of the same type with structurally isomorphic
+	 * child subtrees. Subclasses may override this method as needed.
+	 * </p>
+	 *
+	 * @param node the node
+	 * @param other the other object, or <code>null</code>
+	 * @return <code>true</code> if the subtree matches, or
+	 *   <code>false</code> if they do not match or the other object has a
+	 *   different node type or is <code>null</code>
+	 * @since 3.37
+	 */
+	public boolean match(StringTemplateComponent node, Object other) {
+		if (other instanceof StringTemplateComponent exp) {
+			return safeSubtreeMatch(node.getStringFragment(), exp.getStringFragment()) &&
+					safeSubtreeMatch(node.getEmbeddedExpression(), exp.getEmbeddedExpression());
+		}
+		return false;
+	}
 }

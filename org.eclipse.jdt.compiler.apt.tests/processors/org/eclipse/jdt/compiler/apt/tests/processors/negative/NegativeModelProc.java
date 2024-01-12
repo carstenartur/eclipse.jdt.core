@@ -463,7 +463,7 @@ public class NegativeModelProc extends AbstractProcessor
 	private int _oneTest;
 
 	// Report failures on tests that are already known to be unsupported
-	private boolean _reportFailingCases = true;
+	private final boolean _reportFailingCases = true;
 
 	// If processor options don't include this processor's classname, don't run the proc at all.
 	private boolean _processorEnabled;
@@ -701,7 +701,7 @@ public class NegativeModelProc extends AbstractProcessor
 
 
 	public boolean checkNegative5() throws Exception {
-		List<TypeElement> rootElements = new ArrayList<TypeElement>();
+		List<TypeElement> rootElements = new ArrayList<>();
 		TypeElement element = _elementUtils.getTypeElement("targets.negative.pa.Negative5");
 		if (null == element) {
 			reportError("Element Negative5 was not found");
@@ -741,7 +741,7 @@ public class NegativeModelProc extends AbstractProcessor
 	public boolean checkNegative7() throws Exception {
 
 		// Get the roots of the Negative7 model
-		List<TypeElement> rootElements = new ArrayList<TypeElement>();
+		List<TypeElement> rootElements = new ArrayList<>();
 		TypeElement element = _elementUtils.getTypeElement("targets.negative.pa.Negative7");
 		if (null == element) {
 			reportError("Element Negative7 was not found");
@@ -764,7 +764,7 @@ public class NegativeModelProc extends AbstractProcessor
 	 */
 	public boolean checkNegative8() throws Exception {
 		// check that all expected elements are here
-		List<TypeElement> rootElements = new ArrayList<TypeElement>();
+		List<TypeElement> rootElements = new ArrayList<>();
 		String[] suffixes = new String[] {"a", "b", "c", "d", "e", "f"};
 		for (int i = 0, l = suffixes.length; i < l; i++) {
 			TypeElement element = _elementUtils.getTypeElement("targets.negative.pa.Negative8" + suffixes[i]);
@@ -789,7 +789,7 @@ public class NegativeModelProc extends AbstractProcessor
 	 */
 	public boolean checkNegative9() throws Exception {
 		// check that all expected elements are here
-		List<TypeElement> rootElements = new ArrayList<TypeElement>();
+		List<TypeElement> rootElements = new ArrayList<>();
 		String[] suffixes = new String[] {"a", "b"};
 		for (int i = 0, l = suffixes.length; i < l; i++) {
 			TypeElement element = _elementUtils.getTypeElement("targets.negative.pa.Negative9" + suffixes[i]);
@@ -830,14 +830,12 @@ public class NegativeModelProc extends AbstractProcessor
 	 * Compare a set of elements to a reference model, and output error information if there is a
 	 * mismatch.
 	 *
-	 * @param rootElements
 	 * @param expected
 	 *            a string representation of the XML reference model, as it would be serialized by
 	 *            XMLConverter
 	 * @param name
 	 *            the name of the test, which is used for human-readable output
 	 * @return true if the actual and expected models were equivalent
-	 * @throws Exception
 	 */
 	private boolean checkModel(List<TypeElement> rootElements, String expected, String name) throws Exception {
 		Document actualModel = XMLConverter.convertModel(rootElements);

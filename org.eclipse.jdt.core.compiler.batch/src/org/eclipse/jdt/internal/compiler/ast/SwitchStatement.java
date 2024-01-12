@@ -76,6 +76,7 @@ public class SwitchStatement extends Expression {
 
 	public boolean containsPatterns;
 	public boolean containsNull;
+	private boolean nullProcessed = false;
 	BranchLabel switchPatternRestartTarget;
 	/* package */ public Pattern totalPattern;
 
@@ -121,6 +122,7 @@ public class SwitchStatement extends Expression {
 
 	class Node {
 		TypeBinding type;
+		boolean hasError = false;
 		public void traverse(NodeVisitor visitor) {
 			visitor.visit(this);
 			visitor.endVisit(this);
@@ -178,6 +180,10 @@ public class SwitchStatement extends Expression {
 		}
 
 		public void addPattern(RecordPattern rp, int i) {
+			if (rp.patterns.length <= i) {
+				this.hasError = true;
+				return;
+			}
 			TypeBinding childType = rp.patterns[i].resolvedType;
 			PatternNode child = null;
 			for (PatternNode c : this.children) {
@@ -335,6 +341,9 @@ public class SwitchStatement extends Expression {
 		public boolean covers = true;
 		@Override
 		public boolean visit(TNode node) {
+			if (node.hasError)
+				return false;
+
 			List<TypeBinding> availableTypes = new ArrayList<>();
 			if (node.children != null) {
 				for (Node child : node.children) {
@@ -506,6 +515,8 @@ public class SwitchStatement extends Expression {
 		}
 	}
 	private boolean isNullHostile() {
+		if (this.containsNull)
+			return false;
 		if ((this.expression.implicitConversion & TypeIds.UNBOXING) != 0) {
 			return true;
 		} else if (this.expression.resolvedType != null
@@ -855,8 +866,8 @@ public class SwitchStatement extends Expression {
 					generateCodePatternCaseEpilogue(codeStream, typeSwitchIndex, caseStatement);
 				}
 			}
-			boolean enumInSwitchExpression =  resolvedType1.isEnum() && this instanceof SwitchExpression;
-			boolean isEnumSwitchWithoutDefaultCase = this.defaultCase == null && enumInSwitchExpression;
+
+			boolean isEnumSwitchWithoutDefaultCase = this.defaultCase == null && resolvedType1.isEnum() && (this instanceof SwitchExpression || this.containsNull);
 			CompilerOptions compilerOptions = this.scope != null ? this.scope.compilerOptions() : null;
 			boolean isPatternSwitchSealedWithoutDefaultCase = this.defaultCase == null
 							&& compilerOptions != null
@@ -914,7 +925,7 @@ public class SwitchStatement extends Expression {
 			}
 			// place the trailing labels (for break and default case)
 			this.breakLabel.place();
-			if (this.defaultCase == null && !(enumInSwitchExpression
+			if (this.defaultCase == null && !(isEnumSwitchWithoutDefaultCase
 					|| isPatternSwitchSealedWithoutDefaultCase
 					|| isRecordPatternSwitchWithoutDefault)) {
 				// we want to force an line number entry to get an end position after the switch statement
@@ -929,7 +940,7 @@ public class SwitchStatement extends Expression {
 				boolean optimizedGoto = codeStream.lastAbruptCompletion == -1;
 				// if the last bytecode was an optimized goto (value is already on the stack) or an enum switch without default case, then we need to adjust the
 				// stack depth to reflect the fact that there is an value on the stack (return type of the switch expression)
-				codeStream.recordExpressionType(switchResolveType, optimizedGoto ? 0 : 1, optimizedGoto || isEnumSwitchWithoutDefaultCase);
+				codeStream.recordExpressionType(switchResolveType, optimizedGoto ? 0 : 1, optimizedGoto || (isEnumSwitchWithoutDefaultCase && this instanceof SwitchExpression));
 			}
 			codeStream.recordPositionsFrom(pc, this.sourceStart);
 		} finally {
@@ -970,6 +981,7 @@ public class SwitchStatement extends Expression {
 			Pattern pattern = (Pattern) caseStatement.constantExpressions[caseStatement.patternIndex];
 			pattern.elseTarget.place();
 			pattern.suspendVariables(codeStream, this.scope);
+			caseIndex = this.nullProcessed ? caseIndex - 1 : caseIndex;
 			if (!pattern.isAlwaysTrue()) {
 				codeStream.loadInt(caseIndex);
 				codeStream.store(this.restartIndexLocal, false);
@@ -977,6 +989,8 @@ public class SwitchStatement extends Expression {
 			}
 			pattern.thenTarget.place();
 			pattern.resumeVariables(codeStream, this.scope);
+		} else if (this.containsNull && caseStatement != null) {
+			this.nullProcessed |= caseStatement.patternIndex == -1;
 		}
 	}
 	private void generateCodeSwitchPatternPrologue(BlockScope currentScope, CodeStream codeStream) {
@@ -1048,7 +1062,7 @@ public class SwitchStatement extends Expression {
 		generateCode(currentScope, codeStream); // redirecting to statement part
 	}
 	@Override
-	public StringBuffer printStatement(int indent, StringBuffer output) {
+	public StringBuilder printStatement(int indent, StringBuilder output) {
 
 		printIndent(indent, output).append("switch ("); //$NON-NLS-1$
 		this.expression.printExpression(0, output).append(") {"); //$NON-NLS-1$
@@ -1144,7 +1158,7 @@ public class SwitchStatement extends Expression {
 							upperScope.problemReporter().incorrectSwitchType(this.expression, expressionType); // https://bugs.eclipse.org/bugs/show_bug.cgi?id=360317
 						}
 						break checkType;
-					} else if (!this.containsPatterns && upperScope.isBoxingCompatibleWith(expressionType, TypeBinding.INT)) {
+					} else if (!this.containsPatterns && !this.containsNull && upperScope.isBoxingCompatibleWith(expressionType, TypeBinding.INT)) {
 						this.expression.computeConversion(upperScope, TypeBinding.INT, expressionType);
 						break checkType;
 					} else if (compilerOptions.complianceLevel >= ClassFileConstants.JDK1_7 && expressionType.id == TypeIds.T_JavaLangString) {
@@ -1237,7 +1251,7 @@ public class SwitchStatement extends Expression {
 								this.scope.problemReporter().patternDominatedByAnother(c.e);
 							}
 							for (int j = 0; j < counter; j++) {
-								IntPredicate check = (idx) -> {
+								IntPredicate check = idx -> {
 									Constant c2 = this.otherConstants[idx].c;
 									if (con.typeID() == TypeIds.T_JavaLangString) {
 										return c2.stringValue().equals(con.stringValue());
@@ -1484,10 +1498,18 @@ public class SwitchStatement extends Expression {
 		this.switchBits |= SwitchStatement.Exhaustive;
 		return false;
 	}
-	private boolean isExhaustiveWithCaseTypes(List<ReferenceBinding> allallowedTypes,  List<TypeBinding> listedTypes) {
+	private boolean isExhaustiveWithCaseTypes(List<ReferenceBinding> allAllowedTypes,  List<TypeBinding> listedTypes) {
 		// first KISS (Keep It Simple Stupid)
-		int pendingTypes = allallowedTypes.size();
-		for (TypeBinding pt : allallowedTypes) {
+		int pendingTypes = allAllowedTypes.size();
+		for (ReferenceBinding pt : allAllowedTypes) {
+			/* Per JLS 14.11.1.1: A type T that names an abstract sealed class or sealed interface is covered
+			   if every permitted direct subclass or subinterface of it is covered. These subtypes are already
+			   added to allAllowedTypes and subject to cover test.
+			*/
+			if (pt.isAbstract() && pt.isSealed()) {
+				--pendingTypes;
+				continue;
+			}
 			for (TypeBinding type : listedTypes) {
 				if (pt.isCompatibleWith(type)) {
 					--pendingTypes;
@@ -1499,7 +1521,7 @@ public class SwitchStatement extends Expression {
 			return true;
 		// else - #KICKME (Keep It Complicated Keep Me Employed)"
 		List<TypeBinding> coveredTypes = new ArrayList<>(listedTypes);
-		List<ReferenceBinding> remainingTypes = new ArrayList<>(allallowedTypes);
+		List<ReferenceBinding> remainingTypes = new ArrayList<>(allAllowedTypes);
 		remainingTypes.removeAll(coveredTypes);
 
 		Map<TypeBinding, List<TypeBinding>> impliedTypes = new HashMap<>();
@@ -1507,7 +1529,7 @@ public class SwitchStatement extends Expression {
 		for (ReferenceBinding type : remainingTypes) {
 			impliedTypes.put(type, new ArrayList<>());
 			List<ReferenceBinding> typesToAdd = new ArrayList<>();
-			for (ReferenceBinding impliedType : allallowedTypes) {
+			for (ReferenceBinding impliedType : allAllowedTypes) {
 				if (impliedType.equals(type)) continue;
 				if (type.isClass()) {
 					if (impliedType.isAbstract() && type.superclass().equals(impliedType)) {
@@ -1556,12 +1578,12 @@ public class SwitchStatement extends Expression {
 	private boolean needPatternDispatchCopy() {
 		if (this.containsPatterns || (this.switchBits & QualifiedEnum) != 0)
 			return true;
-		if (!this.containsNull)
-			return false;
+		if (this.containsNull)
+			return true;
 		TypeBinding eType = this.expression != null ? this.expression.resolvedType : null;
 		if (eType == null)
 			return false;
-		return !(eType.isPrimitiveOrBoxedPrimitiveType() || eType.isEnum());
+		return !(eType.isPrimitiveOrBoxedPrimitiveType() || eType.isEnum() || eType.id == TypeIds.T_JavaLangString); // classic selectors
 	}
 	private void addSecretPatternSwitchVariables(BlockScope upperScope) {
 		if (needPatternDispatchCopy()) {
@@ -1736,7 +1758,7 @@ public class SwitchStatement extends Expression {
 	}
 
 	@Override
-	public StringBuffer printExpression(int indent, StringBuffer output) {
+	public StringBuilder printExpression(int indent, StringBuilder output) {
 		return printStatement(indent, output);
 	}
 }

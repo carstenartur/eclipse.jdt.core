@@ -34,7 +34,7 @@ public class MatchingNodeSet {
  * Each node is removed as it is reported.
  */
 SimpleLookupTable matchingNodes = new SimpleLookupTable(3); // node -> accuracy
-private HashtableOfLong matchingNodesKeys = new HashtableOfLong(3); // sourceRange -> node
+private final HashtableOfLong matchingNodesKeys = new HashtableOfLong(3); // sourceRange -> node
 static Integer EXACT_MATCH = Integer.valueOf(SearchMatch.A_ACCURATE);
 static Integer POTENTIAL_MATCH = Integer.valueOf(SearchMatch.A_INACCURATE);
 static Integer ERASURE_MATCH = Integer.valueOf(SearchPattern.R_ERASURE_MATCH);
@@ -49,7 +49,7 @@ public boolean mustResolve;
  * to determine if they really match the search pattern.
  */
 SimpleSet possibleMatchingNodesSet = new SimpleSet(7);
-private HashtableOfLong possibleMatchingNodesKeys = new HashtableOfLong(7);
+private final HashtableOfLong possibleMatchingNodesKeys = new HashtableOfLong(7);
 
 
 public MatchingNodeSet(boolean mustResolvePattern) {
@@ -179,7 +179,7 @@ public Object removeTrustedMatch(ASTNode node) {
 @Override
 public String toString() {
 	// TODO (jerome) should show both tables
-	StringBuffer result = new StringBuffer();
+	StringBuilder result = new StringBuilder();
 	result.append("Exact matches:"); //$NON-NLS-1$
 	Object[] keyTable = this.matchingNodes.keyTable;
 	Object[] valueTable = this.matchingNodes.valueTable;

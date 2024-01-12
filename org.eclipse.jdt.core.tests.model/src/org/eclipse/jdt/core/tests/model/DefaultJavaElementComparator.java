@@ -70,9 +70,9 @@ class DefaultJavaElementComparator implements Comparator {
 	private static final int CONSTRUCTOR_CATEGORY = 7;
 	private static final int METHOD_CATEGORY = 8;
 
-	private Collator collator;
+	private final Collator collator;
 
-	private int[] categories;
+	private final int[] categories;
 
 	/**
 	 * Creates an instance that sorts the various categories of body
@@ -257,7 +257,7 @@ class DefaultJavaElementComparator implements Comparator {
 		switch(node.getNodeType()) {
 			case ASTNode.METHOD_DECLARATION :
 				MethodDeclaration methodDeclaration = (MethodDeclaration) node;
-				StringBuffer buffer = new StringBuffer();
+				StringBuilder buffer = new StringBuilder();
 				buffer.append(methodDeclaration.getName().getIdentifier());
 				final List parameters = methodDeclaration.parameters();
 				int length1 = parameters.size();

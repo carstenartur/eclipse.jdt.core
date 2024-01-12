@@ -76,7 +76,6 @@ public abstract class Pattern extends Expression {
 	/**
 	 * Implement the rules in the spec under 14.11.1.1 Exhaustive Switch Blocks
 	 *
-	 * @param type
 	 * @return whether pattern covers the given type or not
 	 */
 	public boolean coversType(TypeBinding type) {
@@ -133,7 +132,7 @@ public abstract class Pattern extends Expression {
 	}
 
 	@Override
-	public StringBuffer print(int indent, StringBuffer output) {
+	public StringBuilder print(int indent, StringBuilder output) {
 		return this.printExpression(indent, output);
 	}
 }

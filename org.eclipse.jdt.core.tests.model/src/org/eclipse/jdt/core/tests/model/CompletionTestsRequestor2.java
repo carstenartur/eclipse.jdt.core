@@ -41,13 +41,13 @@ public class CompletionTestsRequestor2 extends CompletionRequestor {
 	private CompletionProposal[] proposals = new CompletionProposal[PROPOSALS_INCREMENT];
 	private IProblem problem;
 
-	private boolean showParameterNames;
-	private boolean showUniqueKeys;
-	private boolean showPositions;
-	private boolean showTokenPositions;
-	private boolean shortContext;
-	private boolean showMissingTypes;
-	private boolean showModifiers;
+	private final boolean showParameterNames;
+	private final boolean showUniqueKeys;
+	private final boolean showPositions;
+	private final boolean showTokenPositions;
+	private final boolean shortContext;
+	private final boolean showMissingTypes;
+	private final boolean showModifiers;
 
 	private boolean computeVisibleElements;
 	private boolean computeEnclosingElement;
@@ -318,7 +318,7 @@ public class CompletionTestsRequestor2 extends CompletionRequestor {
 	 */
 	public String getResultsWithoutSorting() {
 		if(this.proposalsPtr < 0) return "";
-		StringBuffer buffer = printProposal(this.proposals[0]);
+		StringBuilder buffer = printProposal(this.proposals[0]);
 		for(int i = 1; i <=this.proposalsPtr; i++) {
 			if(i > 0) buffer.append('\n');
 			buffer.append(printProposal(this.proposals[i]));
@@ -336,12 +336,12 @@ public class CompletionTestsRequestor2 extends CompletionRequestor {
 		return strings;
 	}
 
-	protected StringBuffer printProposal(CompletionProposal proposal) {
-		StringBuffer buffer = new StringBuffer();
+	protected StringBuilder printProposal(CompletionProposal proposal) {
+		StringBuilder buffer = new StringBuilder();
 		return printProposal(proposal, 0, buffer);
 	}
 
-	protected StringBuffer printProposal(CompletionProposal proposal, int tab, StringBuffer buffer) {
+	protected StringBuilder printProposal(CompletionProposal proposal, int tab, StringBuilder buffer) {
 		for (int i = 0; i < tab; i++) {
 			buffer.append("   "); //$NON-NLS-1$
 		}

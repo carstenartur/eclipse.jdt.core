@@ -237,7 +237,6 @@ public MethodDeclaration addMissingAbstractMethodFor(MethodBinding methodBinding
 
 /**
  *	Flow analysis for a local innertype
- *
  */
 @Override
 public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, FlowInfo flowInfo) {
@@ -260,7 +259,6 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
 
 /**
  *	Flow analysis for a member innertype
- *
  */
 public void analyseCode(ClassScope enclosingClassScope) {
 	if (this.ignoreFurtherInvestigation)
@@ -276,7 +274,6 @@ public void analyseCode(ClassScope enclosingClassScope) {
 
 /**
  *	Flow analysis for a local member innertype
- *
  */
 public void analyseCode(ClassScope currentScope, FlowContext flowContext, FlowInfo flowInfo) {
 	if (this.ignoreFurtherInvestigation)
@@ -297,7 +294,6 @@ public void analyseCode(ClassScope currentScope, FlowContext flowContext, FlowIn
 
 /**
  *	Flow analysis for a package member type
- *
  */
 public void analyseCode(CompilationUnitScope unitScope) {
 	if (this.ignoreFurtherInvestigation)
@@ -547,13 +543,13 @@ public MethodBinding createDefaultConstructorWithBinding(MethodBinding inherited
 			sourceType); //declaringClass
 	constructor.binding.tagBits |= (inheritedConstructorBinding.tagBits & TagBits.HasMissingType);
 	constructor.binding.modifiers |= ExtraCompilerModifiers.AccIsDefaultConstructor;
-	if (inheritedConstructorBinding.parameterNonNullness != null // this implies that annotation based null analysis is enabled
+	if (inheritedConstructorBinding.parameterFlowBits != null // this implies that annotation based null/resource analysis is enabled
 			&& argumentsLength > 0)
 	{
-		// copy nullness info from inherited constructor to the new constructor:
-		int len = inheritedConstructorBinding.parameterNonNullness.length;
-		System.arraycopy(inheritedConstructorBinding.parameterNonNullness, 0,
-				constructor.binding.parameterNonNullness = new Boolean[len], 0, len);
+		// copy flowbits from inherited constructor to the new constructor:
+		int len = inheritedConstructorBinding.parameterFlowBits.length;
+		System.arraycopy(inheritedConstructorBinding.parameterFlowBits, 0,
+				constructor.binding.parameterFlowBits = new byte[len], 0, len);
 	}
 	// TODO(stephan): do argument types already carry sufficient info about type annotations?
 
@@ -863,6 +859,10 @@ private void internalAnalyseCode(FlowContext flowContext, FlowInfo flowInfo) {
 		}
 	}
 
+	boolean useOwningAnnotations = this.scope.compilerOptions().isAnnotationBasedResourceAnalysisEnabled;
+	boolean isCloseable = this.binding.hasTypeBit(TypeIds.BitAutoCloseable|TypeIds.BitCloseable);
+	FieldDeclaration fieldNeedingClose = null;
+
 	// for local classes we use the flowContext as our parent, but never use an initialization context for this purpose
 	// see Bug 360328 - [compiler][null] detect null problems in nested code (local class inside a loop)
 	FlowContext parentContext = (flowContext instanceof InitializationFlowContext) ? null : flowContext;
@@ -905,6 +905,9 @@ private void internalAnalyseCode(FlowContext flowContext, FlowInfo flowInfo) {
 				if (nonStaticFieldInfo == FlowInfo.DEAD_END) {
 					this.initializerScope.problemReporter().initializerMustCompleteNormally(field);
 					nonStaticFieldInfo = FlowInfo.initial(this.maxFieldCount).setReachMode(FlowInfo.UNREACHABLE_OR_DEAD);
+				}
+				if (fieldNeedingClose == null && useOwningAnnotations && isCloseable && (field.binding.tagBits & TagBits.AnnotationOwning) != 0) {
+					fieldNeedingClose = field;
 				}
 			}
 		}
@@ -959,8 +962,14 @@ private void internalAnalyseCode(FlowContext flowContext, FlowInfo flowInfo) {
 				}
 				// pass down the parentContext (NOT an initializer context, see above):
 				((MethodDeclaration)method).analyseCode(this.scope, parentContext, flowInfo.copy());
+				if (fieldNeedingClose != null && CharOperation.equals(TypeConstants.CLOSE, method.selector) && method.arguments == null) {
+					fieldNeedingClose = null;
+				}
 			}
 		}
+	}
+	if (fieldNeedingClose != null) {
+		this.scope.problemReporter().missingImplementationOfClose(fieldNeedingClose);
 	}
 	// enable enum support ?
 	if (this.binding.isEnum() && !this.binding.isAnonymousType()) {
@@ -1163,7 +1172,7 @@ public void parseMethods(Parser parser, CompilationUnitDeclaration unit) {
 }
 
 @Override
-public StringBuffer print(int indent, StringBuffer output) {
+public StringBuilder print(int indent, StringBuilder output) {
 	if (this.javadoc != null) {
 		this.javadoc.print(indent, output);
 	}
@@ -1174,7 +1183,7 @@ public StringBuffer print(int indent, StringBuffer output) {
 	return printBody(indent, output);
 }
 
-public StringBuffer printBody(int indent, StringBuffer output) {
+public StringBuilder printBody(int indent, StringBuilder output) {
 	output.append(" {"); //$NON-NLS-1$
 	if (this.memberTypes != null) {
 		for (int i = 0; i < this.memberTypes.length; i++) {
@@ -1204,7 +1213,7 @@ public StringBuffer printBody(int indent, StringBuffer output) {
 	return printIndent(indent, output).append('}');
 }
 
-public StringBuffer printHeader(int indent, StringBuffer output) {
+public StringBuilder printHeader(int indent, StringBuilder output) {
 	printModifiers(this.modifiers, output);
 	if (this.annotations != null) {
 		printAnnotations(this.annotations, output);
@@ -1282,7 +1291,7 @@ public StringBuffer printHeader(int indent, StringBuffer output) {
 }
 
 @Override
-public StringBuffer printStatement(int tab, StringBuffer output) {
+public StringBuilder printStatement(int tab, StringBuilder output) {
 	return print(tab, output);
 }
 
@@ -1517,14 +1526,15 @@ public void resolve() {
 		} else if (!sourceType.isLocalType()) {
 			// Set javadoc visibility
 			int visibility = sourceType.modifiers & ExtraCompilerModifiers.AccVisibilityMASK;
-			ProblemReporter reporter = this.scope.problemReporter();
-			int severity = reporter.computeSeverity(IProblem.JavadocMissing);
-			if (severity != ProblemSeverities.Ignore) {
-				if (this.enclosingType != null) {
-					visibility = Util.computeOuterMostVisibility(this.enclosingType, visibility);
+			try (ProblemReporter reporter = this.scope.problemReporter()) {
+				int severity = reporter.computeSeverity(IProblem.JavadocMissing);
+				if (severity != ProblemSeverities.Ignore) {
+					if (this.enclosingType != null) {
+						visibility = Util.computeOuterMostVisibility(this.enclosingType, visibility);
+					}
+					int javadocModifiers = (this.binding.modifiers & ~ExtraCompilerModifiers.AccVisibilityMASK) | visibility;
+					reporter.javadocMissing(this.sourceStart, this.sourceEnd, severity, javadocModifiers);
 				}
-				int javadocModifiers = (this.binding.modifiers & ~ExtraCompilerModifiers.AccVisibilityMASK) | visibility;
-				reporter.javadocMissing(this.sourceStart, this.sourceEnd, severity, javadocModifiers);
 			}
 		}
 		updateNestHost();
@@ -1646,7 +1656,6 @@ public void tagAsHavingIgnoredMandatoryErrors(int problemId) {
 
 /**
  *	Iteration for a package member type
- *
  */
 public void traverse(ASTVisitor visitor, CompilationUnitScope unitScope) {
 	try {
@@ -1778,7 +1787,6 @@ public void traverse(ASTVisitor visitor, BlockScope blockScope) {
 
 /**
  *	Iteration for a member innertype
- *
  */
 public void traverse(ASTVisitor visitor, ClassScope classScope) {
 	try {
@@ -1915,6 +1923,9 @@ public void updateSupertypesWithAnnotations(Map<ReferenceBinding,ReferenceBindin
 		for (TypeDeclaration memberTypesDecl : this.memberTypes) {
 			memberTypesDecl.updateSupertypesWithAnnotations(updates);
 		}
+	}
+	if (this.scope.compilerOptions().isAnnotationBasedResourceAnalysisEnabled) {
+		this.binding.detectWrapperResource(); // needs field an methods built
 	}
 }
 

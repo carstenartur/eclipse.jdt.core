@@ -137,12 +137,12 @@ protected void analyseArguments(BlockScope currentScope, FlowContext flowContext
 		if (compilerOptions.sourceLevel >= ClassFileConstants.JDK1_7 && methodBinding.isPolymorphic())
 			return;
 		boolean considerTypeAnnotations = currentScope.environment().usesNullTypeAnnotations();
-		boolean hasJDK15NullAnnotations = methodBinding.parameterNonNullness != null;
+		boolean hasJDK15FlowAnnotations = methodBinding.parameterFlowBits != null;
 		int numParamsToCheck = methodBinding.parameters.length;
 		int varArgPos = -1;
 		TypeBinding varArgsType = null;
 		boolean passThrough = false;
-		if (considerTypeAnnotations || hasJDK15NullAnnotations) {
+		if (considerTypeAnnotations || hasJDK15FlowAnnotations) {
 			// check if varargs need special treatment:
 			if (methodBinding.isVarargs()) {
 				varArgPos = numParamsToCheck-1;
@@ -162,21 +162,21 @@ protected void analyseArguments(BlockScope currentScope, FlowContext flowContext
 		if (considerTypeAnnotations) {
 			for (int i=0; i<numParamsToCheck; i++) {
 				TypeBinding expectedType = methodBinding.parameters[i];
-				Boolean specialCaseNonNullness = hasJDK15NullAnnotations ? methodBinding.parameterNonNullness[i] : null;
+				Boolean specialCaseNonNullness = hasJDK15FlowAnnotations? methodBinding.getParameterNullness(i) : null;
 				analyseOneArgument18(currentScope, flowContext, flowInfo, expectedType, arguments[i],
 						specialCaseNonNullness, methodBinding.original().parameters[i]);
 			}
 			if (!passThrough && varArgsType instanceof ArrayBinding) {
 				TypeBinding expectedType = ((ArrayBinding) varArgsType).elementsType();
-				Boolean specialCaseNonNullness = hasJDK15NullAnnotations ? methodBinding.parameterNonNullness[varArgPos] : null;
+				Boolean specialCaseNonNullness = hasJDK15FlowAnnotations? methodBinding.getParameterNullness(varArgPos) : null;
 				for (int i = numParamsToCheck; i < arguments.length; i++) {
 					analyseOneArgument18(currentScope, flowContext, flowInfo, expectedType, arguments[i],
 							specialCaseNonNullness, methodBinding.original().parameters[varArgPos]);
 				}
 			}
-		} else if (hasJDK15NullAnnotations) {
+		} else if (hasJDK15FlowAnnotations) {
 			for (int i = 0; i < numParamsToCheck; i++) {
-				if (methodBinding.parameterNonNullness[i] == Boolean.TRUE) {
+				if ((methodBinding.parameterFlowBits[i] & MethodBinding.PARAM_NONNULL) != 0) {
 					TypeBinding expectedType = methodBinding.parameters[i];
 					Expression argument = arguments[i];
 					int nullStatus = argument.nullStatus(flowInfo, flowContext); // slight loss of precision: should also use the null info from the receiver.
@@ -478,11 +478,11 @@ public boolean isValidJavaStatement() {
 }
 
 @Override
-public StringBuffer print(int indent, StringBuffer output) {
+public StringBuilder print(int indent, StringBuilder output) {
 	return printStatement(indent, output);
 }
 
-public abstract StringBuffer printStatement(int indent, StringBuffer output);
+public abstract StringBuilder printStatement(int indent, StringBuilder output);
 
 public abstract void resolve(BlockScope scope);
 public LocalVariableBinding[] getPatternVariablesWhenTrue() {
@@ -501,30 +501,21 @@ public void addPatternVariablesWhenFalse(LocalVariableBinding[] vars) {
 	if (this.patternVarsWhenFalse == vars) return;
 	this.patternVarsWhenFalse = addPatternVariables(this.patternVarsWhenFalse, vars);
 }
-private LocalVariableBinding[] addPatternVariables(LocalVariableBinding[] current, LocalVariableBinding[] add) {
-	if (add == null || add.length == 0)
-		return current;
-	if (current == null) {
-		current = add;
-	} else {
-		for (LocalVariableBinding local : add) {
-			current = addPatternVariables(current, local);
+
+private LocalVariableBinding[] addPatternVariables(LocalVariableBinding[] current, LocalVariableBinding[] additions) {
+	if (additions != null && additions.length > 0) {
+		if (current == null)
+			current = new LocalVariableBinding[0];
+		nextVariable: for (LocalVariableBinding addition : additions) {
+			for (LocalVariableBinding existing : current) {
+				if (existing == addition)
+					continue nextVariable;
+			}
+			int oldLength = current.length;
+			System.arraycopy(current, 0, (current = new LocalVariableBinding[oldLength + 1]), 0, oldLength);
+			current[oldLength] = addition;
 		}
 	}
-	return current;
-}
-private LocalVariableBinding[] addPatternVariables(LocalVariableBinding[] current, LocalVariableBinding add) {
-	int oldSize = current.length;
-	// it's odd that we only look at the last element, but in most cases
-	// we will only have one in the array. In the unlikely case of having two
-	// distinct pattern variables, the cost is nothing but setting the same
-	// bit twice on the same object.
-	if (oldSize > 0 && current[oldSize - 1] == add) {
-		return current;
-	}
-	int newLength = current.length + 1;
-	System.arraycopy(current, 0, (current = new LocalVariableBinding[newLength]), 0, oldSize);
-	current[oldSize] = add;
 	return current;
 }
 public void promotePatternVariablesIfApplicable(LocalVariableBinding[] patternVariablesInScope, BooleanSupplier condition) {
@@ -583,3 +574,4 @@ protected MethodBinding findConstructorBinding(BlockScope scope, Invocation site
 	return resolvePolyExpressionArguments(site, ctorBinding, argumentTypes, scope);
 }
 }
+

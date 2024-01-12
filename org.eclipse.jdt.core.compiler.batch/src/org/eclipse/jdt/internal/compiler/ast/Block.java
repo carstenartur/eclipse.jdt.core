@@ -55,7 +55,7 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
 			flowContext.expireNullCheckedFieldInfo();
 		}
 		if (compilerOptions.analyseResourceLeaks) {
-			FakedTrackingVariable.cleanUpUnassigned(this.scope, stat, flowInfo);
+			FakedTrackingVariable.cleanUpUnassigned(this.scope, stat, flowInfo, false);
 		}
 	}
 	if (this.scope != currentScope) {
@@ -99,7 +99,7 @@ public boolean isEmptyBlock() {
 	return this.statements == null;
 }
 
-public StringBuffer printBody(int indent, StringBuffer output) {
+public StringBuilder printBody(int indent, StringBuilder output) {
 	if (this.statements == null) return output;
 	for (int i = 0; i < this.statements.length; i++) {
 		this.statements[i].printStatement(indent + 1, output);
@@ -109,7 +109,7 @@ public StringBuffer printBody(int indent, StringBuffer output) {
 }
 
 @Override
-public StringBuffer printStatement(int indent, StringBuffer output) {
+public StringBuilder printStatement(int indent, StringBuilder output) {
 	printIndent(indent, output);
 	output.append("{\n"); //$NON-NLS-1$
 	printBody(indent, output);

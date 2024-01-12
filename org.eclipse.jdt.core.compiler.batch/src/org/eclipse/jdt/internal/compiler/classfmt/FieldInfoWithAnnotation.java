@@ -16,7 +16,7 @@
 package org.eclipse.jdt.internal.compiler.classfmt;
 
 public class FieldInfoWithAnnotation extends FieldInfo {
-	private AnnotationInfo[] annotations;
+	private final AnnotationInfo[] annotations;
 
 FieldInfoWithAnnotation(FieldInfo info, AnnotationInfo[] annos) {
 	super(info.reference, info.constantPoolOffsets, info.structOffset, info.version);
@@ -52,7 +52,7 @@ protected void reset() {
 }
 @Override
 public String toString() {
-	StringBuffer buffer = new StringBuffer(getClass().getName());
+	StringBuilder buffer = new StringBuilder(getClass().getName());
 	if (this.annotations != null) {
 		buffer.append('\n');
 		for (int i = 0; i < this.annotations.length; i++) {

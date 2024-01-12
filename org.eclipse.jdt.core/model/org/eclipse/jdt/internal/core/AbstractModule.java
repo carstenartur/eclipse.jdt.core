@@ -36,7 +36,7 @@ public interface AbstractModule extends IModuleDescription {
 	 */
 	static class AutoModule extends NamedMember implements AbstractModule {
 
-		private boolean nameFromManifest;
+		private final boolean nameFromManifest;
 
 		public AutoModule(JavaElement parent, String name, boolean nameFromManifest) {
 			super(parent, name);
@@ -70,7 +70,7 @@ public interface AbstractModule extends IModuleDescription {
 			return ModuleDescriptionInfo.NO_REQUIRES;
 		}
 		@Override
-		public void toStringContent(StringBuffer buffer, String lineDelimiter) throws JavaModelException {
+		public void toStringContent(StringBuilder buffer, String lineDelimiter) throws JavaModelException {
 			buffer.append("automatic module "); //$NON-NLS-1$
 			buffer.append(this.name);
 		}
@@ -156,16 +156,17 @@ public interface AbstractModule extends IModuleDescription {
 	}
 
 	default String toString(String lineDelimiter) {
-		StringBuffer buffer = new StringBuffer();
+		StringBuilder buffer = new StringBuilder();
 		try {
 			toStringContent(buffer, lineDelimiter);
 		} catch (JavaModelException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			if (JavaModelManager.VERBOSE) {
+				JavaModelManager.trace("", e); //$NON-NLS-1$
+			}
 		}
 		return buffer.toString();
 	}
-	default void toStringContent(StringBuffer buffer, String lineDelimiter) throws JavaModelException {
+	default void toStringContent(StringBuilder buffer, String lineDelimiter) throws JavaModelException {
 		IPackageExport[] exports = getExportedPackages();
 		IModuleReference[] requires = getRequiredModules();
 		buffer.append("module "); //$NON-NLS-1$

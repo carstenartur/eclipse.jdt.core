@@ -21,7 +21,7 @@ import org.eclipse.jdt.core.JavaModelException;
  */
 public class ResolvedSourceType extends SourceType {
 
-	private String uniqueKey;
+	private final String uniqueKey;
 
 	/*
 	 * See class comments.
@@ -50,7 +50,7 @@ public class ResolvedSourceType extends SourceType {
 	 * @private Debugging purposes
 	 */
 	@Override
-	protected void toStringInfo(int tab, StringBuffer buffer, Object info, boolean showResolvedInfo) {
+	protected void toStringInfo(int tab, StringBuilder buffer, Object info, boolean showResolvedInfo) {
 		super.toStringInfo(tab, buffer, info, showResolvedInfo);
 		if (showResolvedInfo) {
 			buffer.append(" {key="); //$NON-NLS-1$

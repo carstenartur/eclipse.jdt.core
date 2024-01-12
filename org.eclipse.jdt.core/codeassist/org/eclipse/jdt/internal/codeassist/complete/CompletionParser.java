@@ -395,7 +395,7 @@ protected void attachOrphanCompletionNode(){
 					}
 
 					CompletionOnFieldType fieldDeclaration = new CompletionOnFieldType(fieldType,
-							isAtRecordType // mark as a local variable
+							!recoveredType.foundOpeningBrace // mark as a local variable
 					);
 
 					// retrieve annotations if any
@@ -1295,7 +1295,7 @@ private Statement buildMoreCompletionEnclosingContext(Statement statement) {
 						condition.sourceStart < recoveredLocalVariable.localDeclaration.sourceStart) {
 					this.currentElement.add(statement, 0);
 
-					statement = recoveredLocalVariable.updatedStatement(0, new HashSet<TypeDeclaration>());
+					statement = recoveredLocalVariable.updatedStatement(0, new HashSet<>());
 
 					// RecoveredLocalVariable must be removed from its parent because the IfStatement will be added instead
 					RecoveredBlock recoveredBlock =  (RecoveredBlock) recoveredLocalVariable.parent;
@@ -5900,6 +5900,26 @@ public MethodDeclaration parseSomeStatements(int start, int end, int fakeBlocksC
 	}
 	return fakeMethod;
 }
+@Override
+protected Expression parseEmbeddedExpression(Parser parser, char[] source, int offset, int length,
+		CompilationUnitDeclaration unit, boolean recordLineSeparators) {
+	Expression e = super.parseEmbeddedExpression(parser, source, offset, length, unit, recordLineSeparators);
+	if (((AssistParser) parser).assistNode != null) {
+		this.assistNode = ((AssistParser) parser).assistNode;
+		((CompletionScanner) this.scanner).completionIdentifier = ((CompletionScanner)parser.scanner).completionIdentifier;
+		((CompletionScanner) this.scanner).completedIdentifierStart = ((CompletionScanner)parser.scanner).completedIdentifierStart;
+		((CompletionScanner) this.scanner).completedIdentifierEnd = ((CompletionScanner)parser.scanner).completedIdentifierEnd;
+	}
+	return e;
+}
+@Override
+protected CompletionParser getEmbeddedExpressionParser() {
+	CompletionParser cp = new CompletionParser(this.problemReporter, this.storeSourceEnds, this.monitor);
+	cp.cursorLocation = this.cursorLocation;
+	CompletionScanner cs = (CompletionScanner)cp.scanner;
+	cs.cursorLocation = this.cursorLocation;
+	return cp;
+}
 protected void popUntilCompletedAnnotationIfNecessary() {
 	if(this.elementPtr < 0) return;
 
@@ -6187,7 +6207,7 @@ protected boolean assistNodeNeedsStacking() {
 
 @Override
 public  String toString() {
-	StringBuffer buffer = new StringBuffer();
+	StringBuilder buffer = new StringBuilder();
 	buffer.append("elementKindStack : int[] = {"); //$NON-NLS-1$
 	for (int i = 0; i <= this.elementPtr; i++) {
 		buffer.append(String.valueOf(this.elementKindStack[i])).append(',');

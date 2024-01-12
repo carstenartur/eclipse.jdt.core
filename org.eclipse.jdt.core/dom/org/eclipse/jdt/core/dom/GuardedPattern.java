@@ -199,6 +199,16 @@ public class GuardedPattern extends Pattern{
 	 */
 	public Expression getExpression() {
 		supportedOnlyIn21();
+		if (this.conditonalExpression == null) {
+			//lazy init must be thread-safe for readers
+			synchronized (this) {
+				if (this.conditonalExpression == null) {
+					preLazyInit();
+					this.conditonalExpression = this.ast.newNullLiteral();
+					postLazyInit(this.pattern, EXPRESSION_PROPERTY);
+				}
+			}
+		}
 		return this.conditonalExpression;
 	}
 
@@ -213,6 +223,16 @@ public class GuardedPattern extends Pattern{
 	 */
 	public Pattern getPattern() {
 		supportedOnlyIn21();
+		if (this.pattern == null) {
+			// lazy init must be thread-safe for readers
+			synchronized (this) {
+				if (this.pattern == null) {
+					preLazyInit();
+					this.pattern = this.ast.newNullPattern();
+					postLazyInit(this.pattern, PATTERN_PROPERTY);
+				}
+			}
+		}
 		return this.pattern;
 	}
 
@@ -239,7 +259,6 @@ public class GuardedPattern extends Pattern{
 
 	/**
 	 * Sets the pattern of this switch case.
-	 * @param pattern
 	 * @noreference This method is not intended to be referenced by clients.
 	 * @exception UnsupportedOperationException if this operation is used not for JLS18
 	 * @exception UnsupportedOperationException if this operation is used without previewEnabled

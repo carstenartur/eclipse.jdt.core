@@ -146,8 +146,6 @@ protected void generateExpressionResultCodeExpanded(BlockScope currentScope, Cod
 	if (this.subroutines != null){
 		for (int i = 0, max = this.subroutines.length; i < max; i++){
 			SubRoutineStatement sub = this.subroutines[i];
-			sub.exitAnyExceptionHandler();
-			sub.exitDeclaredExceptionHandlers(codeStream);
 			SwitchExpression se1 = sub.getSwitchExpression();
 			setSubroutineSwitchExpression(sub);
 			boolean didEscape = sub.generateSubRoutineInvocation(currentScope, codeStream, this.targetLabel, this.initStateIndex, null);
@@ -255,7 +253,7 @@ public TypeBinding resolveExpressionType(BlockScope scope1) {
 }
 
 @Override
-public StringBuffer printStatement(int tab, StringBuffer output) {
+public StringBuilder printStatement(int tab, StringBuilder output) {
 	if (!this.isImplicit)
 		printIndent(tab, output).append("yield"); //$NON-NLS-1$
 	if (this.expression != null) {

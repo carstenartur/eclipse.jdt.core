@@ -55,8 +55,8 @@ public class AnnotationProcessors {
      */
     static class CompositeAnnotationProcessor implements AnnotationProcessor {
 
-	private List<AnnotationProcessor> aps =
-	    new LinkedList<AnnotationProcessor>();
+	private final List<AnnotationProcessor> aps =
+	    new LinkedList<>();
 
 	/**
 	 * Constructs a new composite annotation processor.

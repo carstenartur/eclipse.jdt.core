@@ -245,6 +245,7 @@ public TypeDeclaration declarationOfType(char[][] typeName) {
 }
 
 public void finalizeProblems() {
+	this.compilationResult.materializeProblems();
 	int problemCount = this.compilationResult.problemCount;
 	CategorizedProblem[] problems = this.compilationResult.problems;
 	if (this.suppressWarningsCount == 0) {
@@ -487,7 +488,7 @@ public boolean hasErrors() {
 }
 
 @Override
-public StringBuffer print(int indent, StringBuffer output) {
+public StringBuilder print(int indent, StringBuilder output) {
 	if (this.currentPackage != null) {
 		printIndent(indent, output).append("package "); //$NON-NLS-1$
 		this.currentPackage.print(0, output, false).append(";\n"); //$NON-NLS-1$

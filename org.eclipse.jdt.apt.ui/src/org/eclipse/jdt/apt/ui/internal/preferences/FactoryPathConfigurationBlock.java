@@ -212,7 +212,7 @@ public class FactoryPathConfigurationBlock extends BaseConfigurationBlock {
 	 * The GUI control representing the factory path.  Its data items
 	 * are of type FactoryPathEntry.
 	 */
-	private CheckedListDialogField<FactoryPathEntry> fFactoryPathList;
+	private final CheckedListDialogField<FactoryPathEntry> fFactoryPathList;
 
 	/**
 	 * True while inside setListContents().  Used in order to efficiently
@@ -262,7 +262,6 @@ public class FactoryPathConfigurationBlock extends BaseConfigurationBlock {
 	 * Respond to a button in the button bar.
 	 * Most buttons are handled by code in CheckedListDialogField;
 	 * this method is for the rest, e.g., Add External Jar.
-	 * @param index
 	 */
 	public void customButtonPressed(int index) {
 		FactoryPathEntry[] newEntries = null;

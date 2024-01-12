@@ -18,7 +18,6 @@ import java.util.Arrays;
 
 /*
  * Parser extension for code assist task
- *
  */
 
 import java.util.HashSet;
@@ -197,7 +196,6 @@ public Object becomeSimpleParser() {
 }
 /**
  * Restore the parser as an assist parser
- * @param parserState
  */
 public void restoreAssistParser(Object parserState) {
 	//Do nothing
@@ -635,7 +633,7 @@ protected boolean triggerRecoveryUponLambdaClosure(Statement statement, boolean 
 						this.currentElement instanceof RecoveredMethod ? ((RecoveredMethod) this.currentElement).methodBody : null);
 				if (recoveredBlock != null) {
 					RecoveredStatement recoveredStatement = recoveredBlock.statementCount > 0 ? recoveredBlock.statements[recoveredBlock.statementCount - 1] : null;
-					ASTNode parseTree = recoveredStatement != null ? recoveredStatement.updatedStatement(0, new HashSet<TypeDeclaration>()) : null;
+					ASTNode parseTree = recoveredStatement != null ? recoveredStatement.updatedStatement(0, new HashSet<>()) : null;
 					if (parseTree != null) {
 						detectAssistNodeParent(parseTree);
 						if ((parseTree.sourceStart == 0 || parseTree.sourceEnd == 0) || (parseTree.sourceStart >= statementStart && parseTree.sourceEnd <= statementEnd)) {

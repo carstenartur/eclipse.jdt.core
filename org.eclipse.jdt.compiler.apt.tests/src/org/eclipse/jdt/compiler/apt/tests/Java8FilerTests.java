@@ -32,7 +32,6 @@ public class Java8FilerTests extends TestCase {
 
 	/**
 	 * Validate the testElement test against the javac compiler.
-	 * @throws IOException
 	 */
 	public void testFilerWithSystemCompiler() throws IOException {
 		JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
@@ -45,7 +44,6 @@ public class Java8FilerTests extends TestCase {
 
 	/**
 	 * Attempt to read various elements of the Element hierarchy.
-	 * @throws IOException
 	 */
 	public void testFilerWithEclipseCompiler() throws IOException {
 		JavaCompiler compiler = BatchTestUtils.getEclipseCompiler();
@@ -60,7 +58,7 @@ public class Java8FilerTests extends TestCase {
 		File targetFolder = TestUtils.concatPath(BatchTestUtils.getSrcFolderName(), "targets", "filer8");
 		BatchTestUtils.copyResources("targets/filer8", targetFolder);
 
-		List<String> options = new ArrayList<String>();
+		List<String> options = new ArrayList<>();
 		options.add("-A" + FILER_PROC);
 		// Javac 1.8 doesn't (yet?) support the -1.8 option
 		if (compiler instanceof EclipseCompiler) {

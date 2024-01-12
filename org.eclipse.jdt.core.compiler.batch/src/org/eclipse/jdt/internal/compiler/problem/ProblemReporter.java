@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2023 IBM Corporation and others.
+ * Copyright (c) 2000, 2024 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -81,13 +81,11 @@
 package org.eclipse.jdt.internal.compiler.problem;
 
 import java.io.CharConversionException;
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Set;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -219,8 +217,9 @@ import org.eclipse.jdt.internal.compiler.parser.TerminalTokens;
 import org.eclipse.jdt.internal.compiler.util.Messages;
 import org.eclipse.jdt.internal.compiler.util.Util;
 
+/** See contract of {@link #close()}. */
 @SuppressWarnings("rawtypes")
-public class ProblemReporter extends ProblemHandler {
+public class ProblemReporter extends ProblemHandler implements AutoCloseable {
 
 	public ReferenceContext referenceContext;
 	private Scanner positionScanner;
@@ -691,12 +690,22 @@ public static int getIrritant(int problemID) {
 
 		case IProblem.UnclosedCloseable:
 		case IProblem.UnclosedCloseableAtExit:
+		case IProblem.MandatoryCloseNotShown:
+		case IProblem.MandatoryCloseNotShownAtExit:
 			return CompilerOptions.UnclosedCloseable;
 		case IProblem.PotentiallyUnclosedCloseable:
 		case IProblem.PotentiallyUnclosedCloseableAtExit:
 			return CompilerOptions.PotentiallyUnclosedCloseable;
 		case IProblem.ExplicitlyClosedAutoCloseable:
 			return CompilerOptions.ExplicitlyClosedAutoCloseable;
+		case IProblem.ShouldMarkMethodAsOwning:
+		case IProblem.NotOwningResourceField:
+		case IProblem.OwningFieldInNonResourceClass:
+		case IProblem.OwningFieldShouldImplementClose:
+			return CompilerOptions.InsufficientResourceManagement;
+		case IProblem.OverrideReducingParamterOwning:
+		case IProblem.OverrideAddingReturnOwning:
+			return CompilerOptions.IncompatibleOwningContract;
 
 		case IProblem.RedundantSpecificationOfTypeArguments:
 			return CompilerOptions.RedundantSpecificationOfTypeArguments;
@@ -730,7 +739,6 @@ public static int getIrritant(int problemID) {
 }
 /**
  * Compute problem category ID based on problem ID
- * @param problemID
  * @return a category ID
  * @see CategorizedProblem
  */
@@ -782,6 +790,8 @@ public static int getProblemCategory(int severity, int problemID) {
 			case CompilerOptions.UnusedObjectAllocation :
 			case CompilerOptions.UnclosedCloseable :
 			case CompilerOptions.PotentiallyUnclosedCloseable :
+			case CompilerOptions.IncompatibleOwningContract:
+			case CompilerOptions.InsufficientResourceManagement:
 			case CompilerOptions.PessimisticNullAnalysisForFreeTypeVariables :
 			case CompilerOptions.NonNullTypeVariableFromLegacyInvocation :
 			case CompilerOptions.UnlikelyCollectionMethodArgumentType :
@@ -1454,18 +1464,10 @@ public void cannotReadSource(CompilationUnitDeclaration unit, AbortCompilationUn
 				0);
 		return;
 	}
-	StringWriter stringWriter = new StringWriter();
-	PrintWriter writer = new PrintWriter(stringWriter);
 	if (verbose) {
-		abortException.exception.printStackTrace(writer);
-		System.err.println(stringWriter.toString());
-		stringWriter = new StringWriter();
-		writer = new PrintWriter(stringWriter);
+		System.err.println(Util.getStackTrace(abortException.exception));
 	}
-	writer.print(abortException.exception.getClass().getName());
-	writer.print(':');
-	writer.print(abortException.exception.getMessage());
-	String exceptionTrace = stringWriter.toString();
+	String exceptionTrace = abortException.exception.getClass().getName() + ':' + abortException.exception.getMessage();
 	String[] arguments = new String[]{ fileName, exceptionTrace };
 	this.handle(
 			IProblem.CannotReadSource,
@@ -1957,6 +1959,8 @@ public void deprecatedType(TypeBinding type, ASTNode location) {
 public void deprecatedType(TypeBinding type, ASTNode location, int index) {
 	if (location == null) return; // 1G828DN - no type ref for synthetic arguments
 	final TypeBinding leafType = type.leafComponentType();
+	if (!leafType.isReadyForAnnotations() && scheduleProblemForContext(() -> deprecatedType(type, location, index)))
+		return;
 	int sourceStart = -1;
 	if (location instanceof QualifiedTypeReference) { // https://bugs.eclipse.org/bugs/show_bug.cgi?id=300031
 		QualifiedTypeReference ref = (QualifiedTypeReference) location;
@@ -2014,7 +2018,7 @@ String deprecatedSinceValue(Supplier<AnnotationBinding[]> annotations) {
 				}
 			}
 		} finally {
-			this.referenceContext = contextSave;
+			this.referenceContext = contextSave; // resolving could have manipulated the referenceContext
 		}
 	}
 	return null;
@@ -3224,7 +3228,7 @@ public void illegalStaticModifierForMemberType(SourceTypeBinding type) {
 		type.sourceEnd());
 }
 public void illegalUsageOfQualifiedTypeReference(QualifiedTypeReference qualifiedTypeReference) {
-	StringBuffer buffer = new StringBuffer();
+	StringBuilder buffer = new StringBuilder();
 	char[][] tokens = qualifiedTypeReference.tokens;
 	for (int i = 0; i < tokens.length; i++) {
 		if (i > 0) buffer.append('.');
@@ -4851,130 +4855,132 @@ public void invalidParenthesizedExpression(ASTNode reference) {
 		reference.sourceEnd);
 }
 public void invalidType(ASTNode location, TypeBinding type) {
-	if (type instanceof ReferenceBinding) {
-		if (isRecoveredName(((ReferenceBinding)type).compoundName)) return;
-	}
-	else if (type instanceof ArrayBinding) {
-		TypeBinding leafType = ((ArrayBinding)type).leafComponentType;
-		if (leafType instanceof ReferenceBinding) {
-			if (isRecoveredName(((ReferenceBinding)leafType).compoundName)) return;
+	try (this) { // ensure clean-up despite the many exits without calling handle(..)
+		if (type instanceof ReferenceBinding) {
+			if (isRecoveredName(((ReferenceBinding)type).compoundName)) return;
 		}
-	}
+		else if (type instanceof ArrayBinding) {
+			TypeBinding leafType = ((ArrayBinding)type).leafComponentType;
+			if (leafType instanceof ReferenceBinding) {
+				if (isRecoveredName(((ReferenceBinding)leafType).compoundName)) return;
+			}
+		}
 
-	if (type.isParameterizedType()) {
-		List missingTypes = type.collectMissingTypes(null);
-		if (missingTypes != null) {
-			ReferenceContext savedContext = this.referenceContext;
-			for (Iterator iterator = missingTypes.iterator(); iterator.hasNext(); ) {
-				try {
-					invalidType(location, (TypeBinding) iterator.next());
-				} finally {
-					this.referenceContext = savedContext;
+		if (type.isParameterizedType()) {
+			List missingTypes = type.collectMissingTypes(null);
+			if (missingTypes != null) {
+				ReferenceContext savedContext = this.referenceContext;
+				for (Iterator iterator = missingTypes.iterator(); iterator.hasNext(); ) {
+					try {
+						invalidType(location, (TypeBinding) iterator.next());
+					} finally {
+						this.referenceContext = savedContext; // nested reporting will have reset referenceContext
+					}
+				}
+				return;
+			}
+		}
+		int id = IProblem.UndefinedType; // default
+		switch (type.problemId()) {
+			case ProblemReasons.NotFound :
+				id = IProblem.UndefinedType;
+				break;
+			case ProblemReasons.NotVisible :
+				id = IProblem.NotVisibleType;
+				break;
+			case ProblemReasons.NotAccessible :
+				id = IProblem.NotAccessibleType;
+				break;
+			case ProblemReasons.Ambiguous :
+				id = IProblem.AmbiguousType;
+				break;
+			case ProblemReasons.InternalNameProvided :
+				id = IProblem.InternalTypeNameProvided;
+				break;
+			case ProblemReasons.InheritedNameHidesEnclosingName :
+				id = IProblem.InheritedTypeHidesEnclosingName;
+				break;
+			case ProblemReasons.NonStaticReferenceInStaticContext :
+				id = IProblem.NonStaticTypeFromStaticInvocation;
+				break;
+			case ProblemReasons.IllegalSuperTypeVariable :
+				id = IProblem.IllegalTypeVariableSuperReference;
+				break;
+			case ProblemReasons.NoError : // 0
+			default :
+				needImplementation(location); // want to fail to see why we were here...
+				break;
+		}
+
+		int end = location.sourceEnd;
+		if (location instanceof QualifiedNameReference) {
+			QualifiedNameReference ref = (QualifiedNameReference) location;
+			if (isRecoveredName(ref.tokens)) return;
+			if (ref.indexOfFirstFieldBinding >= 1)
+				end = (int) ref.sourcePositions[ref.indexOfFirstFieldBinding - 1];
+		} else if (location instanceof ParameterizedQualifiedTypeReference) {
+			// must be before instanceof ArrayQualifiedTypeReference
+			ParameterizedQualifiedTypeReference ref = (ParameterizedQualifiedTypeReference) location;
+			if (isRecoveredName(ref.tokens)) return;
+			if (type instanceof ReferenceBinding) {
+				char[][] name = ((ReferenceBinding) type).compoundName;
+				if (name.length <= ref.sourcePositions.length) {
+					end = (int) ref.sourcePositions[name.length - 1];
 				}
 			}
-			return;
-		}
-	}
-	int id = IProblem.UndefinedType; // default
-	switch (type.problemId()) {
-		case ProblemReasons.NotFound :
-			id = IProblem.UndefinedType;
-			break;
-		case ProblemReasons.NotVisible :
-			id = IProblem.NotVisibleType;
-			break;
-		case ProblemReasons.NotAccessible :
-			id = IProblem.NotAccessibleType;
-			break;
-		case ProblemReasons.Ambiguous :
-			id = IProblem.AmbiguousType;
-			break;
-		case ProblemReasons.InternalNameProvided :
-			id = IProblem.InternalTypeNameProvided;
-			break;
-		case ProblemReasons.InheritedNameHidesEnclosingName :
-			id = IProblem.InheritedTypeHidesEnclosingName;
-			break;
-		case ProblemReasons.NonStaticReferenceInStaticContext :
-			id = IProblem.NonStaticTypeFromStaticInvocation;
-			break;
-		case ProblemReasons.IllegalSuperTypeVariable :
-			id = IProblem.IllegalTypeVariableSuperReference;
-			break;
-		case ProblemReasons.NoError : // 0
-		default :
-			needImplementation(location); // want to fail to see why we were here...
-			break;
-	}
-
-	int end = location.sourceEnd;
-	if (location instanceof QualifiedNameReference) {
-		QualifiedNameReference ref = (QualifiedNameReference) location;
-		if (isRecoveredName(ref.tokens)) return;
-		if (ref.indexOfFirstFieldBinding >= 1)
-			end = (int) ref.sourcePositions[ref.indexOfFirstFieldBinding - 1];
-	} else if (location instanceof ParameterizedQualifiedTypeReference) {
-		// must be before instanceof ArrayQualifiedTypeReference
-		ParameterizedQualifiedTypeReference ref = (ParameterizedQualifiedTypeReference) location;
-		if (isRecoveredName(ref.tokens)) return;
-		if (type instanceof ReferenceBinding) {
-			char[][] name = ((ReferenceBinding) type).compoundName;
-			if (name.length <= ref.sourcePositions.length) {
+		} else if (location instanceof ArrayQualifiedTypeReference) {
+			ArrayQualifiedTypeReference arrayQualifiedTypeReference = (ArrayQualifiedTypeReference) location;
+			if (isRecoveredName(arrayQualifiedTypeReference.tokens)) return;
+			TypeBinding leafType = type.leafComponentType();
+			if (leafType instanceof ReferenceBinding) {
+				char[][] name = ((ReferenceBinding) leafType).compoundName; // problem type will tell how much got resolved
+				if (name.length <= arrayQualifiedTypeReference.sourcePositions.length) {
+					end = (int) arrayQualifiedTypeReference.sourcePositions[name.length-1];
+				}
+			} else {
+				long[] positions = arrayQualifiedTypeReference.sourcePositions;
+				end = (int) positions[positions.length - 1];
+			}
+		} else if (location instanceof QualifiedTypeReference) {
+			QualifiedTypeReference ref = (QualifiedTypeReference) location;
+			if (isRecoveredName(ref.tokens)) return;
+			if (type instanceof ReferenceBinding) {
+				char[][] name = ((ReferenceBinding) type).compoundName;
+				if (name.length <= ref.sourcePositions.length)
+					end = (int) ref.sourcePositions[name.length - 1];
+			}
+		} else if (location instanceof ImportReference) {
+			ImportReference ref = (ImportReference) location;
+			if (isRecoveredName(ref.tokens)) return;
+			if (type instanceof ReferenceBinding) {
+				char[][] name = ((ReferenceBinding) type).compoundName;
 				end = (int) ref.sourcePositions[name.length - 1];
 			}
+		} else if (location instanceof ArrayTypeReference) {
+			ArrayTypeReference arrayTypeReference = (ArrayTypeReference) location;
+			if (isRecoveredName(arrayTypeReference.token)) return;
+			end = arrayTypeReference.originalSourceEnd;
 		}
-	} else if (location instanceof ArrayQualifiedTypeReference) {
-		ArrayQualifiedTypeReference arrayQualifiedTypeReference = (ArrayQualifiedTypeReference) location;
-		if (isRecoveredName(arrayQualifiedTypeReference.tokens)) return;
-		TypeBinding leafType = type.leafComponentType();
-		if (leafType instanceof ReferenceBinding) {
-			char[][] name = ((ReferenceBinding) leafType).compoundName; // problem type will tell how much got resolved
-			if (name.length <= arrayQualifiedTypeReference.sourcePositions.length) {
-				end = (int) arrayQualifiedTypeReference.sourcePositions[name.length-1];
-			}
-		} else {
-			long[] positions = arrayQualifiedTypeReference.sourcePositions;
-			end = (int) positions[positions.length - 1];
-		}
-	} else if (location instanceof QualifiedTypeReference) {
-		QualifiedTypeReference ref = (QualifiedTypeReference) location;
-		if (isRecoveredName(ref.tokens)) return;
-		if (type instanceof ReferenceBinding) {
-			char[][] name = ((ReferenceBinding) type).compoundName;
-			if (name.length <= ref.sourcePositions.length)
-				end = (int) ref.sourcePositions[name.length - 1];
-		}
-	} else if (location instanceof ImportReference) {
-		ImportReference ref = (ImportReference) location;
-		if (isRecoveredName(ref.tokens)) return;
-		if (type instanceof ReferenceBinding) {
-			char[][] name = ((ReferenceBinding) type).compoundName;
-			end = (int) ref.sourcePositions[name.length - 1];
-		}
-	} else if (location instanceof ArrayTypeReference) {
-		ArrayTypeReference arrayTypeReference = (ArrayTypeReference) location;
-		if (isRecoveredName(arrayTypeReference.token)) return;
-		end = arrayTypeReference.originalSourceEnd;
-	}
 
-	int start = location.sourceStart;
-	if (location instanceof org.eclipse.jdt.internal.compiler.ast.SingleTypeReference) {
-		org.eclipse.jdt.internal.compiler.ast.SingleTypeReference ref =
-				(org.eclipse.jdt.internal.compiler.ast.SingleTypeReference) location;
-		if (ref.annotations != null)
-			start = end - ref.token.length + 1;
-	} else if (location instanceof QualifiedTypeReference) {
-		QualifiedTypeReference ref = (QualifiedTypeReference) location;
-		if (ref.annotations != null)
-			start = (int) (ref.sourcePositions[0] & 0x00000000FFFFFFFFL ) - ref.tokens[0].length + 1;
-	}
+		int start = location.sourceStart;
+		if (location instanceof org.eclipse.jdt.internal.compiler.ast.SingleTypeReference) {
+			org.eclipse.jdt.internal.compiler.ast.SingleTypeReference ref =
+					(org.eclipse.jdt.internal.compiler.ast.SingleTypeReference) location;
+			if (ref.annotations != null)
+				start = end - ref.token.length + 1;
+		} else if (location instanceof QualifiedTypeReference) {
+			QualifiedTypeReference ref = (QualifiedTypeReference) location;
+			if (ref.annotations != null)
+				start = (int) (ref.sourcePositions[0] & 0x00000000FFFFFFFFL ) - ref.tokens[0].length + 1;
+		}
 
-	this.handle(
-		id,
-		new String[] {new String(type.leafComponentType().readableName()) },
-		new String[] {new String(type.leafComponentType().shortReadableName())},
-		start,
-		end);
+		this.handle(
+			id,
+			new String[] {new String(type.leafComponentType().readableName()) },
+			new String[] {new String(type.leafComponentType().shortReadableName())},
+			start,
+			end);
+	}
 }
 public void invalidTypeForCollection(Expression expression) {
 	this.handle(
@@ -8418,7 +8424,14 @@ private boolean handleSyntaxErrorOnNewTokens(
 	String errorTokenName,
 	String expectedToken) {
 	if (isIdentifier(currentKind)) {
-		return validateRestrictedKeywords(errorTokenSource, expectedToken, start, end, true);
+		if (expectedToken != null) {
+			String tokenName= new String(errorTokenSource);
+			String restrictedIdentifier= permittedRestrictedKeyWordMap.get(tokenName);
+			if (restrictedIdentifier == null || !restrictedIdentifier.equals(expectedToken)) {
+				return false;
+			}
+		}
+		return validateRestrictedKeywords(errorTokenSource, start, end, true);
 	}
 	return false;
 }
@@ -9707,18 +9720,8 @@ public void previewAPIUsed(int sourceStart, int sourceEnd, boolean isFatal) {
 			sourceEnd);
 }
 //Returns true if the problem is handled and reported (only errors considered and not warnings)
-public boolean validateRestrictedKeywords(char[] name, int start, int end, boolean reportSyntaxError) {
-	return validateRestrictedKeywords(name, null, start, end, reportSyntaxError);
-}
-private boolean validateRestrictedKeywords(char[] name, String expectedToken, int start, int end, boolean reportSyntaxError) {
+private boolean validateRestrictedKeywords(char[] name, int start, int end, boolean reportSyntaxError) {
 	boolean isPreviewEnabled = this.options.enablePreviewFeatures;
-	if (expectedToken != null) {
-		String tokenName= new String(name);
-		String restrictedIdentifier= permittedRestrictedKeyWordMap.get(tokenName);
-		if (restrictedIdentifier == null || !restrictedIdentifier.equals(expectedToken)) {
-			return false;
-		}
-	}
 	for (JavaFeature feature : JavaFeature.values()) {
 		char[][] restrictedKeywords = feature.getRestrictedKeywords();
 		for (char[] k : restrictedKeywords) {
@@ -9750,7 +9753,10 @@ private boolean validateRestrictedKeywords(char[] name, String expectedToken, in
 	return false;
 }
 public boolean validateRestrictedKeywords(char[] name, ASTNode node) {
-	return validateRestrictedKeywords(name, node.sourceStart, node.sourceEnd, false);
+	// ensure clean-up because inner method is not guaranteed to invoke handle(..)
+	try (this) {
+		return validateRestrictedKeywords(name, node.sourceStart, node.sourceEnd, false);
+	}
 }
 //Returns true if the problem is handled and reported (only errors considered and not warnings)
 public boolean validateJavaFeatureSupport(JavaFeature feature, int sourceStart, int sourceEnd) {
@@ -10235,8 +10241,8 @@ public void redundantSpecificationOfTypeArguments(ASTNode location, TypeBinding[
 }
 public void potentiallyUnclosedCloseable(FakedTrackingVariable trackVar, ASTNode location) {
 	String[] args = { trackVar.nameForReporting(location, this.referenceContext) };
-	if (location == null || trackVar.acquisition != null) {
-		// if acquisition is set, the problem is not location specific
+	if (location == null || trackVar.originalBinding == null) {
+		// if no original local is known (unassigned Closeable), the problem is not location specific
 		this.handle(
 			IProblem.PotentiallyUnclosedCloseable,
 			args,
@@ -10253,17 +10259,18 @@ public void potentiallyUnclosedCloseable(FakedTrackingVariable trackVar, ASTNode
 	}
 }
 public void unclosedCloseable(FakedTrackingVariable trackVar, ASTNode location) {
-	String[] args = { String.valueOf(trackVar.name) };
-	if (location == null) {
+	String[] args = { trackVar.nameForReporting(location, this.referenceContext) };
+	boolean shared = trackVar.isShared();
+	if (location == null || trackVar.originalBinding == null) { // unassigned has no doubt about location
 		this.handle(
-			IProblem.UnclosedCloseable,
+			shared ? IProblem.MandatoryCloseNotShown : IProblem.UnclosedCloseable,
 			args,
 			args,
 			trackVar.sourceStart,
 			trackVar.sourceEnd);
 	} else {
 		this.handle(
-			IProblem.UnclosedCloseableAtExit,
+			shared ? IProblem.MandatoryCloseNotShownAtExit : IProblem.UnclosedCloseableAtExit,
 			args,
 			args,
 			location.sourceStart,
@@ -10279,7 +10286,69 @@ public void explicitlyClosedAutoCloseable(FakedTrackingVariable trackVar) {
 		trackVar.sourceStart,
 		trackVar.sourceEnd);
 }
+public void shouldMarkMethodAsOwning(ASTNode location) {
+	char[] name = this.options.owningAnnotationName[this.options.owningAnnotationName.length-1];
+	String[] args = { String.valueOf(name) };
+	this.handle(
+		IProblem.ShouldMarkMethodAsOwning,
+		args,
+		args,
+		location.sourceStart,
+		location.sourceEnd);
+}
+public void shouldMarkFieldAsOwning(ASTNode location) {
+	char[] name = this.options.owningAnnotationName[this.options.owningAnnotationName.length-1];
+	String[] args = { String.valueOf(name) };
+	this.handle(
+		IProblem.NotOwningResourceField,
+		args,
+		args,
+		location.sourceStart,
+		location.sourceEnd);
+}
+public void shouldImplementAutoCloseable(ASTNode location) {
+	char[] name = this.options.owningAnnotationName[this.options.owningAnnotationName.length-1];
+	String[] args = { String.valueOf(name) };
+	this.handle(
+		IProblem.OwningFieldInNonResourceClass,
+		args,
+		args,
+		location.sourceStart,
+		location.sourceEnd);
+}
+public void missingImplementationOfClose(FieldDeclaration fieldDeclaration) {
+	char[] name = this.options.owningAnnotationName[this.options.owningAnnotationName.length-1];
+	String[] args = { String.valueOf(name) };
+	this.handle(
+		IProblem.OwningFieldShouldImplementClose,
+		args,
+		args,
+		fieldDeclaration.sourceStart,
+		fieldDeclaration.sourceEnd);
+}
+public void overrideReducingParamterOwning(Argument argument) {
+	char[] name = this.options.owningAnnotationName[this.options.owningAnnotationName.length-1];
+	String[] args = { String.valueOf(name) };
+	this.handle(
+		IProblem.OverrideReducingParamterOwning,
+		args,
+		args,
+		argument.sourceStart,
+		argument.sourceEnd);
+}
 
+public void overrideAddingReturnOwning(AbstractMethodDeclaration method) {
+	char[] name = this.options.owningAnnotationName[this.options.owningAnnotationName.length-1];
+	Annotation annotation = findAnnotation(method.annotations, TypeIds.BitOwningAnnotation);
+	ASTNode location = annotation != null ? annotation : method;
+	String[] args = { String.valueOf(name) };
+	this.handle(
+		IProblem.OverrideAddingReturnOwning,
+		args,
+		args,
+		location.sourceStart,
+		location.sourceEnd);
+}
 public void nullityMismatch(Expression expression, TypeBinding providedType, TypeBinding requiredType, int nullStatus, char[][] annotationName) {
 	if ((nullStatus & FlowInfo.NULL) != 0) {
 		nullityMismatchIsNull(expression, requiredType);
@@ -10554,11 +10623,11 @@ public void referenceExpressionArgumentNullityMismatch(ReferenceExpression locat
 }
 public void illegalReturnRedefinition(ASTNode location, MethodBinding descriptorMethod,
 			boolean isUnchecked, TypeBinding providedType) {
-	StringBuffer methodSignature = new StringBuffer()
+	StringBuilder methodSignature = new StringBuilder()
 		.append(descriptorMethod.declaringClass.readableName())
 		.append('.')
 		.append(descriptorMethod.readableName());
-	StringBuffer shortSignature = new StringBuffer()
+	StringBuilder shortSignature = new StringBuilder()
 		.append(descriptorMethod.declaringClass.shortReadableName())
 		.append('.')
 		.append(descriptorMethod.shortReadableName());
@@ -11629,7 +11698,7 @@ public void conflictingPackageInModules(char[][] wellKnownTypeName, CompilationU
 				start,
 				end);
 	} finally {
-		this.referenceContext = savedContext;
+		this.referenceContext = savedContext; // unsure from which phase we are called, so better to reset to previous
 	}
 }
 
@@ -12445,6 +12514,14 @@ public void cannotInferRecordPatternTypes(RecordPattern pattern) {
 			pattern.sourceStart,
 			pattern.sourceEnd);
 }
+public void illegalRecordPattern(int recordPatternSourceStart, int recordPatternSourceEnd) {
+	this.handle(
+			IProblem.IllegalRecordPattern,
+			NoArgument,
+			NoArgument,
+			recordPatternSourceStart,
+			recordPatternSourceEnd);
+}
 public void falseLiteralInGuard(Expression exp) {
 	this.handle(
 			IProblem.FalseConstantInGuard,
@@ -12452,5 +12529,41 @@ public void falseLiteralInGuard(Expression exp) {
 			NoArgument,
 			exp.sourceStart,
 			exp.sourceEnd);
+}
+public boolean scheduleProblemForContext(Runnable problemComputation) {
+	if (this.referenceContext != null) {
+		CompilationResult result = this.referenceContext.compilationResult();
+		if (result != null) {
+			try (this) {
+				ReferenceContext capturedContext = this.referenceContext;
+				result.scheduleProblem(() -> {
+					ReferenceContext save = this.referenceContext;
+					this.referenceContext = capturedContext;
+					try {
+						problemComputation.run();
+					} finally {
+						this.referenceContext = save;
+					}
+				});
+			}
+			return true;
+		}
+	}
+	return false;
+}
+/**
+ * General strategy:
+ * <ul>
+ * <li>clients are responsible for assigning {@link #referenceContext} prior to invoking any
+ * reporting method (usually, by obtaining an instance using {@link Scope#problemReporter()}).
+ * <li>individual methods should ensure that {@link #referenceContext} is reset to {@code null} afterwards. This may
+ * happen in two ways:
+ * <ul><li>by calling any of the {@code handle(..)} methods on all paths, or failing that
+ * <li>wrap their body in {@code try(this) { ... }}.
+ * </ul></ul>
+ */
+@Override
+public void close() {
+	this.referenceContext = null;
 }
 }

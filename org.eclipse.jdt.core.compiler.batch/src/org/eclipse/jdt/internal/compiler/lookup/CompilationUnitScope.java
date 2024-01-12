@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2020 IBM Corporation and others.
+ * Copyright (c) 2000, 2023 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -230,20 +230,34 @@ void checkAndSetImports() {
 	}
 
 	// allocate the import array, add java.lang.* by default
+	ImportBinding[] defaultImports = getDefaultImports();
+	boolean importProcessor = defaultImports.length == 2;
 	final int numberOfStatements = this.referenceContext.imports.length;
-	int numberOfImports = numberOfStatements + 1;
+	int numberOfImports = numberOfStatements + defaultImports.length;
 	for (int i = 0; i < numberOfStatements; i++) {
 		ImportReference importReference = this.referenceContext.imports[i];
-		if (((importReference.bits & ASTNode.OnDemand) != 0) && CharOperation.equals(TypeConstants.JAVA_LANG, importReference.tokens) && !importReference.isStatic()) {
-			numberOfImports--;
-			break;
+		if ((importReference.bits & ASTNode.OnDemand) != 0 && !importReference.isStatic()) {
+			if (CharOperation.equals(TypeConstants.JAVA_LANG, importReference.tokens)) {
+				numberOfImports--;
+				if (!importProcessor)
+					break;
+			}
+		}
+		if (importProcessor && (importReference.bits & ASTNode.OnDemand) == 0 && importReference.isStatic()){
+			if (CharOperation.equals(TypeConstants.JAVA_LANG_STRING_TEMPLATE_STR, importReference.tokens)) {
+				numberOfImports--;
+			}
 		}
 	}
 	ImportBinding[] resolvedImports = new ImportBinding[numberOfImports];
-	resolvedImports[0] = getDefaultImports()[0];
+	resolvedImports[0] = defaultImports[0];
 	int index = 1;
+	if (importProcessor) {
+		resolvedImports[1] = defaultImports[1];
+		index = 2;
+	}
 
-	Predicate<ImportReference> isStaticImport = i -> i.isStatic();
+	Predicate<ImportReference> isStaticImport = ImportReference::isStatic;
 	Predicate<ImportReference> isNotStaticImport = Predicate.not(isStaticImport);
 
 	// GitHub 269: resolve non-static imports first, so that cyclic static imports can be resolved correctly
@@ -391,18 +405,30 @@ public char[] computeConstantPoolName(LocalTypeBinding localType) {
 	return candidateName;
 }
 
-void connectTypeHierarchy1() {
+void connectTypeHierarchy() {
 	for (int i = 0, length = this.topLevelTypes.length; i < length; i++)
 		this.topLevelTypes[i].scope.connectTypeHierarchy();
 }
-void connectTypeHierarchy2() {
+void integrateAnnotationsInHierarchy() {
 	// Only now that all hierarchy information is built we're ready for ...
 	// ... integrating annotations
-	for (int i = 0, length = this.topLevelTypes.length; i < length; i++)
-		this.topLevelTypes[i].scope.referenceType().updateSupertypesWithAnnotations(Collections.emptyMap());
+	try {
+		this.environment.suppressImportErrors = true;
+		for (int i = 0, length = this.topLevelTypes.length; i < length; i++)
+			this.topLevelTypes[i].scope.referenceType().updateSupertypesWithAnnotations(Collections.emptyMap());
+	} finally {
+		this.environment.suppressImportErrors = false;
+	}
 	// ... checking on permitted types
+	connectPermittedTypes();
 	for (int i = 0, length = this.topLevelTypes.length; i < length; i++)
 		this.topLevelTypes[i].scope.connectImplicitPermittedTypes();
+}
+private void connectPermittedTypes() {
+	for (int i = 0, length = this.topLevelTypes.length; i < length; i++) {
+		SourceTypeBinding sourceType = this.topLevelTypes[i];
+		sourceType.scope.connectPermittedTypes();
+	}
 }
 void faultInImports() {
 	if (this.tempImports != null)
@@ -429,19 +455,34 @@ void faultInImports() {
 			break;
 		}
 	}
-
+	ImportBinding[] defaultImports = getDefaultImports();
+	boolean importProcessor = defaultImports.length == 2;
 	// allocate the import array, add java.lang.* by default
-	int numberOfImports = numberOfStatements + 1;
+	int numberOfImports = numberOfStatements + 2;
 	for (int i = 0; i < numberOfStatements; i++) {
 		ImportReference importReference = this.referenceContext.imports[i];
-		if (((importReference.bits & ASTNode.OnDemand) != 0) && CharOperation.equals(TypeConstants.JAVA_LANG, importReference.tokens) && !importReference.isStatic()) {
-			numberOfImports--;
-			break;
+		if ((importReference.bits & ASTNode.OnDemand) != 0 && !importReference.isStatic()) {
+			if (CharOperation.equals(TypeConstants.JAVA_LANG, importReference.tokens)) {
+				numberOfImports--;
+				if (!importProcessor)
+					break;
+			}
+		}
+		if (importProcessor && (importReference.bits & ASTNode.OnDemand) == 0 && importReference.isStatic()){
+			if (CharOperation.equals(TypeConstants.JAVA_LANG_STRING_TEMPLATE_STR, importReference.tokens)) {
+				numberOfImports--;
+			}
 		}
 	}
 	this.tempImports = new ImportBinding[numberOfImports];
-	this.tempImports[0] = getDefaultImports()[0];
-	this.importPtr = 1;
+	if (importProcessor) {
+		this.tempImports[0] = defaultImports[0];
+		this.tempImports[1] = defaultImports[1];
+		this.importPtr = 2;
+	} else {
+		this.tempImports[0] = defaultImports[0];
+		this.importPtr = 1;
+	}
 
 	CompilerOptions compilerOptions = compilerOptions();
 	boolean inJdtDebugCompileMode = compilerOptions.enableJdtDebugCompileMode;
@@ -729,8 +770,29 @@ ImportBinding[] getDefaultImports() {
 		BinaryTypeBinding missingObject = this.environment.createMissingType(null, TypeConstants.JAVA_LANG_OBJECT);
 		importBinding = missingObject.fPackage;
 	}
-
-	return this.environment.root.defaultImports = new ImportBinding[] {new ImportBinding(TypeConstants.JAVA_LANG, true, importBinding, null)};
+	ReferenceBinding templateSTR;
+	ImportBinding[] allImports = null;
+	if (this.environment.globalOptions.complianceLevel >= ClassFileConstants.JDK21) {
+		boolean old = this.environment.globalOptions.isAnnotationBasedNullAnalysisEnabled;
+		this.environment.globalOptions.isAnnotationBasedNullAnalysisEnabled = false;
+		templateSTR = (ReferenceBinding) ((PackageBinding) importBinding).getTypeOrPackage(TypeConstants.JAVA_LANG_STRING_TEMPLATE_STR[2], module(), false);
+		if (templateSTR != null) {
+			FieldBinding str = templateSTR.getField("STR".toCharArray(), true); //$NON-NLS-1$
+			ImportBinding ibinding = new ImportBinding(TypeConstants.JAVA_LANG_STRING_TEMPLATE_STR, false, str, null) {
+				@Override
+				public boolean isStatic() {
+					return true;
+				}
+			};
+			allImports = new ImportBinding[] {
+					new ImportBinding(TypeConstants.JAVA_LANG, true, importBinding, null), ibinding};
+		}
+		this.environment.globalOptions.isAnnotationBasedNullAnalysisEnabled = old;
+	}
+	if (allImports == null){
+		allImports = new ImportBinding[] {new ImportBinding(TypeConstants.JAVA_LANG, true, importBinding, null)};
+	}
+	return this.environment.root.defaultImports = allImports;
 }
 // NOT Public API
 public final Binding getImport(char[][] compoundName, boolean onDemand, boolean isStaticImport) {
@@ -980,10 +1042,6 @@ private void recordImportBinding(ImportBinding bindingToAdd) {
  * Checks additional bindings (methods or types) imported from a single static import.
  * Method is tried first, followed by type. If found, records them.
  * If in the process, import is flagged as duplicate, -1 is returned.
- * @param compoundName
- * @param typesBySimpleNames
- * @param mask
- * @param importReference
  */
 private void checkMoreStaticBindings(
 		char[][] compoundName,
@@ -1013,10 +1071,6 @@ private void checkMoreStaticBindings(
 /**
  * Checks for duplicates. If all ok, records the importBinding
  * returns -1 when this import is flagged as duplicate.
- * @param importBinding
- * @param typesBySimpleNames
- * @param importReference
- * @param compoundName
  * @return -1 when this import is flagged as duplicate, importPtr otherwise.
  */
 private int checkAndRecordImportBinding(

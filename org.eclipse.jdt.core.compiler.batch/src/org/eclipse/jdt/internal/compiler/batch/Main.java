@@ -46,7 +46,6 @@ import java.io.LineNumberReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.io.StringReader;
-import java.io.StringWriter;
 import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
@@ -122,10 +121,10 @@ import org.eclipse.jdt.internal.compiler.util.Util;
 public class Main implements ProblemSeverities, SuffixConstants {
 
 	public static class Logger {
-		private PrintWriter err;
+		private final PrintWriter err;
 		private PrintWriter log;
-		private Main main;
-		private PrintWriter out;
+		private final Main main;
+		private final PrintWriter out;
 		int tagBits;
 		private static final String CLASS = "class"; //$NON-NLS-1$
 		private static final String CLASS_FILE = "classfile"; //$NON-NLS-1$
@@ -253,9 +252,6 @@ public class Main implements ProblemSeverities, SuffixConstants {
 			}
 		}
 
-		/**
-		 *
-		 */
 		public void compiling() {
 			printlnOut(this.main.bind("progress.compiling")); //$NON-NLS-1$
 		}
@@ -408,7 +404,7 @@ public class Main implements ProblemSeverities, SuffixConstants {
 			while ((c = unitSource[end]) == ' ' || c == '\t') end--;
 
 			// copy source
-			StringBuffer buffer = new StringBuffer();
+			StringBuilder buffer = new StringBuilder();
 			buffer.append(unitSource, begin, end - begin + 1);
 			HashMap<String, Object> parameters = new HashMap<>();
 			parameters.put(Logger.VALUE, String.valueOf(buffer));
@@ -574,27 +570,20 @@ public class Main implements ProblemSeverities, SuffixConstants {
 		 * @param e the given exception to log
 		 */
 		public void logException(Exception e) {
-			StringWriter writer = new StringWriter();
-			PrintWriter printWriter = new PrintWriter(writer);
-			e.printStackTrace(printWriter);
-			printWriter.flush();
-			printWriter.close();
-			final String stackTrace = writer.toString();
+			final String stackTrace = Util.getStackTrace(e).toString();
 			if ((this.tagBits & Logger.XML) != 0) {
-				LineNumberReader reader = new LineNumberReader(new StringReader(stackTrace));
-				String line;
-				int i = 0;
 				StringBuilder buffer = new StringBuilder();
 				String message = e.getMessage();
-				if (message != null) {
-					buffer.append(message).append(Util.LINE_SEPARATOR);
-				}
-				try {
+				try (LineNumberReader reader = new LineNumberReader(new StringReader(stackTrace))) {
+					String line;
+					int i = 0;
+					if (message != null) {
+						buffer.append(message).append(Util.LINE_SEPARATOR);
+					}
 					while ((line = reader.readLine()) != null && i < 4) {
 						buffer.append(line).append(Util.LINE_SEPARATOR);
 						i++;
 					}
-					reader.close();
 				} catch (IOException e1) {
 					// ignore
 				}
@@ -718,9 +707,6 @@ public class Main implements ProblemSeverities, SuffixConstants {
 			this.printlnErr(this.main.bind("configure.incorrectVMVersionforAPT")); //$NON-NLS-1$
 		}
 
-		/**
-		 *
-		 */
 		public void logNoClassFileCreated(String outputDir, String relativeFileName, IOException e) {
 			if ((this.tagBits & Logger.XML) != 0) {
 				HashMap<String, Object> parameters = new HashMap<>();
@@ -740,9 +726,6 @@ public class Main implements ProblemSeverities, SuffixConstants {
 				}));
 		}
 
-		/**
-		 * @param exportedClassFilesCounter
-		 */
 		public void logNumberOfClassFilesGenerated(int exportedClassFilesCounter) {
 			if ((this.tagBits & Logger.XML) != 0) {
 				HashMap<String, Object> parameters = new HashMap<>();
@@ -909,11 +892,6 @@ public class Main implements ProblemSeverities, SuffixConstants {
 			return localErrorCount;
 		}
 
-		/**
-		 * @param globalProblemsCount
-		 * @param globalErrorsCount
-		 * @param globalWarningsCount
-		 */
 		public void logProblemsSummary(int globalProblemsCount,
 			int globalErrorsCount, int globalWarningsCount, int globalInfoCount, int globalTasksCount) {
 			if ((this.tagBits & Logger.XML) != 0) {
@@ -1002,9 +980,6 @@ public class Main implements ProblemSeverities, SuffixConstants {
 			}
 		}
 
-		/**
-		 *
-		 */
 		public void logProgress() {
 			printOut('.');
 		}
@@ -1019,9 +994,6 @@ public class Main implements ProblemSeverities, SuffixConstants {
 			printlnOut(this.main.bind("compile.repetition", //$NON-NLS-1$
 				String.valueOf(i + 1), String.valueOf(repetitions)));
 		}
-		/**
-		 * @param compilerStats
-		 */
 		public void logTiming(CompilerStats compilerStats) {
 			long time = compilerStats.elapsedTime();
 			long lineCount = compilerStats.lineCount;
@@ -1065,7 +1037,6 @@ public class Main implements ProblemSeverities, SuffixConstants {
 
 		/**
 		 * Print the usage of the compiler
-		 * @param usage
 		 */
 		public void logUsage(String usage) {
 			printlnOut(usage);
@@ -1221,9 +1192,6 @@ public class Main implements ProblemSeverities, SuffixConstants {
 			}
 		}
 
-		/**
-		 *
-		 */
 		public void printNewLine() {
 			this.out.println();
 		}
@@ -2919,7 +2887,7 @@ public void configure(String[] argv) {
 					this.annotationsFromClasspath = true;
 				} else {
 					if (this.annotationPaths == null)
-						this.annotationPaths = new ArrayList<String>();
+						this.annotationPaths = new ArrayList<>();
 					StringTokenizer tokens = new StringTokenizer(currentArg, File.pathSeparator);
 					while (tokens.hasMoreTokens())
 						this.annotationPaths.add(tokens.nextToken());
@@ -3208,7 +3176,7 @@ private IModule extractModuleDesc(String fileName) {
 	if (fileName.toLowerCase().endsWith(IModule.MODULE_INFO_JAVA)) {
 		// this.options may not be completely populated yet, and definitely not
 		// validated. Make sure the source level is set for the parser
-		Map<String,String> opts = new HashMap<String, String>(this.options);
+		Map<String,String> opts = new HashMap<>(this.options);
 		opts.put(CompilerOptions.OPTION_Source, this.options.get(CompilerOptions.OPTION_Compliance));
 		Parser parser = new Parser(new ProblemReporter(getHandlingPolicy(),
 				new CompilerOptions(opts), getProblemFactory()), false);
@@ -3270,7 +3238,7 @@ private static String getAllEncodings(Set<String> encodings) {
 	String[] allEncodings = new String[size];
 	encodings.toArray(allEncodings);
 	Arrays.sort(allEncodings);
-	StringBuffer buffer = new StringBuffer();
+	StringBuilder buffer = new StringBuilder();
 	for (int i = 0; i < size; i++) {
 		if (i > 0) {
 			buffer.append(", "); //$NON-NLS-1$
@@ -3285,23 +3253,13 @@ private void initializeWarnings(String propertiesFile) {
 	if (!file.exists()) {
 		throw new IllegalArgumentException(this.bind("configure.missingwarningspropertiesfile", propertiesFile)); //$NON-NLS-1$
 	}
-	BufferedInputStream stream = null;
 	Properties properties = null;
-	try {
-		stream = new BufferedInputStream(new FileInputStream(propertiesFile));
+	try (BufferedInputStream stream = new BufferedInputStream(new FileInputStream(propertiesFile))) {
 		properties = new Properties();
 		properties.load(stream);
 	} catch(IOException e) {
 		e.printStackTrace();
 		throw new IllegalArgumentException(this.bind("configure.ioexceptionwarningspropertiesfile", propertiesFile)); //$NON-NLS-1$
-	} finally {
-		if (stream != null) {
-			try {
-				stream.close();
-			} catch(IOException e) {
-				// ignore
-			}
-		}
 	}
 	for(Iterator iterator = properties.entrySet().iterator(); iterator.hasNext(); ) {
 		Map.Entry entry = (Map.Entry) iterator.next();
@@ -5270,7 +5228,7 @@ protected void setPaths(ArrayList<String> bootclasspaths,
 
 	if (this.releaseVersion != null && this.complianceLevel < jdkLevel) {
 		// TODO: Revisit for access rules
-		allPaths = new ArrayList<Classpath>();
+		allPaths = new ArrayList<>();
 		allPaths.add(
 				FileSystem.getOlderSystemRelease(this.javaHomeCache.getAbsolutePath(), this.releaseVersion, null));
 	} else {

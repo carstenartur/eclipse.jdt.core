@@ -90,7 +90,7 @@ public class ProfilingASTConvertionTest extends AbstractJavaModelTests {
 		if ((value % 10) == 0) {
 			numberOfFigures = (int) (Math.log(value + 1)/ Math.log(10));
 		}
-		StringBuffer buffer = new StringBuffer();
+		StringBuilder buffer = new StringBuilder();
 		while(numberOfFigures < numberOfFiguresForRange) {
 			buffer.append(" ");
 			numberOfFigures++;
@@ -99,10 +99,6 @@ public class ProfilingASTConvertionTest extends AbstractJavaModelTests {
 		return String.valueOf(buffer);
 	}
 
-	/**
-	 * @param array
-	 * @param increment
-	 */
 	private void printDistribution(long[] array, int increment) {
 		int bound = increment;
 		int counter = 0;
@@ -132,13 +128,9 @@ public class ProfilingASTConvertionTest extends AbstractJavaModelTests {
 		printRange(counter, bound, increment, totalCounter, length, numberOfFiguresForRange, numberOfFiguresForCounter);
 	}
 
-	/**
-	 * @param counter
-	 * @param bound
-	 */
 	private void printRange(int counter, int bound, int increment, int totalCounter, int length, int numberOfFiguresForRange, int numberOfFiguresForCounters) {
 		if (counter != 0) {
-			StringBuffer buffer = new StringBuffer();
+			StringBuilder buffer = new StringBuilder();
 			int low = bound - increment;
 			if (low != 0) {
 				low++;
@@ -157,10 +149,6 @@ public class ProfilingASTConvertionTest extends AbstractJavaModelTests {
 	}
 
 	/**
-	 * @param totalTime
-	 * @param length
-	 * @param times
-	 * @param arrayList
 	 * @deprecated using deprecated code
 	 */
 	private void reportResults(int apiLevel, long totalTime, int length, long[] times, ArrayList arrayList) {
@@ -265,7 +253,7 @@ public class ProfilingASTConvertionTest extends AbstractJavaModelTests {
 				CompilationUnit unit = (CompilationUnit) node;
 				assertEquals("Has problem", 0, unit.getProblems().length);
 				TypeDeclaration typeDeclaration = (TypeDeclaration) unit.types().get(0);
-				StringBuffer buffer = new StringBuffer();
+				StringBuilder buffer = new StringBuilder();
 				buffer.append(unit.getPackage().getName()).append(".").append(typeDeclaration.getName());
 				IResource resource = this.compilationUnits[i].getResource();
 				if (resource instanceof IFile) {
@@ -303,7 +291,7 @@ public class ProfilingASTConvertionTest extends AbstractJavaModelTests {
 				CompilationUnit unit = (CompilationUnit) node;
 				assertEquals("Has problem", 0, unit.getProblems().length);
 				TypeDeclaration typeDeclaration = (TypeDeclaration) unit.types().get(0);
-				StringBuffer buffer = new StringBuffer();
+				StringBuilder buffer = new StringBuilder();
 				buffer.append(unit.getPackage().getName()).append(".").append(typeDeclaration.getName());
 				IResource resource = this.compilationUnits[i].getResource();
 				if (resource instanceof IFile) {
@@ -342,7 +330,7 @@ public class ProfilingASTConvertionTest extends AbstractJavaModelTests {
 				CompilationUnit unit = (CompilationUnit) node;
 				assertEquals("Has problem", 0, unit.getProblems().length);
 				TypeDeclaration typeDeclaration = (TypeDeclaration) unit.types().get(0);
-				StringBuffer buffer = new StringBuffer();
+				StringBuilder buffer = new StringBuilder();
 				buffer.append(unit.getPackage().getName()).append(".").append(typeDeclaration.getName());
 				IResource resource = this.compilationUnits[i].getResource();
 				if (resource instanceof IFile) {
@@ -382,7 +370,7 @@ public class ProfilingASTConvertionTest extends AbstractJavaModelTests {
 				CompilationUnit unit = (CompilationUnit) node;
 				assertEquals("Has problem", 0, unit.getProblems().length);
 				TypeDeclaration typeDeclaration = (TypeDeclaration) unit.types().get(0);
-				StringBuffer buffer = new StringBuffer();
+				StringBuilder buffer = new StringBuilder();
 				buffer.append(unit.getPackage().getName()).append(".").append(typeDeclaration.getName());
 				IResource resource = this.compilationUnits[i].getResource();
 				if (resource instanceof IFile) {
@@ -422,7 +410,7 @@ public class ProfilingASTConvertionTest extends AbstractJavaModelTests {
 				CompilationUnit unit = (CompilationUnit) node;
 				assertEquals("Has problem", 0, unit.getProblems().length);
 				TypeDeclaration typeDeclaration = (TypeDeclaration) unit.types().get(0);
-				StringBuffer buffer = new StringBuffer();
+				StringBuilder buffer = new StringBuilder();
 				buffer.append(unit.getPackage().getName()).append(".").append(typeDeclaration.getName());
 				IResource resource = this.compilationUnits[i].getResource();
 				if (resource instanceof IFile) {

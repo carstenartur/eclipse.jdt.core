@@ -21,6 +21,8 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.codeassist;
 
+import static org.eclipse.jdt.internal.core.JavaModelManager.trace;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -229,6 +231,7 @@ import org.eclipse.jdt.internal.compiler.lookup.ProblemReferenceBinding;
 import org.eclipse.jdt.internal.compiler.lookup.ReferenceBinding;
 import org.eclipse.jdt.internal.compiler.lookup.Scope;
 import org.eclipse.jdt.internal.compiler.lookup.SourceTypeBinding;
+import org.eclipse.jdt.internal.compiler.lookup.SyntheticMethodBinding;
 import org.eclipse.jdt.internal.compiler.lookup.TagBits;
 import org.eclipse.jdt.internal.compiler.lookup.TypeBinding;
 import org.eclipse.jdt.internal.compiler.lookup.TypeConstants;
@@ -863,7 +866,6 @@ public final class CompletionEngine
 	 * all elements found matches the expected type, the completion proposals will not contains the calculated expected type
 	 * relevance. This is done to keep the overloaded method suggestions always on top in this mode as a fix for
 	 * https://bugs.eclipse.org/bugs/show_bug.cgi?id=575149
-	 *
 	 */
 	private boolean strictMatchForExtepectedType = false;
 
@@ -1896,7 +1898,7 @@ public final class CompletionEngine
 		buildTokenLocationContext(context, scope, astNode, astNodeParent);
 
 		if(DEBUG) {
-			System.out.println(context.toString());
+			trace(context.toString());
 		}
 		this.requestor.acceptContext(context);
 	}
@@ -2116,12 +2118,8 @@ public final class CompletionEngine
 	public void complete(ICompilationUnit sourceUnit, int completionPosition, int pos, ITypeRoot root) {
 
 		if(DEBUG) {
-			System.out.print("COMPLETION IN "); //$NON-NLS-1$
-			System.out.print(sourceUnit.getFileName());
-			System.out.print(" AT POSITION "); //$NON-NLS-1$
-			System.out.println(completionPosition);
-			System.out.println("COMPLETION - Source :"); //$NON-NLS-1$
-			System.out.println(sourceUnit.getContents());
+			trace("COMPLETION IN " + new String(sourceUnit.getFileName()) + " AT POSITION " + completionPosition);  //$NON-NLS-1$//$NON-NLS-2$
+			trace("COMPLETION - Source :" + new String(sourceUnit.getContents())); //$NON-NLS-1$
 		}
 		if (this.monitor != null) this.monitor.beginTask(Messages.engine_completing, IProgressMonitor.UNKNOWN);
 		this.requestor.beginReporting();
@@ -2142,8 +2140,8 @@ public final class CompletionEngine
 			//		boolean completionNodeFound = false;
 			if (parsedUnit != null) {
 				if(DEBUG) {
-					System.out.println("COMPLETION - Diet AST :"); //$NON-NLS-1$
-					System.out.println(parsedUnit.toString());
+					trace("COMPLETION - Diet AST :"); //$NON-NLS-1$
+					trace(parsedUnit.toString());
 				}
 
 				if (parsedUnit.isModuleInfo()) {
@@ -2229,11 +2227,9 @@ public final class CompletionEngine
 						if (e.astNode != null) {
 							// if null then we found a problem in the completion node
 							if(DEBUG) {
-								System.out.print("COMPLETION - Completion node : "); //$NON-NLS-1$
-								System.out.println(e.astNode.toString());
+								trace("COMPLETION - Completion node : " + e.astNode.toString()); //$NON-NLS-1$
 								if(this.parser.assistNodeParent != null) {
-									System.out.print("COMPLETION - Parent Node : ");  //$NON-NLS-1$
-									System.out.println(this.parser.assistNodeParent);
+									trace("COMPLETION - Parent Node : " + this.parser.assistNodeParent); //$NON-NLS-1$
 								}
 							}
 							this.lookupEnvironment.unitBeingCompleted = parsedUnit; // better resilient to further error reporting
@@ -2337,8 +2333,8 @@ public final class CompletionEngine
 							this.unitScope.throwDeferredException();
 							parseBlockStatements(parsedUnit, this.actualCompletionPosition);
 							if(DEBUG) {
-								System.out.println("COMPLETION - AST :"); //$NON-NLS-1$
-								System.out.println(parsedUnit.toString());
+								trace("COMPLETION - AST :"); //$NON-NLS-1$
+								trace(parsedUnit.toString());
 							}
 							parsedUnit.resolve();
 						}
@@ -2347,11 +2343,9 @@ public final class CompletionEngine
 						if (e.astNode != null) {
 							// if null then we found a problem in the completion node
 							if(DEBUG) {
-								System.out.print("COMPLETION - Completion node : "); //$NON-NLS-1$
-								System.out.println(e.astNode.toString());
+								trace("COMPLETION - Completion node : " + e.astNode.toString()); //$NON-NLS-1$
 								if(this.parser.assistNodeParent != null) {
-									System.out.print("COMPLETION - Parent Node : ");  //$NON-NLS-1$
-									System.out.println(this.parser.assistNodeParent);
+									trace("COMPLETION - Parent Node : " + this.parser.assistNodeParent); //$NON-NLS-1$
 								}
 							}
 							this.lookupEnvironment.unitBeingCompleted = parsedUnit; // better resilient to further error reporting
@@ -2396,8 +2390,7 @@ public final class CompletionEngine
 			*/
 		} catch (IndexOutOfBoundsException | InvalidCursorLocation | AbortCompilation | CompletionNodeFound e){ // internal failure - bugs 5618
 			if(DEBUG) {
-				System.out.println("Exception caught by CompletionEngine:"); //$NON-NLS-1$
-				e.printStackTrace(System.out);
+				trace("Exception caught by CompletionEngine:", e); //$NON-NLS-1$
 			}
 		} finally {
 			if(!contextAccepted) {
@@ -2429,11 +2422,9 @@ public final class CompletionEngine
 				if (e.astNode != null) {
 					// if null then we found a problem in the completion node
 					if(DEBUG) {
-						System.out.print("COMPLETION - Completion node : "); //$NON-NLS-1$
-						System.out.println(e.astNode.toString());
+						trace("COMPLETION - Completion node : " + e.astNode.toString()); //$NON-NLS-1$
 						if(this.parser.assistNodeParent != null) {
-							System.out.print("COMPLETION - Parent Node : ");  //$NON-NLS-1$
-							System.out.println(this.parser.assistNodeParent);
+							trace("COMPLETION - Parent Node : " + this.parser.assistNodeParent); //$NON-NLS-1$
 						}
 					}
 					this.lookupEnvironment.unitBeingCompleted = parsedUnit; // better resilient to further error reporting
@@ -2594,8 +2585,8 @@ public final class CompletionEngine
 				typeDeclaration.fields = newFields;
 
 				if(DEBUG) {
-					System.out.println("SNIPPET COMPLETION AST :"); //$NON-NLS-1$
-					System.out.println(compilationUnit.toString());
+					trace("SNIPPET COMPLETION AST :"); //$NON-NLS-1$
+					trace(compilationUnit.toString());
 				}
 
 				if (compilationUnit.types != null) {
@@ -2638,8 +2629,7 @@ public final class CompletionEngine
 			}
 		}  catch (IndexOutOfBoundsException | InvalidCursorLocation | AbortCompilation | CompletionNodeFound e){ // internal failure - bugs 5618 (added with fix of 99629)
 			if(DEBUG) {
-				System.out.println("Exception caught by CompletionEngine:"); //$NON-NLS-1$
-				e.printStackTrace(System.out);
+				trace("Exception caught by CompletionEngine:", e); //$NON-NLS-1$
 			}
 		} catch(JavaModelException e) {
 			// Do nothing
@@ -4051,6 +4041,15 @@ public final class CompletionEngine
 					findExplicitConstructors(Keywords.SUPER, ref.superclass(), (MethodScope)scope, singleNameReference);
 				}
 			}
+			// if we are inside a constructor and the token is empty, suggest constructor completions to help parameter
+			// hints
+			if (astNodeParent instanceof AllocationExpression && this.completionToken.length == 0) {
+				AllocationExpression expression = ((AllocationExpression) astNodeParent);
+				if (expression.resolvedType instanceof ReferenceBinding) {
+					findConstructors((ReferenceBinding) expression.resolvedType, null, scope, expression, false, null,
+							null, null, false);
+				}
+			}
 		}
 	}
 
@@ -5290,7 +5289,7 @@ public final class CompletionEngine
 		return CharOperation.concat(result, IMPORT_END);
 	}
 
-	private void createMethod(MethodBinding method, char[][] parameterPackageNames, char[][] parameterTypeNames, char[][] parameterNames, Scope scope, StringBuffer completion) {
+	private void createMethod(MethodBinding method, char[][] parameterPackageNames, char[][] parameterTypeNames, char[][] parameterNames, Scope scope, StringBuilder completion) {
 		//// Modifiers
 		// flush uninteresting modifiers
 		int insertedModifiers = method.modifiers & ~(ClassFileConstants.AccNative | ClassFileConstants.AccAbstract);
@@ -5403,7 +5402,7 @@ public final class CompletionEngine
 		return proposal;
 	}
 
-	private void createType(TypeBinding type, Scope scope, StringBuffer completion) {
+	private void createType(TypeBinding type, Scope scope, StringBuilder completion) {
 		switch (type.kind()) {
 			case Binding.BASE_TYPE :
 				completion.append(type.sourceName());
@@ -5646,7 +5645,7 @@ public final class CompletionEngine
 			}
 		}
 	}
-	private void createTypeVariable(TypeVariableBinding typeVariable, Scope scope, StringBuffer completion) {
+	private void createTypeVariable(TypeVariableBinding typeVariable, Scope scope, StringBuilder completion) {
 		completion.append(typeVariable.sourceName);
 
 		if (typeVariable.superclass != null && TypeBinding.equalsEquals(typeVariable.firstBound, typeVariable.superclass)) {
@@ -5671,7 +5670,7 @@ public final class CompletionEngine
 		   }
 		}
 	}
-	private void createVargsType(TypeBinding type, Scope scope, StringBuffer completion) {
+	private void createVargsType(TypeBinding type, Scope scope, StringBuilder completion) {
 		if (type.isArrayType()) {
 			createType(type.leafComponentType(), scope, completion);
 			int dim = type.dimensions() - 1;
@@ -6289,7 +6288,7 @@ public final class CompletionEngine
 								receiver = modRef.typeReference;
 							}
 							if (receiver != null) {
-								StringBuffer javadocCompletion = new StringBuffer();
+								StringBuilder javadocCompletion = new StringBuilder();
 								if (receiver.isThis()) {
 									selector = (((JavadocImplicitTypeReference)receiver).token);
 									if ((this.assistNodeInJavadoc & CompletionOnJavadoc.TEXT) != 0) {
@@ -9415,7 +9414,7 @@ public final class CompletionEngine
 				}
 			}
 
-			StringBuffer completion = new StringBuffer(10);
+			StringBuilder completion = new StringBuilder(10);
 			if (!exactMatch) {
 				createMethod(method, parameterPackageNames, parameterFullTypeNames, parameterNames, scope, completion);
 			}
@@ -9628,7 +9627,7 @@ public final class CompletionEngine
 					receiver = fieldRef.receiver;
 				}
 				if (receiver != null) {
-					StringBuffer javadocCompletion = new StringBuffer();
+					StringBuilder javadocCompletion = new StringBuilder();
 					if (receiver.isThis()) {
 						if ((this.assistNodeInJavadoc & CompletionOnJavadoc.TEXT) != 0) {
 							javadocCompletion.append('#');
@@ -9869,8 +9868,8 @@ public final class CompletionEngine
 			arguments = ms.arguments;
 			candidates = StreamSupport.stream(methodsFound.spliterator(), false)
 					.filter(Objects::nonNull)
-					.filter(o -> o instanceof Object[]).map(o -> (Object[]) o)
-					.map(o -> o[0]).filter(o -> o instanceof MethodBinding).map(b -> (MethodBinding) b)
+					.filter(Object[].class::isInstance).map(o -> (Object[]) o)
+					.map(o -> o[0]).filter(MethodBinding.class::isInstance).map(b -> (MethodBinding) b)
 					.filter(b -> CharOperation.equals(ms.selector, b.selector)).findFirst()
 					.map(m -> new MethodBinding[] { m }).orElse(new MethodBinding[0]);
 		} else if (this.parser.assistNodeParent instanceof AllocationExpression ae) {
@@ -9880,8 +9879,8 @@ public final class CompletionEngine
 						true);
 			}
 			candidates = StreamSupport.stream(methodsFound.spliterator(), false).filter(Objects::nonNull)
-					.filter(o -> o instanceof Object[]).map(o -> (Object[]) o).map(o -> o[0])
-					.filter(o -> o instanceof MethodBinding).map(b -> (MethodBinding) b).filter(b -> b.isConstructor())
+					.filter(Object[].class::isInstance).map(o -> (Object[]) o).map(o -> o[0])
+					.filter(MethodBinding.class::isInstance).map(b -> (MethodBinding) b).filter(MethodBinding::isConstructor)
 					.toArray(MethodBinding[]::new);
 		} else {
 			return parameterName;
@@ -10407,7 +10406,7 @@ public final class CompletionEngine
 					if (receiverType != null) {
 						receiverSourceName = receiverType.sourceName;
 					}
-					if( enclosingSourceName !=null & receiverSourceName !=null)
+					if( enclosingSourceName !=null && receiverSourceName !=null)
 						isEqual = Arrays.equals(enclosingSourceName, receiverSourceName);
 					if(isEqual) {
 						findKeywords(token, new char[][] { Keywords.THIS }, true, false);
@@ -10945,6 +10944,12 @@ public final class CompletionEngine
 		MethodBinding[] receiverTypeMethods = receiverType.availableMethods();
 		if (receiverTypeMethods != null){
 			for (int i = 0; i < receiverTypeMethods.length; i++) {
+				if (receiverType.isRecord() && receiverTypeMethods[i] instanceof SyntheticMethodBinding smb) {
+					if (CharOperation.equals(smb.selector, TypeConstants.EQUALS) ||
+							CharOperation.equals(smb.selector, TypeConstants.HASHCODE) ||
+							CharOperation.equals(smb.selector, TypeConstants.TOSTRING))
+					continue; // allow proposals to override compiler supplied implementations.
+				}
 				if(!receiverTypeMethods[i].isDefaultAbstract()) {
 					methodsFound.add(receiverTypeMethods[i]);
 				}
@@ -12001,8 +12006,7 @@ public final class CompletionEngine
 			);
 		} catch (CoreException e) {
 			if(DEBUG) {
-				System.out.println("Exception caught by CompletionEngine:"); //$NON-NLS-1$
-				e.printStackTrace(System.out);
+				trace("Exception caught by CompletionEngine:", e); //$NON-NLS-1$
 			}
 		}
 
@@ -12884,7 +12888,7 @@ public final class CompletionEngine
 			if (answer.isSourceType()) {
 				IType typeHandle = ((SourceTypeElementInfo) answer.getSourceTypes()[0]).getHandle();
 				try {
-					ArrayList<IType> allTypes = new ArrayList<IType>();
+					ArrayList<IType> allTypes = new ArrayList<>();
 					ITypeHierarchy newTypeHierarchy = typeHandle.newTypeHierarchy(this.javaProject, null);
 					IType[] implementingClasses = newTypeHierarchy.getImplementingClasses(typeHandle);
 					for (IType iClass : implementingClasses) {
@@ -12979,8 +12983,9 @@ public final class CompletionEngine
 				acceptTypes(scope);
 			}
 		} catch (CoreException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			if (JavaModelManager.VERBOSE) {
+				trace("", e); //$NON-NLS-1$
+			}
 		}
 		if(!this.requestor.isIgnored(CompletionProposal.PACKAGE_REF)) {
 			checkCancel();
@@ -13747,7 +13752,6 @@ public final class CompletionEngine
 	}
 	/**
 	 * Returns completion string inserted inside a specified inline tag.
-	 * @param completionName
 	 * @return char[] Completion text inclunding specified inline tag
 	 */
 	private char[] inlineTagCompletion(char[] completionName, char[] inlineTag) {
@@ -13956,7 +13960,7 @@ public final class CompletionEngine
 		return true;
 	}
 	private Initializer parseSnippeInitializer(char[] snippet, int position, char[][] localVariableTypeNames, char[][] localVariableNames, int[] localVariableModifiers, boolean isStatic){
-		StringBuffer prefix = new StringBuffer();
+		StringBuilder prefix = new StringBuilder();
 		prefix.append("public class FakeType {\n "); //$NON-NLS-1$
 		if(isStatic) {
 			prefix.append("static "); //$NON-NLS-1$
@@ -13993,18 +13997,16 @@ public final class CompletionEngine
 	}
 	protected void printDebug(CategorizedProblem error) {
 		if(CompletionEngine.DEBUG) {
-			System.out.print("COMPLETION - completionFailure("); //$NON-NLS-1$
-			System.out.print(error);
-			System.out.println(")"); //$NON-NLS-1$
+			trace("COMPLETION - completionFailure(" + error + ")"); //$NON-NLS-1$ //$NON-NLS-2$
 		}
 	}
 	protected void printDebug(CompletionProposal proposal){
-		StringBuffer buffer = new StringBuffer();
+		StringBuilder buffer = new StringBuilder();
 		printDebug(proposal, 0, buffer);
-		System.out.println(buffer.toString());
+		trace(buffer.toString());
 	}
 
-	private void printDebug(CompletionProposal proposal, int tab, StringBuffer buffer){
+	private void printDebug(CompletionProposal proposal, int tab, StringBuilder buffer){
 		printDebugTab(tab, buffer);
 		buffer.append("COMPLETION - "); //$NON-NLS-1$
 		switch(proposal.getKind()) {
@@ -14143,7 +14145,7 @@ public final class CompletionEngine
 		buffer.append("}\n");//$NON-NLS-1$
 	}
 
-	private void printDebugTab(int tab, StringBuffer buffer) {
+	private void printDebugTab(int tab, StringBuilder buffer) {
 		for (int i = 0; i < tab; i++) {
 			buffer.append('\t');
 		}

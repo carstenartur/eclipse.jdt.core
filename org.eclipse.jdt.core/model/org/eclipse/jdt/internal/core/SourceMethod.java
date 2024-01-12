@@ -80,10 +80,10 @@ public String[] getExceptionTypes() throws JavaModelException {
 	return CompilationUnitStructureRequestor.convertTypeNamesToSigs(exs);
 }
 /**
- * @see JavaElement#getHandleMemento(StringBuffer)
+ * @see JavaElement#getHandleMemento(StringBuilder)
  */
 @Override
-protected void getHandleMemento(StringBuffer buff) {
+protected void getHandleMemento(StringBuilder buff) {
 	getParent().getHandleMemento(buff);
 	char delimiter = getHandleMementoDelimiter();
 	buff.append(delimiter);
@@ -242,6 +242,12 @@ public boolean isConstructor() throws JavaModelException {
 public boolean isMainMethod() throws JavaModelException {
 	return this.isMainMethod(this);
 }
+
+@Override
+public boolean isMainMethodCandidate() throws JavaModelException {
+	return this.isMainMethodCandidate(this);
+}
+
 /**
  * @see IMethod#isLambdaMethod()
  */
@@ -266,8 +272,6 @@ public boolean isSimilar(IMethod method) {
 			null);
 }
 
-/**
- */
 @Override
 public String readableName() {
 
@@ -295,7 +299,7 @@ public JavaElement resolved(Binding binding) {
  * @private Debugging purposes
  */
 @Override
-protected void toStringInfo(int tab, StringBuffer buffer, Object info, boolean showResolvedInfo) {
+protected void toStringInfo(int tab, StringBuilder buffer, Object info, boolean showResolvedInfo) {
 	buffer.append(tabString(tab));
 	if (info == null) {
 		toStringName(buffer);
@@ -316,10 +320,10 @@ protected void toStringInfo(int tab, StringBuffer buffer, Object info, boolean s
 	}
 }
 @Override
-protected void toStringName(StringBuffer buffer) {
+protected void toStringName(StringBuilder buffer) {
 	toStringName(buffer, 0);
 }
-protected void toStringName(StringBuffer buffer, int flags) {
+protected void toStringName(StringBuilder buffer, int flags) {
 	buffer.append(getElementName());
 	buffer.append('(');
 	String[] parameters = getParameterTypes();

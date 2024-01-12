@@ -4125,4 +4125,226 @@ public class PatternMatching16Test extends AbstractRegressionTest {
 				"true",
 				compilerOptions);
 	}
+	public void testGH1726() {
+		if (this.complianceLevel < ClassFileConstants.JDK21)
+			return;
+		Map<String, String> compilerOptions = getCompilerOptions(true);
+		runConformTest(
+				new String[] {
+						"X.java",
+						"""
+						public class X {
+							record A(int x) {
+							}
+
+							public static int foo(Object a) {
+								return a instanceof A(int x) ? x : 1;
+							}
+
+							public static void main(String [] args) {
+								System.out.println("" + foo(new A(1234)) + foo(args));
+							}
+						}
+						""",
+				},
+				"12341",
+				compilerOptions);
+	}
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/1725
+	// [21] Wrongly needing a default case for a switch expression
+	public void testGH1725() {
+		if (this.complianceLevel < ClassFileConstants.JDK21)
+			return;
+		Map<String, String> compilerOptions = getCompilerOptions(true);
+		runConformTest(
+				new String[] {
+						"X.java",
+						"""
+						public class X {
+							public abstract sealed class A permits B, C {
+							}
+
+							public final class C extends A {
+							}
+
+							public abstract sealed class B extends A permits D {
+							}
+
+							public final class D extends B {
+							}
+
+							public String foo(A a) {
+								return switch (a) {
+									case D d -> "1234";
+									case C c -> "6789";
+								};
+							}
+							public static void main(String [] args) {
+								System.out.println(new X().foo(new X().new D()) + new X().foo(new X().new C()));
+							}
+						}
+						""",
+				},
+				"12346789",
+				compilerOptions);
+	}
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/1725
+	// [21] Wrongly needing a default case for a switch expression
+	public void testGH1725_2() {
+		if (this.complianceLevel < ClassFileConstants.JDK21)
+			return;
+
+		runNegativeTest(
+				new String[] {
+						"X.java",
+						"""
+						public class X {
+							public abstract sealed class A permits B, C {
+							}
+
+							public final class C extends A {
+							}
+
+							public sealed class B extends A permits D {
+							}
+
+							public final class D extends B {
+							}
+
+							public String foo(A a) {
+								return switch (a) {
+									case D d -> "1234";
+									// case B b -> "blah";
+									case C c -> "6789";
+								};
+							}
+							public static void main(String [] args) {
+								System.out.println(new X().foo(new X().new D()) + new X().foo(new X().new C()));
+							}
+						}
+						""",
+				},
+				"""
+				----------
+				1. ERROR in X.java (at line 15)
+					return switch (a) {
+					               ^
+				A switch expression should have a default case
+				----------
+				""",
+				false);
+	}
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/1759
+	// Pattern variable is not recognized in AND_AND_Expression
+	public void testGHI1759() {
+
+		runConformTest(
+				new String[] {
+						"X.java",
+						"""
+						import java.util.Arrays;
+						import java.util.List;
+						public class X {
+							public static void main(String [] args) {
+						        Object obj = "test";
+						        List<String> values = Arrays.asList("fail", "test", "pass");
+						        if (obj instanceof String str && values.stream().anyMatch(str::equalsIgnoreCase)) {
+						            System.out.println(str);
+						        }
+						    }
+
+						}
+						""",
+				},
+				"test");
+	}
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/1759
+	// Pattern variable is not recognized in AND_AND_Expression
+	public void testGHI1759_2() {
+
+		runConformTest(
+				new String[] {
+						"X.java",
+						"""
+						import java.util.Arrays;
+						import java.util.List;
+						public class X {
+							public static void main(String [] args) {
+						        Object obj = "test";
+						        List<String> values = Arrays.asList("fail", "test", "pass");
+						        if (!(obj instanceof String str) || values.stream().anyMatch(str::equalsIgnoreCase)) {
+						            System.out.println(obj);
+						        }
+						    }
+
+						}
+						""",
+				},
+				"test");
+	}
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/1759
+	// Pattern variable is not recognized in AND_AND_Expression
+	public void testGHI1759_3() {
+
+		runConformTest(
+				new String[] {
+						"X.java",
+						"""
+						import java.util.Arrays;
+						import java.util.List;
+						public class X {
+						    public static void main(String [] args) {
+						        Object obj = "test";
+						        List<String> values = Arrays.asList("fail", "test", "pass");
+						        if (obj instanceof String str) {
+						        	if (values.stream().anyMatch(str::equalsIgnoreCase)) {
+						        		System.out.println(str);
+						        	}
+						        }
+						    }
+						}
+						""",
+				},
+				"test");
+	}
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/1485
+	// ECJ hangs when pattern matching code is used in a nested conditional expression.
+	public void testGHI1485() {
+
+		runConformTest(
+				new String[] {
+						"X.java",
+						"""
+						public class X {
+						    static class PvsVariable {
+						    }
+
+						    static class PvsVariableNext_1 extends PvsVariable {
+						    }
+
+						    static class PvsVariableNext_2 extends PvsVariableNext_1 {
+						    }
+
+						    static class PvsVariableNext_3 extends PvsVariableNext_2 {
+						    }
+
+						    static class PvsVariableNext_4 extends PvsVariableNext_3 {
+						    }
+
+						    public static void main(String[] args) {
+						        final var pvsVariable = new PvsVariableNext_3();
+						        final Object origVar =
+						                pvsVariable instanceof PvsVariableNext_1 var_first
+						                    ? "PvsVariableNext_1"
+						                    : (pvsVariable instanceof PvsVariableNext_2 var_second &&
+						                       pvsVariable instanceof PvsVariableNext_3 var_three &&
+						                       true) ? "PvsVariableNext_2 && PvsVariableNext_3"
+						                                : "None";
+						        System.out.println(origVar);
+						    }
+						}
+						""",
+				},
+				"PvsVariableNext_1");
+	}
 }

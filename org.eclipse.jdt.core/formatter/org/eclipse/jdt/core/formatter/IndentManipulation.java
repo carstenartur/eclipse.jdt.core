@@ -182,7 +182,7 @@ public final class IndentManipulation {
 	/**
 	 * Removes the given number of indentation units from a given line. If the line
 	 * has less indent than the given indentUnitsToRemove, all the available indentation is removed.
-	 * If <code>indentsToRemove <= 0 or indent == 0</code> the line is returned.
+	 * If <code>indentsToRemove &lt;= 0 or indent == 0</code> the line is returned.
 	 *
 	 * @param line the line to trim
 	 * @param tabWidth the width of one tab in space equivalents
@@ -363,7 +363,7 @@ public final class IndentManipulation {
 
 	/*
 	 * Returns the index where the indent of the given size ends.
-	 * Returns <code>-1<code> if the line isn't prefixed with an indent of
+	 * Returns <code>-1</code> if the line isn't prefixed with an indent of
 	 * the given number of indents.
 	 */
 	private static int indexOfIndent(CharSequence line, int numberOfIndentUnits, int tabWidth, int indentWidth) {

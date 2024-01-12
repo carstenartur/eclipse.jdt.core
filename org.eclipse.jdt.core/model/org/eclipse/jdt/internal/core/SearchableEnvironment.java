@@ -79,7 +79,7 @@ public class SearchableEnvironment
 	protected boolean checkAccessRestrictions;
 	// moduleName -> IPackageFragmentRoot[](lazily populated)
 	private Map<String,IPackageFragmentRoot[]> knownModuleLocations; // null indicates: not using JPMS
-	private boolean excludeTestCode;
+	private final boolean excludeTestCode;
 
 	private ModuleUpdater moduleUpdater;
 	private Map<IPackageFragmentRoot,IModuleDescription> rootToModule;
@@ -104,14 +104,15 @@ public class SearchableEnvironment
 			|| !JavaCore.IGNORE.equals(project.getOption(JavaCore.COMPILER_PB_DISCOURAGED_REFERENCE, true));
 		this.workingCopies = workingCopies;
 		this.nameLookup = project.newNameLookup(workingCopies, excludeTestCode);
-		boolean java9plus = CompilerOptions.versionToJdkLevel(project.getOption(JavaCore.COMPILER_COMPLIANCE, true)) >= ClassFileConstants.JDK9;
+		boolean java9plus = JavaCore.callReadOnly(() -> CompilerOptions
+				.versionToJdkLevel(project.getOption(JavaCore.COMPILER_COMPLIANCE, true)) >= ClassFileConstants.JDK9);
 		if (java9plus) {
 			this.knownModuleLocations = new HashMap<>();
 
 			this.moduleUpdater = new ModuleUpdater(project);
 			if (!excludeTestCode) {
 				IClasspathEntry[] expandedClasspath = project.getExpandedClasspath();
-				if(Arrays.stream(expandedClasspath).anyMatch(e -> e.isTest())) {
+				if(Arrays.stream(expandedClasspath).anyMatch(IClasspathEntry::isTest)) {
 					this.moduleUpdater.addReadUnnamedForNonEmptyClasspath(project, expandedClasspath);
 				}
 			}
@@ -1285,9 +1286,9 @@ private void findPackagesFromRequires(char[] prefix, boolean isMatchAllPrefix, I
 		if(!NameLookup.VERBOSE)
 			return;
 
-		Util.verbose(" TIME SPENT SearchableEnvironment");  //$NON-NLS-1$
-		Util.verbose(" -> getModulesDeclaringPackage..." +  this.timeSpentInGetModulesDeclaringPackage + "ms");  //$NON-NLS-1$ //$NON-NLS-2$
-		Util.verbose(" -> findTypes...................." +  this.timeSpentInFindTypes + "ms");  //$NON-NLS-1$ //$NON-NLS-2$
+		JavaModelManager.trace(" TIME SPENT SearchableEnvironment");  //$NON-NLS-1$
+		JavaModelManager.trace(" -> getModulesDeclaringPackage..." +  this.timeSpentInGetModulesDeclaringPackage + "ms");  //$NON-NLS-1$ //$NON-NLS-2$
+		JavaModelManager.trace(" -> findTypes...................." +  this.timeSpentInFindTypes + "ms");  //$NON-NLS-1$ //$NON-NLS-2$
 
 		this.nameLookup.printTimeSpent();
 	}

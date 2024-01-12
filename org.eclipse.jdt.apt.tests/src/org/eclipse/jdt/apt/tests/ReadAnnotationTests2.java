@@ -45,8 +45,8 @@ import org.eclipse.jdt.core.tests.util.Util;
  */
 public class ReadAnnotationTests2 extends BuilderTests {
 
-	private String[] NO_ANNOTATIONS = new String[0];
-	private ICompilationUnit[] NO_UNIT = new ICompilationUnit[0];
+	private final String[] NO_ANNOTATIONS = new String[0];
+	private final ICompilationUnit[] NO_UNIT = new ICompilationUnit[0];
 	private int counter = 0;
 	private String projectName = null;
 	public ReadAnnotationTests2(final String name) {
@@ -315,7 +315,7 @@ public class ReadAnnotationTests2 extends BuilderTests {
 		final int expectedLen = expected.length;
 		assertEquals("annotation number mismatch", expected.length, annotations.length); //$NON-NLS-1$
 
-		final HashSet<String> expectedSet = new HashSet<String>(expectedLen * 4 / 3 + 1);
+		final HashSet<String> expectedSet = new HashSet<>(expectedLen * 4 / 3 + 1);
 		for( int i=0; i<expectedLen; i++ )
 			expectedSet.add(expected[i]);
 

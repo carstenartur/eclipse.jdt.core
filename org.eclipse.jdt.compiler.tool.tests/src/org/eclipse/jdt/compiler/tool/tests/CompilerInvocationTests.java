@@ -111,7 +111,7 @@ void runTest(
 	}
 }
 class GetLocationDetector extends ForwardingStandardJavaFileManager<StandardJavaFileManager>  {
-	private Location match;
+	private final Location match;
 	private boolean matchFound;
 	GetLocationDetector(StandardJavaFileManager javaFileManager, Location location) {
 		super(javaFileManager);
@@ -152,7 +152,7 @@ abstract class GetJavaFileDetector extends ForwardingStandardJavaFileManager<Sta
 	@Override
 	public Iterable<? extends JavaFileObject> getJavaFileObjectsFromFiles(
 			Iterable<? extends File> files) {
-		ArrayList<JavaFileObject> result = new ArrayList<JavaFileObject>();
+		ArrayList<JavaFileObject> result = new ArrayList<>();
 		for (JavaFileObject file: super.getJavaFileObjectsFromFiles(files)) {
 			result.add(detector(file));
 		}
@@ -161,7 +161,7 @@ abstract class GetJavaFileDetector extends ForwardingStandardJavaFileManager<Sta
 	@Override
 	public Iterable<? extends JavaFileObject> getJavaFileObjectsFromStrings(
 			Iterable<String> names) {
-		ArrayList<JavaFileObject> result = new ArrayList<JavaFileObject>();
+		ArrayList<JavaFileObject> result = new ArrayList<>();
 		for (JavaFileObject file: getJavaFileObjectsFromStrings(names)) {
 			result.add(detector(file));
 		}
@@ -170,7 +170,7 @@ abstract class GetJavaFileDetector extends ForwardingStandardJavaFileManager<Sta
 	@Override
 	public Iterable<JavaFileObject> list(Location location, String packageName,
 			Set<Kind> kinds, boolean recurse) throws IOException {
-		ArrayList<JavaFileObject> result = new ArrayList<JavaFileObject>();
+		ArrayList<JavaFileObject> result = new ArrayList<>();
 		for (JavaFileObject file: super.list(location, packageName, kinds, recurse)) {
 			result.add(detector(file));
 		}
@@ -178,7 +178,7 @@ abstract class GetJavaFileDetector extends ForwardingStandardJavaFileManager<Sta
 	}
 }
 class GetJavaFileForInputDetector extends GetJavaFileDetector  {
-	private Kind discriminatingKind;
+	private final Kind discriminatingKind;
 	GetJavaFileForInputDetector(StandardJavaFileManager javaFileManager) {
 		super(javaFileManager);
 		this.discriminatingKind = Kind.SOURCE;
@@ -283,7 +283,7 @@ class GetJavaFileForOutputDetector extends GetJavaFileDetector  {
 	}
 }
 class SetLocationDetector extends ForwardingStandardJavaFileManager<StandardJavaFileManager>  {
-	private Location match;
+	private final Location match;
 	private boolean matchFound;
 	SetLocationDetector(StandardJavaFileManager javaFileManager, Location location) {
 		super(javaFileManager);
@@ -302,7 +302,7 @@ class SetLocationDetector extends ForwardingStandardJavaFileManager<StandardJava
 	}
 }
 class SubstringDetector extends java.util.logging.Logger {
-	private String match;
+	private final String match;
 	private boolean matchFound;
 	SubstringDetector(String match) {
 		super("SubstringDetector", null);
@@ -996,14 +996,8 @@ public void test021_output_streams() throws IOException {
 		Arrays.asList("-v"), null, null);
 	assertTrue(task.call());
 	Properties properties = new Properties();
-	InputStream resourceAsStream = null;
-	try {
-		resourceAsStream = Main.class.getResourceAsStream("messages.properties");
+	try (InputStream resourceAsStream = Main.class.getResourceAsStream("messages.properties")) {
 		properties.load(resourceAsStream);
-	} finally {
-		if (resourceAsStream != null) {
-			resourceAsStream.close();
-		}
 	}
 	assertTrue(outBuffer.toString().startsWith(properties.getProperty("compiler.name")));
 	assertTrue(errBuffer.toString().isEmpty());

@@ -25,15 +25,15 @@ public class ASTConverterJavadocFlattener extends ASTVisitor {
 	 * The string buffer into which the serialized representation of the AST is
 	 * written.
 	 */
-	private StringBuffer buffer;
-	private int indent = 0;
-	private String comment;
+	private final StringBuilder buffer;
+	private final int indent = 0;
+	private final String comment;
 
 /**
  * Creates a new AST printer.
  */
 ASTConverterJavadocFlattener(String comment) {
-	this.buffer = new StringBuffer();
+	this.buffer = new StringBuilder();
 	this.comment = comment;
 }
 

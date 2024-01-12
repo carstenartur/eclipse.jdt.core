@@ -36,7 +36,6 @@ public class FilerTests extends TestCase {
 
 	/**
 	 * Validate the testElement test against the javac compiler.
-	 * @throws IOException
 	 */
 	public void testElementWithSystemCompiler() throws IOException {
 		JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
@@ -49,7 +48,6 @@ public class FilerTests extends TestCase {
 
 	/**
 	 * Attempt to read various elements of the Element hierarchy.
-	 * @throws IOException
 	 */
 	public void _testElementWithEclipseCompiler() throws IOException {
 		JavaCompiler compiler = BatchTestUtils.getEclipseCompiler();
@@ -59,14 +57,13 @@ public class FilerTests extends TestCase {
 	/**
 	 * Test the createResource() by processing resources/targets/filer/FilerTarget1.java
 	 * and verifying the existence and content of the resulting files.
-	 * @throws IOException
 	 */
 	private void internalTestCreateResource(JavaCompiler compiler, boolean isSystemCommpiler) throws IOException {
 		File targetFolder = TestUtils.concatPath(BatchTestUtils.getSrcFolderName(), "targets", "filer");
 		File inputFile = BatchTestUtils.copyResource("targets/filer/FilerTarget1.java", targetFolder);
 		assertNotNull("No input file", inputFile);
 
-		List<String> options = new ArrayList<String>();
+		List<String> options = new ArrayList<>();
 		BatchTestUtils.compileOneClass(compiler, options, inputFile);
 
 		// check that the resource and class files were generated

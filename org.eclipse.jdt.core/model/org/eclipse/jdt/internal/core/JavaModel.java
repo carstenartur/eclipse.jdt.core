@@ -161,10 +161,10 @@ public IJavaElement getHandleFromMemento(String token, MementoTokenizer memento,
 	return null;
 }
 /**
- * @see JavaElement#getHandleMemento(StringBuffer)
+ * @see JavaElement#getHandleMemento(StringBuilder)
  */
 @Override
-protected void getHandleMemento(StringBuffer buff) {
+protected void getHandleMemento(StringBuilder buff) {
 	buff.append(getElementName());
 }
 /**
@@ -311,7 +311,7 @@ protected void runOperation(MultiOperation op, IJavaElement[] elements, IJavaEle
  * @private Debugging purposes
  */
 @Override
-protected void toStringInfo(int tab, StringBuffer buffer, Object info, boolean showResolvedInfo) {
+protected void toStringInfo(int tab, StringBuilder buffer, Object info, boolean showResolvedInfo) {
 	buffer.append(tabString(tab));
 	buffer.append("Java Model"); //$NON-NLS-1$
 	if (info == null) {
@@ -410,7 +410,7 @@ static private boolean isExternalFile(IPath path) {
 		return true;
 	}
 	if (JavaModelManager.ZIP_ACCESS_VERBOSE) {
-		System.out.println("(" + Thread.currentThread() + ") [JavaModel.isExternalFile(...)] Checking existence of " + path.toString()); //$NON-NLS-1$ //$NON-NLS-2$
+		JavaModelManager.trace("(" + Thread.currentThread() + ") [JavaModel.isExternalFile(...)] Checking existence of " + path.toString()); //$NON-NLS-1$ //$NON-NLS-2$
 	}
 	boolean isFile = path.toFile().isFile();
 	if (isFile) {

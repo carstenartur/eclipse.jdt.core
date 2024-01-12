@@ -342,7 +342,7 @@ class BoundSet {
 	private TypeBound[] incorporatedBounds = Binding.NO_TYPE_BOUNDS;
 	private TypeBound[] unincorporatedBounds = new TypeBound[8];
 	private int unincorporatedBoundsCount = 0;
-	private TypeBound[] mostRecentBounds = new TypeBound[4]; // for quick & dirty duplicate elimination
+	private final TypeBound[] mostRecentBounds = new TypeBound[4]; // for quick & dirty duplicate elimination
 
 	public BoundSet() {}
 
@@ -1061,7 +1061,7 @@ class BoundSet {
 		Map<InferenceVariable, Set<InferenceVariable>> allEdges = new HashMap<>();
 		for (int i = 0; i < inferenceVariables.length; i++) {
 			InferenceVariable iv1 = inferenceVariables[i];
-			Set<InferenceVariable> targetSet = new LinkedHashSet<InferenceVariable>();
+			Set<InferenceVariable> targetSet = new LinkedHashSet<>();
 			allEdges.put(iv1, targetSet); // eventually ensures: forall iv in inferenceVariables : allEdges.get(iv) != null
 			for (int j = 0; j < i; j++) {
 				InferenceVariable iv2 = inferenceVariables[j];

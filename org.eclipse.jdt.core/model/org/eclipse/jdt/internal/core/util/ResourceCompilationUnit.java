@@ -13,6 +13,8 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.core.util;
 
+import java.lang.ref.SoftReference;
+
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.jdt.core.compiler.CharOperation;
@@ -23,11 +25,11 @@ import org.eclipse.jdt.internal.compiler.env.ICompilationUnit;
  */
 public class ResourceCompilationUnit implements ICompilationUnit {
 
-	private IFile file;
-	private char[] contents;
-	private char[] fileName;
-	private char[] mainTypeName;
-	private char[] module;
+	private final IFile file;
+	private volatile SoftReference<char[]> contentRef;
+	private final char[] fileName;
+	private final char[] mainTypeName;
+	private final char[] module;
 	public ResourceCompilationUnit(IFile file, char[] mod) {
 		this.file = file;
 		this.module = mod;
@@ -46,15 +48,22 @@ public class ResourceCompilationUnit implements ICompilationUnit {
 
 	@Override
 	public char[] getContents() {
-		if (this.contents != null)
-			return this.contents;   // answer the cached source
-
-		// otherwise retrieve it
-		try {
-			return (this.contents = Util.getResourceContentsAsCharArray(this.file));
-		} catch (CoreException e) {
-			return CharOperation.NO_CHAR;
+		SoftReference<char[]> cr = this.contentRef;
+		if (cr != null) {
+			char[] cachedContents = cr.get();
+			if (cachedContents != null) {
+				return cachedContents;
+			}
 		}
+		char[] contents;
+		try {
+			contents = Util.getResourceContentsAsCharArray(this.file);
+		} catch (CoreException e) {
+			contents = CharOperation.NO_CHAR;
+		}
+		 // softly cache the result:
+		this.contentRef = new SoftReference<>(contents);
+		return contents;
 	}
 
 	@Override

@@ -22,7 +22,7 @@ package org.eclipse.jdt.internal.compiler.lookup;
  */
 public class MostSpecificExceptionMethodBinding  extends MethodBinding {
 
-	private MethodBinding originalMethod;
+	private final MethodBinding originalMethod;
 
 	public MostSpecificExceptionMethodBinding (MethodBinding originalMethod, ReferenceBinding[] mostSpecificExceptions) {
 		super(
@@ -33,7 +33,7 @@ public class MostSpecificExceptionMethodBinding  extends MethodBinding {
 				mostSpecificExceptions,
 				originalMethod.declaringClass);
 		this.originalMethod = originalMethod;
-		this.parameterNonNullness = originalMethod.parameterNonNullness;
+		this.parameterFlowBits = originalMethod.parameterFlowBits;
 		this.defaultNullness = originalMethod.defaultNullness;
 	}
 

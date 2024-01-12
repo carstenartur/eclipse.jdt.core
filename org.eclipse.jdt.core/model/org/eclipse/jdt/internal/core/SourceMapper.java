@@ -15,6 +15,8 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.core;
 
+import static org.eclipse.jdt.internal.core.JavaModelManager.trace;
+
 import java.io.IOException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -94,7 +96,7 @@ public class SourceMapper
 		String name;
 
 		public LocalVariableElementKey(IJavaElement method, String name) {
-			StringBuffer buffer = new StringBuffer();
+			StringBuilder buffer = new StringBuilder();
 			buffer
 				.append(method.getParent().getHandleIdentifier())
 				.append('#')
@@ -146,7 +148,7 @@ public class SourceMapper
 		}
 		@Override
 		public String toString() {
-			StringBuffer buffer = new StringBuffer();
+			StringBuilder buffer = new StringBuilder();
 			buffer.append('(').append(this.parent).append('.').append(this.name).append(')');
 			return String.valueOf(buffer);
 		}
@@ -418,7 +420,7 @@ public class SourceMapper
 
 			// transforms signatures that contains a qualification into unqualified signatures
 			// e.g. "QX<+QMap.Entry;>;" becomes "QX<+QEntry;>;"
-			StringBuffer simpleTypeSig = null;
+			StringBuilder simpleTypeSig = null;
 			int start = 0;
 			int dot = -1;
 			int length = typeSig.length;
@@ -437,7 +439,7 @@ public class SourceMapper
 						if (matchingEnd > 0 && matchingEnd+1 < length && typeSig[matchingEnd+1] == Signature.C_DOT) {
 							// found Head<Param>.Tail -> discard everything except Tail
 							if (simpleTypeSig == null)
-								simpleTypeSig = new StringBuffer().append(typeSig, 0, start);
+								simpleTypeSig = new StringBuilder().append(typeSig, 0, start);
 							simpleTypeSig.append(Signature.C_UNRESOLVED);
 							start = j = matchingEnd+2;
 							break;
@@ -446,7 +448,7 @@ public class SourceMapper
 					case Signature.C_NAME_END:
 						if (dot > start) {
 							if (simpleTypeSig == null)
-								simpleTypeSig = new StringBuffer().append(typeSig, 0, start);
+								simpleTypeSig = new StringBuilder().append(typeSig, 0, start);
 							simpleTypeSig.append(Signature.C_UNRESOLVED);
 							simpleTypeSig.append(typeSig, dot+1, j-dot-1);
 							start = j;
@@ -547,7 +549,7 @@ public class SourceMapper
 		final HashSet tempRoots = new HashSet();
 		long time = 0;
 		if (VERBOSE) {
-			System.out.println("compute all root paths for " + root.getElementName()); //$NON-NLS-1$
+			trace("compute all root paths for " + root.getElementName()); //$NON-NLS-1$
 			time = System.currentTimeMillis();
 		}
 		final HashSet firstLevelPackageNames = new HashSet();
@@ -568,7 +570,7 @@ public class SourceMapper
 			} catch (IOException e) {
 				// We are not reading any specific file, so, move on for now
 				if (VERBOSE) {
-					e.printStackTrace();
+					trace("", e); //$NON-NLS-1$
 				}
 			}
 		} else if (root.isArchive()) {
@@ -708,11 +710,11 @@ public class SourceMapper
 		}
 		this.areRootPathsComputed = true;
 		if (VERBOSE) {
-			System.out.println("Spent " + (System.currentTimeMillis() - time) + "ms"); //$NON-NLS-1$ //$NON-NLS-2$
-			System.out.println("Found " + size + " root paths");	//$NON-NLS-1$ //$NON-NLS-2$
+			trace("Spent " + (System.currentTimeMillis() - time) + "ms"); //$NON-NLS-1$ //$NON-NLS-2$
+			trace("Found " + size + " root paths");	//$NON-NLS-1$ //$NON-NLS-2$
 			int i = 0;
 			for (Iterator iterator = this.rootPaths.iterator(); iterator.hasNext();) {
-				System.out.println("root[" + i + "]=" + ((String) iterator.next()));//$NON-NLS-1$ //$NON-NLS-2$
+				trace("root[" + i + "]=" + ((String) iterator.next()));//$NON-NLS-1$ //$NON-NLS-2$
 				i++;
 			}
 		}
@@ -752,8 +754,9 @@ public class SourceMapper
 				}
 			}
 		} catch (CoreException e) {
-			// ignore
-			e.printStackTrace();
+			if (VERBOSE) {
+				trace("", e); //$NON-NLS-1$
+			}
 		}
 	}
 
@@ -1422,7 +1425,7 @@ public class SourceMapper
 		String[] qualifiedParameterTypes = method.getParameterTypes();
 		String[] unqualifiedParameterTypes = new String[qualifiedParameterTypes.length];
 		for (int i = 0; i < qualifiedParameterTypes.length; i++) {
-			StringBuffer unqualifiedTypeSig = new StringBuffer();
+			StringBuilder unqualifiedTypeSig = new StringBuilder();
 			getUnqualifiedTypeSignature(qualifiedParameterTypes[i], 0/*start*/, qualifiedParameterTypes[i].length(), unqualifiedTypeSig, noDollar);
 			unqualifiedParameterTypes[i] = unqualifiedTypeSig.toString();
 			hasDollar |= unqualifiedParameterTypes[i].lastIndexOf('$') != -1;
@@ -1438,7 +1441,7 @@ public class SourceMapper
 		return result;
 	}
 
-	private int getUnqualifiedTypeSignature(String qualifiedTypeSig, int start, int length, StringBuffer unqualifiedTypeSig, boolean noDollar) {
+	private int getUnqualifiedTypeSignature(String qualifiedTypeSig, int start, int length, StringBuilder unqualifiedTypeSig, boolean noDollar) {
 		char firstChar = qualifiedTypeSig.charAt(start);
 		int end = start + 1;
 		boolean sigStart = false;

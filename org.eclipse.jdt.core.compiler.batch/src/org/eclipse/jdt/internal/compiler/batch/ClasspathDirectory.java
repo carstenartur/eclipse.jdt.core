@@ -39,7 +39,6 @@ import org.eclipse.jdt.internal.compiler.util.Util;
 import java.io.File;
 import java.io.FilenameFilter;
 import java.io.IOException;
-import java.nio.file.FileSystems;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -57,9 +56,9 @@ import java.util.stream.Stream;
 public class ClasspathDirectory extends ClasspathLocation {
 
 private Hashtable directoryCache;
-private String[] missingPackageHolder = new String[1];
-private int mode; // ability to only consider one kind of files (source vs. binaries), by default use both
-private String encoding; // only useful if referenced in the source path
+private final String[] missingPackageHolder = new String[1];
+private final int mode; // ability to only consider one kind of files (source vs. binaries), by default use both
+private final String encoding; // only useful if referenced in the source path
 private Hashtable<String, Hashtable<String, String>> packageSecondaryTypes = null;
 Map options;
 
@@ -345,7 +344,7 @@ public boolean hasCUDeclaringPackage(String qualifiedPackageName, Function<Compi
 public char[][] listPackages() {
 	Set<String> packageNames = new HashSet<>();
 	try {
-		Path basePath = FileSystems.getDefault().getPath(this.path);
+		Path basePath = Path.of(this.path);
 		Files.walkFileTree(basePath, new SimpleFileVisitor<Path>() {
 			@Override
 			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {

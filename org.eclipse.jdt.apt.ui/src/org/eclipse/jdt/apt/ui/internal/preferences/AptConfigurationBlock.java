@@ -73,7 +73,6 @@ import org.eclipse.jdt.internal.ui.wizards.dialogfields.StringDialogField;
  * see org.eclipse.jdt.ui.internal.preferences.TodoTaskConfigurationBlock
  * for the conceptual source of some of this code.
  * <p>
- *
  */
 public class AptConfigurationBlock extends BaseConfigurationBlock {
 
@@ -95,10 +94,10 @@ public class AptConfigurationBlock extends BaseConfigurationBlock {
 	private final IJavaProject fJProj;
 
 	private SelectionButtonDialogField fAptEnabledField;
-	private SelectionButtonDialogField fReconcileEnabledField;
-	private StringDialogField fGenSrcDirField;
-	private StringDialogField fGenTestSrcDirField;
-	private ListDialogField<ProcessorOption> fProcessorOptionsField;
+	private final SelectionButtonDialogField fReconcileEnabledField;
+	private final StringDialogField fGenSrcDirField;
+	private final StringDialogField fGenTestSrcDirField;
+	private final ListDialogField<ProcessorOption> fProcessorOptionsField;
 
 	private PixelConverter fPixelConverter;
 	private Composite fBlockControl;
@@ -418,7 +417,6 @@ public class AptConfigurationBlock extends BaseConfigurationBlock {
 	 * but we continue to set both values in order to ensure backward
 	 * compatibility with prior versions.
 	 * the aptEnabled setting.
-	 * @param enable
 	 */
 	private void setJDTProcessAnnotationsSetting(boolean enable) {
 		IScopeContext context = (null != fJProj) ?

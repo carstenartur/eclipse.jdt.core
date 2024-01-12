@@ -30,7 +30,7 @@ public class SwitchPatternTest extends AbstractRegressionTest9 {
 	static {
 //		TESTS_NUMBERS = new int [] { 40 };
 //		TESTS_RANGE = new int[] { 1, -1 };
-//		TESTS_NAMES = new String[] { "testIssueExhaustiveness_005"};
+//		TESTS_NAMES = new String[] { "testIssue1466_02"};
 	}
 
 	private static String previewLevel = "21";
@@ -2186,7 +2186,12 @@ public class SwitchPatternTest extends AbstractRegressionTest9 {
 			"----------\n" +
 			"1. ERROR in X.java (at line 5)\n" +
 			"	case null, null  -> System.out.println(o);\n" +
-			"	^^^^^^^^^^^^^^^\n" +
+			"	     ^^^^\n" +
+			"Duplicate case\n" +
+			"----------\n" +
+			"2. ERROR in X.java (at line 5)\n" +
+			"	case null, null  -> System.out.println(o);\n" +
+			"	           ^^^^\n" +
 			"Duplicate case\n" +
 			"----------\n");
 	}
@@ -6906,5 +6911,214 @@ public class SwitchPatternTest extends AbstractRegressionTest9 {
 					+ "}"
 				},
 				"true");
+	}
+	public void testIssue1466_01() {
+		this.runConformTest(
+				new String[] {
+					"X.java",
+					"""
+					public class X {
+
+						  private static String foo(Integer i) {
+						    return switch (i) {
+						      case null -> "null";
+						      case Integer value when value > 0 -> value.toString();
+						      default -> i.toString();
+						    };
+						  }
+
+						  public static void main(String[] args) {
+						    System.out.println(foo(0));
+						  }
+						}
+
+					""",
+				},
+				"0");
+	}
+	public void testIssue1466_02() {
+		this.runConformTest(
+				new String[] {
+					"X.java",
+					"""
+					public class X {
+					  public static void main(String[] args) {
+					    constantLabelMustAppearBeforePatternInteger(-1);
+					    constantLabelMustAppearBeforePatternInteger(0);
+					    constantLabelMustAppearBeforePatternInteger(42);
+					    constantLabelMustAppearBeforePatternInteger(-99);
+					    constantLabelMustAppearBeforePatternInteger(Integer.valueOf(123));
+					    constantLabelMustAppearBeforePatternInteger(null);
+					  }
+					  static String constantLabelMustAppearBeforePatternInteger(Integer i) {
+					    switch (i) {
+					      case null -> System.out.println("value unavailable: " + i);
+					      case -1, 1 -> System.out.println("absolute value 1: " + i);
+					      case Integer value when value > 0 -> System.out.println("positive integer: " + i);
+					      default -> System.out.println("other integer: " + i);
+					    }
+					    return i == null ? "null" : i.toString();
+					  }
+					}
+
+					""",
+				},
+				"absolute value 1: -1\n" +
+				"other integer: 0\n" +
+				"positive integer: 42\n" +
+				"other integer: -99\n" +
+				"positive integer: 123\n" +
+				"value unavailable: null"
+);
+	}
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/1767
+	// NPE in switch with case null
+	public void testIssue1767() {
+		this.runConformTest(
+				new String[] {
+					"X.java",
+					"""
+					public class X {
+					   public static void main(String[] args) {
+						   Integer o = null;
+						   switch (o) {
+						     case null:
+						       System.out.println("NULL");
+						       break;
+						     default : System.out.println(o);
+						   }
+					   }
+					}
+					""",
+				},
+				"NULL");
+	}
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/277
+	// [19] statement switch with a case null does not compile
+	public void testIssue277() {
+		this.runConformTest(
+				new String[] {
+					"X.java",
+					"""
+					public class X {
+					  enum Color { RED, BLACK }
+
+					  public static void main(String[] args) {
+					    Color color = null;
+					    switch (color) {
+					      case null -> System.out.println("NULL");
+					      case RED -> System.out.println("RED");
+					      case BLACK -> System.out.println("BLACK");
+					    }
+					  }
+					}
+					""",
+				},
+				"NULL");
+	}
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/277
+	// [19] statement switch with a case null does not compile
+	public void testIssue277_original() {
+		this.runConformTest(
+				new String[] {
+					"X.java",
+					"""
+					public class X {
+					  enum Color { RED, BLACK }
+
+					  public static void main(String[] args) {
+					    Color color = Color.RED;
+					    switch (color) {
+					      case null -> throw null;
+					      case RED -> System.out.println("RED");
+					      case BLACK -> System.out.println("BLACK");
+					    }
+					  }
+					}
+					""",
+				},
+				"RED");
+	}
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/554
+	// [19] statement switch with a case null does not compile
+	public void testIssue554() {
+		this.runConformTest(
+				new String[] {
+					"X.java",
+					"""
+					public class X {
+					    public static void main(String[] args) {
+					        MyEnum val = null;
+					        switch (val) {
+					        case null:
+					            System.out.println("val is null");
+					            break;
+					        }
+					    }
+					}
+					enum MyEnum {
+					    a
+					}
+					""",
+				},
+				"val is null");
+	}
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/113
+	// [switch] The Class file generated by ECJ for guarded patterns behaves incorrectly
+	public void testGHI113() {
+		this.runConformTest(
+				new String[] {
+					"X.java",
+					"""
+					public class X {
+
+						interface Shape {
+							public double calculateArea();
+						}
+
+						record Triangle(int base, int height) implements Shape {
+
+							@Override
+							public double calculateArea() {
+								return (0.5 * base * height);
+							}
+
+						}
+
+						record Square(int side) implements Shape {
+
+							@Override
+							public double calculateArea() {
+								return (side * side);
+							}
+
+						}
+
+						static String evaluate(Shape s) {
+							return switch(s) {
+								case null ->
+									"NULL";
+								case Triangle T when (T.calculateArea() > 100) ->
+								    "Large Triangle : " + T.calculateArea();
+								case Triangle T ->
+								    "Small Triangle : " + T.calculateArea();
+								default ->
+								    "shape : " + s.calculateArea();
+							};
+						}
+
+						public static void main(String[] args) {
+							System.out.println(evaluate(new Triangle(10, 10)));
+							System.out.println(evaluate(new Triangle(20, 20)));
+							System.out.println(evaluate(new Square(10)));
+							System.out.println(evaluate(null));
+						}
+					}
+					""",
+				},
+				"Small Triangle : 50.0\n"
+				+ "Large Triangle : 200.0\n"
+				+ "shape : 100.0\n"
+				+ "NULL");
 	}
 }

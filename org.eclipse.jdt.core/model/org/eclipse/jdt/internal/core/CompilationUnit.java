@@ -500,8 +500,9 @@ public void destroy() {
 	try {
 		discardWorkingCopy();
 	} catch (JavaModelException e) {
-		if (JavaModelManager.VERBOSE)
-			e.printStackTrace();
+		if (JavaModelManager.VERBOSE) {
+			JavaModelManager.trace("", e); //$NON-NLS-1$
+		}
 	}
 }
 
@@ -1376,7 +1377,7 @@ public void save(IProgressMonitor pm, boolean force) throws JavaModelException {
  * Debugging purposes
  */
 @Override
-protected void toStringInfo(int tab, StringBuffer buffer, Object info, boolean showResolvedInfo) {
+protected void toStringInfo(int tab, StringBuilder buffer, Object info, boolean showResolvedInfo) {
 	if (!isPrimary()) {
 		buffer.append(tabString(tab));
 		buffer.append("[Working copy] "); //$NON-NLS-1$
@@ -1448,15 +1449,16 @@ public char[] getModuleName() {
 		if (module != null)
 			return module.getElementName().toCharArray();
 	} catch (JavaModelException e) {
-		// TODO Auto-generated catch block
-		e.printStackTrace();
+		if (JavaModelManager.VERBOSE) {
+			JavaModelManager.trace("", e); //$NON-NLS-1$
+		}
 	}
 	return null;
 }
 
 @Override
 public void setOptions(Map<String, String> newOptions) {
-	Map<String, String> customOptions = newOptions == null ? null : new ConcurrentHashMap<String, String>(newOptions);
+	Map<String, String> customOptions = newOptions == null ? null : new ConcurrentHashMap<>(newOptions);
 	try {
 		this.getCompilationUnitElementInfo().setCustomOptions(customOptions);
 	} catch (JavaModelException e) {

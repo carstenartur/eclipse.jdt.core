@@ -49,7 +49,7 @@ public class AbstractCompilerToolTest extends BatchCompilerTest {
 		}
 		@Override
 		public String toString() {
-			StringBuffer result = new StringBuffer();
+			StringBuilder result = new StringBuilder();
 			for (String option: this.options) {
 				result.append(option);
 				result.append(' ');
@@ -63,7 +63,7 @@ public class AbstractCompilerToolTest extends BatchCompilerTest {
 		public static final int INFO = 2;
 		public static final int WARNING = 4;
 
-		private PrintWriter err;
+		private final PrintWriter err;
 		public int kind;
 
 		public CompilerInvocationDiagnosticListener(PrintWriter err) {
@@ -105,7 +105,7 @@ public class AbstractCompilerToolTest extends BatchCompilerTest {
 			ownsManager = true;
 		}
 		try {
-			List<File> files = new ArrayList<File>();
+			List<File> files = new ArrayList<>();
 			String[] fileNames = arguments.fileNames;
 			for (int i = 0, l = fileNames.length; i < l; i++) {
 				if (fileNames[i].startsWith(OUTPUT_DIR)) {

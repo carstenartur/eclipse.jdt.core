@@ -29,7 +29,6 @@ package org.eclipse.jdt.internal.codeassist.select;
  *           <SelectOnExplicitConstructorCall:Y.super(1, 2)>
  *         }
  *       }
- *
  */
 
 import org.eclipse.jdt.internal.compiler.ast.*;
@@ -43,7 +42,7 @@ public class SelectionOnExplicitConstructorCall extends ExplicitConstructorCall 
 	}
 
 	@Override
-	public StringBuffer printStatement(int tab, StringBuffer output) {
+	public StringBuilder printStatement(int tab, StringBuilder output) {
 
 		printIndent(tab, output);
 		output.append("<SelectOnExplicitConstructorCall:"); //$NON-NLS-1$

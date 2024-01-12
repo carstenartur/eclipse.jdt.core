@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2019 IBM Corporation and others.
+ * Copyright (c) 2000, 2023 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -28,7 +28,7 @@ import org.eclipse.jdt.internal.compiler.util.Util;
 
 public class DiagnoseParser implements ParserBasicInformation, TerminalTokens, ConflictedParser {
 	private static final boolean DEBUG = false;
-	private boolean DEBUG_PARSECHECK = false;
+	private final boolean DEBUG_PARSECHECK = false;
 
 	private static final int STACK_INCREMENT = 256;
 
@@ -49,9 +49,9 @@ public class DiagnoseParser implements ParserBasicInformation, TerminalTokens, C
 	private static final int MAX_DISTANCE = 30;
 	private static final int MIN_DISTANCE = 3;
 
-	private CompilerOptions options;
+	private final CompilerOptions options;
 
-	private LexStream lexStream;
+	private final LexStream lexStream;
 	private int errorToken;
 	private int errorTokenStart;
 
@@ -85,9 +85,9 @@ public class DiagnoseParser implements ParserBasicInformation, TerminalTokens, C
 	int statePoolTop;
 	StateInfo[] statePool;
 
-	private Parser parser;
+	private final Parser parser;
 
-	private RecoveryScanner recoveryScanner;
+	private final RecoveryScanner recoveryScanner;
 
 	private boolean reportProblem;
 	private int deferredErrorStart;
@@ -198,12 +198,14 @@ public class DiagnoseParser implements ParserBasicInformation, TerminalTokens, C
 			this.deferredErrorStart = this.deferredErrorEnd = -1;
 			diagnoseParse0(record);
 		} finally {
-			ReferenceContext referenceContext = this.problemReporter().referenceContext;
-			CompilationResult compilationResult = referenceContext != null ? referenceContext.compilationResult() : null;
-			if (compilationResult != null && !compilationResult.hasSyntaxError) {
-				reportMisplacedConstruct(this.deferredErrorStart, this.deferredErrorEnd, true);
+			try (ProblemReporter problemReporter = this.problemReporter()) {
+				ReferenceContext referenceContext = problemReporter.referenceContext;
+				CompilationResult compilationResult = referenceContext != null ? referenceContext.compilationResult() : null;
+				if (compilationResult != null && !compilationResult.hasSyntaxError) {
+					reportMisplacedConstruct(this.deferredErrorStart, this.deferredErrorEnd, true);
+				}
+				this.deferredErrorStart = this.deferredErrorEnd = -1;
 			}
-			this.deferredErrorStart = this.deferredErrorEnd = -1;
 		}
 	}
 
@@ -404,9 +406,11 @@ public class DiagnoseParser implements ParserBasicInformation, TerminalTokens, C
 						return;
 					}
 
-					if(this.parser.problemReporter().options.maxProblemsPerUnit < this.parser.compilationUnit.compilationResult.problemCount) {
-						if(this.recoveryScanner == null || !this.recoveryScanner.record) return;
-						this.reportProblem = false;
+					try (ProblemReporter problemReporter = this.parser.problemReporter()) {
+						if(problemReporter.options.maxProblemsPerUnit < this.parser.compilationUnit.compilationResult.problemCount) {
+							if(this.recoveryScanner == null || !this.recoveryScanner.record) return;
+							this.reportProblem = false;
+						}
 					}
 
 					act = this.stack[this.stateStackTop];
@@ -449,7 +453,7 @@ public class DiagnoseParser implements ParserBasicInformation, TerminalTokens, C
 	}
 
 	private static char[] displayEscapeCharacters(char[] tokenSource, int start, int end) {
-		StringBuffer tokenSourceBuffer = new StringBuffer();
+		StringBuilder tokenSourceBuffer = new StringBuilder();
 		for (int i = 0; i < start; i++) {
 			tokenSourceBuffer.append(tokenSource[i]);
 		}
@@ -2125,7 +2129,9 @@ public class DiagnoseParser implements ParserBasicInformation, TerminalTokens, C
 		int currentKind = this.lexStream.kind(token);
 		String errorTokenName = Parser.name[Parser.terminal_index[this.lexStream.kind(token)]];
 		char[] errorTokenSource = this.lexStream.name(token);
-		if (currentKind == TerminalTokens.TokenNameStringLiteral) {
+		if (currentKind == TerminalTokens.TokenNameStringLiteral ||
+				currentKind == TerminalTokens.TokenNameStringTemplate ||
+				currentKind == TerminalTokens.TokenNameTextBlockTemplate) {
 			errorTokenSource = displayEscapeCharacters(errorTokenSource, 1, errorTokenSource.length - 1);
 		}
 

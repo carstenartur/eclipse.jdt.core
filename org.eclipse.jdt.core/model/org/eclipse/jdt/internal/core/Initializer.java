@@ -49,10 +49,10 @@ public int getElementType() {
 	return INITIALIZER;
 }
 /**
- * @see JavaElement#getHandleMemento(StringBuffer)
+ * @see JavaElement#getHandleMemento(StringBuilder)
  */
 @Override
-protected void getHandleMemento(StringBuffer buff) {
+protected void getHandleMemento(StringBuilder buff) {
 	getParent().getHandleMemento(buff);
 	buff.append(getHandleMementoDelimiter());
 	buff.append(this.occurrenceCount);
@@ -68,8 +68,6 @@ protected char getHandleMementoDelimiter() {
 public int hashCode() {
 	return Util.combineHashCodes(this.getParent().hashCode(), this.occurrenceCount);
 }
-/**
- */
 @Override
 public String readableName() {
 
@@ -103,7 +101,7 @@ public JavaElement getPrimaryElement(boolean checkOwner) {
  * @private Debugging purposes
  */
 @Override
-protected void toStringInfo(int tab, StringBuffer buffer, Object info, boolean showResolvedInfo) {
+protected void toStringInfo(int tab, StringBuilder buffer, Object info, boolean showResolvedInfo) {
 	buffer.append(tabString(tab));
 	if (info == null) {
 		buffer.append("<initializer #"); //$NON-NLS-1$

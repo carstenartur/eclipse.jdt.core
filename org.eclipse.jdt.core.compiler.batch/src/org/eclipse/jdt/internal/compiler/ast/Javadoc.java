@@ -177,7 +177,7 @@ public class Javadoc extends ASTNode {
 	 * @see org.eclipse.jdt.internal.compiler.ast.ASTNode#print(int, java.lang.StringBuffer)
 	 */
 	@Override
-	public StringBuffer print(int indent, StringBuffer output) {
+	public StringBuilder print(int indent, StringBuilder output) {
 		printIndent(indent, output).append("/**\n"); //$NON-NLS-1$
 		if (this.paramReferences != null) {
 			for (int i = 0, length = this.paramReferences.length; i < length; i++) {
@@ -1055,14 +1055,14 @@ public class Javadoc extends ASTNode {
 			int scopeModifiers = -1;
 
 			// reference must have enough visibility to be used
-			if (!canBeSeen(scope.problemReporter().options.reportInvalidJavadocTagsVisibility, modifiers)) {
+			if (!canBeSeen(scope.compilerOptions().reportInvalidJavadocTagsVisibility, modifiers)) {
 				scope.problemReporter().javadocHiddenReference(typeReference.sourceStart, reference.sourceEnd, scope, modifiers);
 				return;
 			}
 
 			// type reference must have enough visibility to be used
 			if (reference != typeReference) {
-				if (!canBeSeen(scope.problemReporter().options.reportInvalidJavadocTagsVisibility, resolvedType.modifiers)) {
+				if (!canBeSeen(scope.compilerOptions().reportInvalidJavadocTagsVisibility, resolvedType.modifiers)) {
 					scope.problemReporter().javadocHiddenReference(typeReference.sourceStart, typeReference.sourceEnd, scope, resolvedType.modifiers);
 					return;
 				}
@@ -1206,7 +1206,7 @@ public class Javadoc extends ASTNode {
 			}
 
 			if (!bindingFound) {
-				if (!canBeSeen(scope.problemReporter().options.reportInvalidJavadocTagsVisibility, moduleType.modifiers)) {
+				if (!canBeSeen(scope.compilerOptions().reportInvalidJavadocTagsVisibility, moduleType.modifiers)) {
 					scope.problemReporter().javadocHiddenReference(typeReference.sourceStart, typeReference.sourceEnd, scope, moduleType.modifiers);
 					return bindingFound;
 				}

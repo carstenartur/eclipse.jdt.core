@@ -341,7 +341,6 @@ protected int determineKind(IResource underlyingResource) throws JavaModelExcept
  * Compares two objects for equality;
  * for <code>PackageFragmentRoot</code>s, equality is having the
  * same parent, same resources, and occurrence count.
- *
  */
 @Override
 public boolean equals(Object o) {
@@ -483,10 +482,10 @@ public IJavaElement getHandleFromMemento(String token, MementoTokenizer memento,
 	return null;
 }
 /**
- * @see JavaElement#getHandleMemento(StringBuffer)
+ * @see JavaElement#getHandleMemento(StringBuilder)
  */
 @Override
-protected void getHandleMemento(StringBuffer buff) {
+protected void getHandleMemento(StringBuilder buff) {
 	IPath path;
 	IResource underlyingResource = getResource();
 	if (underlyingResource != null) {
@@ -838,7 +837,7 @@ public void move(
  * @private Debugging purposes
  */
 @Override
-protected void toStringInfo(int tab, StringBuffer buffer, Object info, boolean showResolvedInfo) {
+protected void toStringInfo(int tab, StringBuilder buffer, Object info, boolean showResolvedInfo) {
 	buffer.append(tabString(tab));
 	IPath path = getPath();
 	if (isExternal()) {
@@ -892,7 +891,6 @@ protected void verifyAttachSource(IPath sourcePath) throws JavaModelException {
  * to directly under the root. It is the responsibility of such package fragment roots to
  * provide the custom behavior.
  *
- * @param classname
  * @return the relative path for the class file within the archive
  */
 public String getClassFilePath(String classname) {

@@ -53,8 +53,8 @@ public class UserLibrary {
 	private static final String TAG_ARCHIVE= "archive"; //$NON-NLS-1$
 	private static final String TAG_SYSTEMLIBRARY= "systemlibrary"; //$NON-NLS-1$
 
-	private boolean isSystemLibrary;
-	private IClasspathEntry[] entries;
+	private final boolean isSystemLibrary;
+	private final IClasspathEntry[] entries;
 
 	public UserLibrary(IClasspathEntry[] entries, boolean isSystemLibrary) {
 		Assert.isNotNull(entries);
@@ -139,8 +139,6 @@ public class UserLibrary {
 			}
 		}
 		xmlWriter.endTag(TAG_USERLIBRARY, true/*insert tab*/, true/*insert new line*/);
-		writer.flush();
-		writer.close();
 		return writer.toString();
 	}
 

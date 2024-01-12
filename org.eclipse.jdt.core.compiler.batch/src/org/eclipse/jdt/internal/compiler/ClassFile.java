@@ -79,6 +79,7 @@ import org.eclipse.jdt.internal.compiler.ast.RequiresStatement;
 import org.eclipse.jdt.internal.compiler.ast.SingleMemberAnnotation;
 import org.eclipse.jdt.internal.compiler.ast.SingleNameReference;
 import org.eclipse.jdt.internal.compiler.ast.StringLiteral;
+import org.eclipse.jdt.internal.compiler.ast.StringTemplate;
 import org.eclipse.jdt.internal.compiler.ast.SwitchStatement;
 import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.TypeParameter;
@@ -124,6 +125,7 @@ import org.eclipse.jdt.internal.compiler.lookup.TypeIds;
 import org.eclipse.jdt.internal.compiler.lookup.TypeVariableBinding;
 import org.eclipse.jdt.internal.compiler.problem.AbortMethod;
 import org.eclipse.jdt.internal.compiler.problem.AbortType;
+import org.eclipse.jdt.internal.compiler.problem.ProblemReporter;
 import org.eclipse.jdt.internal.compiler.problem.ProblemSeverities;
 import org.eclipse.jdt.internal.compiler.problem.ShouldNotImplement;
 import org.eclipse.jdt.internal.compiler.util.Messages;
@@ -200,9 +202,10 @@ public class ClassFile implements TypeConstants, TypeIds {
 	public static final String ENUMDESC_OF = "EnumDesc.of"; //$NON-NLS-1$
 	public static final String CLASSDESC = "ClassDesc"; //$NON-NLS-1$
 	public static final String CLASSDESC_OF = "ClassDesc.of"; //$NON-NLS-1$
+	public static final String PROCESS_STRING = "process"; //$NON-NLS-1$
+	public static final String NEW_STRING_TEMPLATE = "newStringTemplate"; //$NON-NLS-1$
 	public static final String[] BOOTSTRAP_METHODS = { ALTMETAFACTORY_STRING, METAFACTORY_STRING, BOOTSTRAP_STRING,
-			TYPESWITCH_STRING, ENUMSWITCH_STRING, CONCAT_CONSTANTS, INVOKE_STRING, ENUMDESC_OF, CLASSDESC, CLASSDESC_OF };
-
+			TYPESWITCH_STRING, ENUMSWITCH_STRING, CONCAT_CONSTANTS, INVOKE_STRING, ENUMDESC_OF, CLASSDESC, CLASSDESC_OF, PROCESS_STRING, NEW_STRING_TEMPLATE};
 	/**
 	 * INTERNAL USE-ONLY
 	 * Request the creation of a ClassFile compatible representation of a problematic type
@@ -618,7 +621,7 @@ public class ClassFile implements TypeConstants, TypeIds {
 						int size = allTypeAnnotationContexts.size();
 						attributesNumber = completeRuntimeTypeAnnotations(attributesNumber,
 								null,
-								(node) -> size > 0,
+								node -> size > 0,
 								() -> allTypeAnnotationContexts);
 					}
 				} finally {
@@ -671,7 +674,7 @@ public class ClassFile implements TypeConstants, TypeIds {
 				int size = allTypeAnnotationContexts.size();
 				attributesNumber = completeRuntimeTypeAnnotations(attributesNumber,
 																	null,
-																	(node) -> size > 0,
+																	node -> size > 0,
 																	() -> allTypeAnnotationContexts);
 
 			}
@@ -1760,7 +1763,7 @@ public class ClassFile implements TypeConstants, TypeIds {
 		int size = allTypeAnnotationContexts.size();
 		attributesNumber = completeRuntimeTypeAnnotations(attributesNumber,
 															null,
-															(node) -> size > 0,
+															node -> size > 0,
 															() -> allTypeAnnotationContexts);
 		return attributesNumber;
 	}
@@ -2038,9 +2041,6 @@ public class ClassFile implements TypeConstants, TypeIds {
 	}
 
 
-	/**
-	 *
-	 */
 	public void completeCodeAttributeForMissingAbstractProblemMethod(
 			MethodBinding binding,
 			int codeAttributeOffset,
@@ -2277,9 +2277,10 @@ public class ClassFile implements TypeConstants, TypeIds {
 				if (exceptionLabel != null) {
 					int iRange = 0, maxRange = exceptionLabel.getCount();
 					if ((maxRange & 1) != 0) {
-						this.referenceBinding.scope.problemReporter().abortDueToInternalError(
+						ProblemReporter problemReporter = this.referenceBinding.scope.problemReporter();
+						problemReporter.abortDueToInternalError(
 								Messages.bind(Messages.abort_invalidExceptionAttribute, new String(binding.selector),
-										this.referenceBinding.scope.problemReporter().referenceContext));
+										problemReporter.referenceContext));
 					}
 					while  (iRange < maxRange) {
 						int start = exceptionLabel.ranges[iRange++]; // even ranges are start positions
@@ -2474,7 +2475,7 @@ public class ClassFile implements TypeConstants, TypeIds {
 			int size = allTypeAnnotationContexts.size();
 			attributesNumber = completeRuntimeTypeAnnotations(attributesNumber,
 											null,
-											(node) -> size > 0,
+											node -> size > 0,
 											() -> allTypeAnnotationContexts);
 		}
 		if ((this.produceAttributes & ClassFileConstants.ATTR_METHOD_PARAMETERS) != 0 ||
@@ -3309,9 +3310,6 @@ public class ClassFile implements TypeConstants, TypeIds {
 			}
 		}
 	}
-	/**
-	 * @param attributeOffset
-	 */
 	private void generateElementValue(int attributeOffset, Expression defaultValue, Constant constant, TypeBinding binding) {
 		if (this.contentsOffset + 3 >= this.contents.length) {
 			resizeContents(3);
@@ -3671,6 +3669,8 @@ public class ClassFile implements TypeConstants, TypeIds {
 				localContentsOffset = addBootStrapTypeCaseConstantEntry(localContentsOffset, (ResolvedCase) o, fPtr);
 			} else if (o instanceof TypeBinding) {
 				localContentsOffset = addClassDescBootstrap(localContentsOffset, (TypeBinding) o, fPtr);
+			} else if (o instanceof StringTemplate template) {
+				localContentsOffset = addBootStrapTemplateRuntimeEntry(localContentsOffset, template, fPtr);
 			}
 		}
 
@@ -3840,7 +3840,7 @@ public class ClassFile implements TypeConstants, TypeIds {
 		String names =
 			Arrays.stream(recordComponents)
 			.map(f -> new String(f.name))
-			.reduce((s1, s2) -> { return s1 + ";" + s2;}) //$NON-NLS-1$
+			.reduce((s1, s2) -> (s1 + ";" + s2)) //$NON-NLS-1$
 			.orElse(Util.EMPTY_STRING);
 		int namesIndex = this.constantPool.literalIndex(names);
 		this.contents[localContentsOffset++] = (byte) (namesIndex >> 8);
@@ -4025,6 +4025,7 @@ public class ClassFile implements TypeConstants, TypeIds {
 		int numArgsLocation = localContentsOffset;
 		CaseStatement.ResolvedCase[] constants = switchStatement.otherConstants;
 		int numArgs = constants.length;
+		if (switchStatement.containsNull) --numArgs;
 		this.contents[numArgsLocation++] = (byte) (numArgs >> 8);
 		this.contents[numArgsLocation] = (byte) numArgs;
 		localContentsOffset += 2;
@@ -4036,8 +4037,11 @@ public class ClassFile implements TypeConstants, TypeIds {
 				this.contents[localContentsOffset++] = (byte) (typeIndex >> 8);
 				this.contents[localContentsOffset++] = (byte) typeIndex;
 			} else {
+				if (c.e instanceof NullLiteral) continue;
+				String s = c.e instanceof QualifiedNameReference qnr ? // handle superfluously qualified enumerator.
+								new String(qnr.tokens[qnr.tokens.length-1]) : c.e.toString();
 				int intValIdx =
-						this.constantPool.literalIndex(c.e.toString());
+						this.constantPool.literalIndex(s);
 				this.contents[localContentsOffset++] = (byte) (intValIdx >> 8);
 				this.contents[localContentsOffset++] = (byte) intValIdx;
 			}
@@ -4069,6 +4073,40 @@ public class ClassFile implements TypeConstants, TypeIds {
 		this.contents[localContentsOffset++] = (byte) (intValIdx >> 8);
 		this.contents[localContentsOffset++] = (byte) intValIdx;
 
+		return localContentsOffset;
+	}
+	private int addBootStrapTemplateRuntimeEntry(int localContentsOffset, StringTemplate template, Map<String, Integer> fPtr) {
+		final int contentsEntries = 10;
+		int indexForProcess = fPtr.get(NEW_STRING_TEMPLATE);
+		if (contentsEntries + localContentsOffset >= this.contents.length) {
+			resizeContents(contentsEntries);
+		}
+		if (indexForProcess == 0) {
+			ReferenceBinding javaLangRuntimeTemplateBootstraps = this.referenceBinding.scope.getJavaLangRuntimeTemplateRuntimeBootstraps();
+			indexForProcess = this.constantPool.literalIndexForMethodHandle(ClassFileConstants.MethodHandleRefKindInvokeStatic, javaLangRuntimeTemplateBootstraps,
+					NEW_STRING_TEMPLATE.toCharArray(), ConstantPool.JAVA_LANG_RUNTIME_STRING_TEMPLATE_SIGNATURE, false);
+			fPtr.put(NEW_STRING_TEMPLATE, indexForProcess);
+		}
+		this.contents[localContentsOffset++] = (byte) (indexForProcess >> 8);
+		this.contents[localContentsOffset++] = (byte) indexForProcess;
+
+		// u2 num_bootstrap_arguments
+		int numArgsLocation = localContentsOffset;
+		StringLiteral[] fragments = template.fragments();
+		int numArgs = fragments.length;
+		this.contents[numArgsLocation++] = (byte) (numArgs >> 8);
+		this.contents[numArgsLocation] = (byte) numArgs;
+		localContentsOffset += 2;
+
+		if ((numArgs * 2) + localContentsOffset >= this.contents.length) {
+			resizeContents(numArgs * 2);
+		}
+		for (StringLiteral frag : fragments) {
+			int intValIdx =
+					this.constantPool.literalIndex(frag.constant.stringValue());
+			this.contents[localContentsOffset++] = (byte) (intValIdx >> 8);
+			this.contents[localContentsOffset++] = (byte) intValIdx;
+		}
 		return localContentsOffset;
 	}
 	private int generateLineNumberAttribute() {
@@ -4403,7 +4441,7 @@ public class ClassFile implements TypeConstants, TypeIds {
 							int size = allTypeAnnotationContexts.size();
 							attributesNumber = completeRuntimeTypeAnnotations(attributesNumber,
 									null,
-									(node) -> size > 0,
+									node -> size > 0,
 									() -> allTypeAnnotationContexts);
 						}
 					}
@@ -4702,7 +4740,6 @@ public class ClassFile implements TypeConstants, TypeIds {
 		return false;
 	}
 	/**
-	 * @param annotations
 	 * @param targetMask allowed targets
 	 * @return the number of attributes created while dumping the annotations in the .class file
 	 */
@@ -5142,7 +5179,10 @@ public class ClassFile implements TypeConstants, TypeIds {
 			for (int i = 0, max = targetParameters.length, argumentsLength = arguments != null ? arguments.length : 0; i < max; i++) {
 				if (argumentsLength > i && arguments[i] != null) {
 					Argument argument = arguments[i];
-					length = writeArgumentName(argument.name, argument.binding.modifiers, length);
+					int modifiers = argument.binding.modifiers;
+					if (binding.isCompactConstructor())
+						modifiers |= ClassFileConstants.AccMandated;
+					length = writeArgumentName(argument.name, modifiers, length);
 				} else {
 					length = writeArgumentName(null, ClassFileConstants.AccSynthetic, length);
 				}
@@ -5855,7 +5895,7 @@ public class ClassFile implements TypeConstants, TypeIds {
 		int size = allTypeAnnotationContexts.size();
 		attributesNumber = completeRuntimeTypeAnnotations(attributesNumber,
 				null,
-				(node) -> size > 0,
+				node -> size > 0,
 				() -> allTypeAnnotationContexts);
 		return attributesNumber;
 	}
@@ -6397,6 +6437,13 @@ public class ClassFile implements TypeConstants, TypeIds {
 			this.bootstrapMethods = new ArrayList<>();
 		}
 		this.bootstrapMethods.add(expression);
+		return this.bootstrapMethods.size() - 1;
+	}
+	public int recordBootstrapMethod(StringTemplate template) {
+		if (this.bootstrapMethods == null) {
+			this.bootstrapMethods = new ArrayList<>();
+		}
+		this.bootstrapMethods.add(template);
 		return this.bootstrapMethods.size() - 1;
 	}
 	public void reset(/*@Nullable*/SourceTypeBinding typeBinding, CompilerOptions options) {

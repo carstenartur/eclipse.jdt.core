@@ -200,7 +200,7 @@ public class HookedJavaFileObject extends
 	 */
 	private boolean _closed = false;
 
-	private String _typeName;
+	private final String _typeName;
 
 	public HookedJavaFileObject(JavaFileObject fileObject, String fileName, String typeName, BatchFilerImpl filer) {
 		super(fileObject);
@@ -209,13 +209,13 @@ public class HookedJavaFileObject extends
 		this._typeName = typeName;
 	}
 
-	@SuppressWarnings("resource") // ForwardingOutputStream forwards close() too
+	// @SuppressWarnings("resource") // ForwardingOutputStream forwards close() too
 	@Override
 	public OutputStream openOutputStream() throws IOException {
 		return new ForwardingOutputStream(super.openOutputStream());
 	}
 
-	@SuppressWarnings("resource") // ForwardingWriter forwards close() too
+	// @SuppressWarnings("resource") // ForwardingWriter forwards close() too
 	@Override
 	public Writer openWriter() throws IOException {
 		return new ForwardingWriter(super.openWriter());

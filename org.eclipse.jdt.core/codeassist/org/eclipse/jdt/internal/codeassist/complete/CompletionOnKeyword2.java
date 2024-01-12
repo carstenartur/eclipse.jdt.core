@@ -17,8 +17,8 @@ import org.eclipse.jdt.internal.compiler.ast.ImportReference;
 import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 
 public class CompletionOnKeyword2 extends ImportReference implements CompletionOnKeyword {
-	private char[] token;
-	private char[][] possibleKeywords;
+	private final char[] token;
+	private final char[][] possibleKeywords;
 	public CompletionOnKeyword2(char[] token, long pos, char[][] possibleKeywords) {
 		super(new char[][]{token}, new long[]{pos}, false, ClassFileConstants.AccDefault);
 		this.token = token;
@@ -33,7 +33,7 @@ public class CompletionOnKeyword2 extends ImportReference implements CompletionO
 		return this.possibleKeywords;
 	}
 	@Override
-	public StringBuffer print(int indent, StringBuffer output, boolean withOnDemand) {
+	public StringBuilder print(int indent, StringBuilder output, boolean withOnDemand) {
 
 		return printIndent(indent, output).append("<CompleteOnKeyword:").append(this.token).append('>'); //$NON-NLS-1$
 	}

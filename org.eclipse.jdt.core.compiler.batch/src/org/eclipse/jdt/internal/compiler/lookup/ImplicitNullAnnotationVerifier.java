@@ -59,7 +59,7 @@ public class ImplicitNullAnnotationVerifier {
 	// delegate which to ask for recursive analysis of super methods
 	// can be 'this', but is never a MethodVerifier (to avoid infinite recursion).
 	ImplicitNullAnnotationVerifier buddyImplicitNullAnnotationsVerifier;
-	private boolean inheritNullAnnotations;
+	private final boolean inheritNullAnnotations;
 	protected LookupEnvironment environment;
 
 
@@ -345,10 +345,10 @@ public class ImplicitNullAnnotationVerifier {
 			length = currentArguments.length;
 		if (useTypeAnnotations) // need to look for type annotations on all parameters:
 			length = currentMethod.parameters.length;
-		else if (inheritedMethod.parameterNonNullness != null)
-			length = inheritedMethod.parameterNonNullness.length;
-		else if (currentMethod.parameterNonNullness != null)
-			length = currentMethod.parameterNonNullness.length;
+		else if (inheritedMethod.parameterFlowBits != null)
+			length = inheritedMethod.parameterFlowBits.length;
+		else if (currentMethod.parameterFlowBits != null)
+			length = currentMethod.parameterFlowBits.length;
 
 		parameterLoop:
 		for (int i = 0; i < length; i++) {
@@ -493,8 +493,8 @@ public class ImplicitNullAnnotationVerifier {
 			}
 			return null;
 		}
-		return (method.parameterNonNullness == null)
-						? null : method.parameterNonNullness[i];
+		return (method.parameterFlowBits == null)
+						? null : method.getParameterNullness(i);
 	}
 
 	private long getReturnTypeNullnessTagBits(MethodBinding method, boolean useTypeAnnotations) {
@@ -525,9 +525,13 @@ public class ImplicitNullAnnotationVerifier {
 
 	/* record declared nullness of a parameter into the method and into the argument (if present). */
 	void recordArgNonNullness(MethodBinding method, int paramCount, int paramIdx, Argument currentArgument, Boolean nonNullNess) {
-		if (method.parameterNonNullness == null)
-			method.parameterNonNullness = new Boolean[paramCount];
-		method.parameterNonNullness[paramIdx] = nonNullNess;
+		if (method.parameterFlowBits == null)
+			method.parameterFlowBits = new byte[paramCount];
+		if (nonNullNess == Boolean.TRUE) {
+			method.parameterFlowBits[paramIdx] |= MethodBinding.PARAM_NONNULL;
+		} else if (nonNullNess == Boolean.FALSE) {
+			method.parameterFlowBits[paramIdx] |= MethodBinding.PARAM_NULLABLE;
+		}
 		if (currentArgument != null) {
 			currentArgument.binding.tagBits |= nonNullNess.booleanValue() ?
 					TagBits.AnnotationNonNull : TagBits.AnnotationNullable;

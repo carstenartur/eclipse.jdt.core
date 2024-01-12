@@ -104,12 +104,12 @@ public class ASTRewriteFlattener extends ASTVisitor {
 		return flattener.getResult();
 	}
 
-	protected StringBuffer result;
-	private RewriteEventStore store;
+	protected StringBuilder result;
+	private final RewriteEventStore store;
 
 	public ASTRewriteFlattener(RewriteEventStore store) {
 		this.store= store;
-		this.result= new StringBuffer();
+		this.result= new StringBuilder();
 	}
 
 	/**
@@ -132,9 +132,9 @@ public class ASTRewriteFlattener extends ASTVisitor {
 	 * Appends the text representation of the given modifier flags, followed by a single space.
 	 *
 	 * @param modifiers the modifiers
-	 * @param buf The <code>StringBuffer</code> to write the result to.
+	 * @param buf The <code>StringBuilder</code> to write the result to.
 	 */
-	public static void printModifiers(int modifiers, StringBuffer buf) {
+	public static void printModifiers(int modifiers, StringBuilder buf) {
 		if (Modifier.isPublic(modifiers)) {
 			buf.append("public "); //$NON-NLS-1$
 		}
@@ -952,9 +952,6 @@ public class ASTRewriteFlattener extends ASTVisitor {
 	}
 
 	private boolean visitPattern(Pattern node) {
-		if (!DOMASTUtil.isPatternSupported(node.getAST())) {
-			return false;
-		}
 		if (node instanceof RecordPattern) {
 			return visit((RecordPattern) node);
 		}
@@ -1643,6 +1640,40 @@ public class ASTRewriteFlattener extends ASTVisitor {
 			expression.accept(this);
 		}
 		this.result.append(';');
+		return false;
+	}
+	@Override
+	public boolean visit(StringFragment node) {
+		this.result.append(node.getEscapedValue());
+		return false;
+	}
+	@Override
+	public boolean visit(StringTemplateExpression node) {
+		ASTNode expression = getChildNode(node, StringTemplateExpression.TEMPLATE_PROCESSOR);
+		if (expression != null) {
+			expression.accept(this);
+		}
+		this.result.append('.');
+		this.result.append((node.isMultiline() ? "\"\"\"\n" : "\"")); //$NON-NLS-1$ //$NON-NLS-2$
+		expression = node.getFirstFragment();
+		expression.accept(this);
+		List<StringTemplateComponent> components = node.components();
+		int size = components.size();
+		for(int i = 0; i < size; i++) {
+			Expression comp = components.get(i);
+			comp.accept(this);
+		}
+		this.result.append((node.isMultiline() ? "\"\"\"" : "\"")); //$NON-NLS-1$ //$NON-NLS-2$
+		return false;
+	}
+	@Override
+	public boolean visit(StringTemplateComponent node) {
+		this.result.append("\\{"); //$NON-NLS-1$
+		Expression expression = node.getEmbeddedExpression();
+		expression.accept(this);
+		this.result.append('}');
+		StringFragment fragment = node.getStringFragment();
+		fragment.accept(this);
 		return false;
 	}
 }

@@ -24,11 +24,11 @@ import org.eclipse.jdt.internal.core.util.Util;
 
 public class LambdaMethod extends SourceMethod {
 
-	private int sourceStart; // cached for ease of use in hashcode/equals.
-	private String [] parameterNameStrings;
-	private String returnTypeString;
+	private final int sourceStart; // cached for ease of use in hashcode/equals.
+	private final String [] parameterNameStrings;
+	private final String returnTypeString;
 	SourceMethodElementInfo elementInfo;
-	private String key;
+	private final String key;
 
 	LambdaMethod(JavaElement parent, String name, String key, int sourceStart, String [] parameterTypes, String [] parameterNames, String returnType, SourceMethodElementInfo elementInfo) {
 		super(parent, name, parameterTypes);
@@ -78,7 +78,7 @@ public class LambdaMethod extends SourceMethod {
 		return this.elementInfo;
 	}
 
-	public void getHandleMemento(StringBuffer buff, boolean serializeParent) {
+	public void getHandleMemento(StringBuilder buff, boolean serializeParent) {
 		if (serializeParent) {
 			((LambdaExpression) getParent()).getHandleMemento(buff, true, false);
 		}
@@ -103,7 +103,7 @@ public class LambdaMethod extends SourceMethod {
 		}
 	}
 	@Override
-	public void getHandleMemento(StringBuffer buff) {
+	public void getHandleMemento(StringBuilder buff) {
 		getHandleMemento(buff, true);
 		// lambda method and lambda expression cannot share the same memento - add a trailing discriminator.
 		appendEscapedDelimiter(buff, getHandleMementoDelimiter());

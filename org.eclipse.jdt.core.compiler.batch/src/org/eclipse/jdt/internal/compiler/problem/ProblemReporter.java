@@ -218,12 +218,10 @@ import org.eclipse.jdt.internal.compiler.util.Messages;
 import org.eclipse.jdt.internal.compiler.util.Util;
 
 /** See contract of {@link #close()}. */
-@SuppressWarnings("rawtypes")
 public class ProblemReporter extends ProblemHandler implements AutoCloseable {
 
 	public ReferenceContext referenceContext;
 	private Scanner positionScanner;
-	private boolean underScoreIsError;
 	private final static byte
 	  // TYPE_ACCESS = 0x0,
 	  FIELD_ACCESS = 0x4,
@@ -1798,7 +1796,7 @@ public int computeSeverity(int problemID){
 		case IProblem.ToleratedMisplacedTypeAnnotations:
 			return ProblemSeverities.Warning;
 		case IProblem.IllegalUseOfUnderscoreAsAnIdentifier:
-			return this.underScoreIsError ? ProblemSeverities.Error : ProblemSeverities.Warning;
+			return ProblemSeverities.Warning;
 		// for Java 16
 		case IProblem.DiscouragedValueBasedTypeSynchronization:
 			return ProblemSeverities.Warning;
@@ -3190,7 +3188,7 @@ public void illegalModifierForMethod(AbstractMethodDeclaration methodDecl) {
 }
 public void illegalModifierForVariable(LocalDeclaration localDecl, boolean complainAsArgument) {
 	String[] arguments = new String[] {new String(localDecl.name)};
-	int problemId = ((localDecl.modifiers & ExtraCompilerModifiers.AccPatternVariable) != 0) ?
+	int problemId = ((localDecl.modifiers & ExtraCompilerModifiers.AccOutOfFlowScope) != 0) ?
 			IProblem.IllegalModifierForPatternVariable :
 			(complainAsArgument
 					? IProblem.IllegalModifierForArgument
@@ -4867,12 +4865,12 @@ public void invalidType(ASTNode location, TypeBinding type) {
 		}
 
 		if (type.isParameterizedType()) {
-			List missingTypes = type.collectMissingTypes(null);
+			List<TypeBinding> missingTypes = type.collectMissingTypes(null);
 			if (missingTypes != null) {
 				ReferenceContext savedContext = this.referenceContext;
-				for (Iterator iterator = missingTypes.iterator(); iterator.hasNext(); ) {
+				for (Iterator<TypeBinding> iterator = missingTypes.iterator(); iterator.hasNext(); ) {
 					try {
-						invalidType(location, (TypeBinding) iterator.next());
+						invalidType(location, iterator.next());
 					} finally {
 						this.referenceContext = savedContext; // nested reporting will have reset referenceContext
 					}
@@ -6920,12 +6918,12 @@ public void missingSynchronizedOnInheritedMethod(MethodBinding currentMethod, Me
 			currentMethod.sourceEnd());
 }
 public void missingTypeInConstructor(ASTNode location, MethodBinding constructor) {
-	List missingTypes = constructor.collectMissingTypes(null);
+	List<TypeBinding> missingTypes = constructor.collectMissingTypes(null);
 	if (missingTypes == null) {
 		System.err.println("The constructor " + constructor + " is wrongly tagged as containing missing types"); //$NON-NLS-1$ //$NON-NLS-2$
 		return;
 	}
-	TypeBinding missingType = (TypeBinding) missingTypes.get(0);
+	TypeBinding missingType = missingTypes.get(0);
 	int start = location.sourceStart;
 	int end = location.sourceEnd;
 	if (location instanceof QualifiedAllocationExpression) {
@@ -6953,12 +6951,12 @@ public void missingTypeInConstructor(ASTNode location, MethodBinding constructor
 public void missingTypeInLambda(LambdaExpression lambda, MethodBinding method) {
 	int nameSourceStart = lambda.sourceStart();
 	int nameSourceEnd = lambda.diagnosticsSourceEnd();
-	List missingTypes = method.collectMissingTypes(null);
+	List<TypeBinding> missingTypes = method.collectMissingTypes(null);
 	if (missingTypes == null) {
 		System.err.println("The lambda expression " + method + " is wrongly tagged as containing missing types"); //$NON-NLS-1$ //$NON-NLS-2$
 		return;
 	}
-	TypeBinding missingType = (TypeBinding) missingTypes.get(0);
+	TypeBinding missingType = missingTypes.get(0);
 	this.handle(
 			IProblem.MissingTypeInLambda,
 			new String[] {
@@ -6980,12 +6978,12 @@ public void missingTypeInMethod(ASTNode astNode, MethodBinding method) {
 		nameSourceStart = astNode.sourceStart;
 		nameSourceEnd = astNode.sourceEnd;
 	}
-	List missingTypes = method.collectMissingTypes(null);
+	List<TypeBinding> missingTypes = method.collectMissingTypes(null);
 	if (missingTypes == null) {
 		System.err.println("The method " + method + " is wrongly tagged as containing missing types"); //$NON-NLS-1$ //$NON-NLS-2$
 		return;
 	}
-	TypeBinding missingType = (TypeBinding) missingTypes.get(0);
+	TypeBinding missingType = missingTypes.get(0);
 	this.handle(
 			IProblem.MissingTypeInMethod,
 			new String[] {
@@ -9326,9 +9324,12 @@ public void unsafeReturnTypeOverride(MethodBinding currentMethod, MethodBinding 
 	int start = type.sourceStart();
 	int end = type.sourceEnd();
 	if (TypeBinding.equalsEquals(currentMethod.declaringClass, type)) {
-		ASTNode location = ((MethodDeclaration) currentMethod.sourceMethod()).returnType;
-		start = location.sourceStart();
-		end = location.sourceEnd();
+		MethodDeclaration md = (MethodDeclaration) currentMethod.sourceMethod();
+		if (md != null) { // synthetics have no source method, don't npe
+			ASTNode location = md.returnType;
+			start = location.sourceStart();
+			end = location.sourceEnd();
+		}
 	}
 	this.handle(
 			IProblem.UnsafeReturnTypeOverride,
@@ -9802,19 +9803,15 @@ public void useEnumAsAnIdentifier(int sourceStart, int sourceEnd) {
 		sourceStart,
 		sourceEnd);
 }
-public void illegalUseOfUnderscoreAsAnIdentifier(int sourceStart, int sourceEnd, boolean reportError) {
-	this.underScoreIsError = reportError;
+public void illegalUseOfUnderscoreAsAnIdentifier(int sourceStart, int sourceEnd, boolean reportError, boolean unusedVariablesSupported) {
 	int problemId = (reportError) ? IProblem.ErrorUseOfUnderscoreAsAnIdentifier : IProblem.IllegalUseOfUnderscoreAsAnIdentifier;
-	try {
-		this.handle(
-			problemId,
-			NoArgument,
-			NoArgument,
-			sourceStart,
-			sourceEnd);
-	} finally {
-		this.underScoreIsError = false;
-	}
+	problemId = unusedVariablesSupported ? IProblem.UnderscoreCannotBeUsedHere : problemId;
+	this.handle(
+		problemId,
+		NoArgument,
+		NoArgument,
+		sourceStart,
+		sourceEnd);
 }
 public void varargsArgumentNeedCast(MethodBinding method, TypeBinding argumentType, InvocationSite location) {
 	int severity = this.options.getSeverity(CompilerOptions.VarargsArgumentNeedCast);
@@ -12514,14 +12511,6 @@ public void cannotInferRecordPatternTypes(RecordPattern pattern) {
 			pattern.sourceStart,
 			pattern.sourceEnd);
 }
-public void illegalRecordPattern(int recordPatternSourceStart, int recordPatternSourceEnd) {
-	this.handle(
-			IProblem.IllegalRecordPattern,
-			NoArgument,
-			NoArgument,
-			recordPatternSourceStart,
-			recordPatternSourceEnd);
-}
 public void falseLiteralInGuard(Expression exp) {
 	this.handle(
 			IProblem.FalseConstantInGuard,
@@ -12529,6 +12518,13 @@ public void falseLiteralInGuard(Expression exp) {
 			NoArgument,
 			exp.sourceStart,
 			exp.sourceEnd);
+}
+public void unnamedVariableMustHaveInitializer(LocalDeclaration variableDeclaration) {
+	this.handle(IProblem.UnnamedVariableMustHaveInitializer,
+			NoArgument,
+			NoArgument,
+			variableDeclaration.sourceStart,
+			variableDeclaration.sourceEnd);
 }
 public boolean scheduleProblemForContext(Runnable problemComputation) {
 	if (this.referenceContext != null) {

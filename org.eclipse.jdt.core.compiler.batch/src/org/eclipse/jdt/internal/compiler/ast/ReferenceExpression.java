@@ -157,8 +157,6 @@ public class ReferenceExpression extends FunctionalExpression implements IPolyEx
 		copy.sourceStart = this.sourceStart;
 		copy.sourceEnd = this.sourceEnd;
 		copy.text = this.text;
-		copy.lhs.addPatternVariablesWhenTrue(this.lhs.getPatternVariablesWhenTrue());
-		copy.lhs.addPatternVariablesWhenFalse(this.lhs.getPatternVariablesWhenFalse());
 		return copy;
 	}
 
@@ -212,7 +210,7 @@ public class ReferenceExpression extends FunctionalExpression implements IPolyEx
 			argv[i] = new SingleNameReference(name, 0);
 		}
 		boolean generateSecretReceiverVariable = shouldGenerateSecretReceiverVariable();
-		LocalVariableBinding[] patternVariablesInScope = null;
+		LocalVariableBinding[] patternVariablesInScope = NO_VARIABLES;
 		if (isMethodReference()) {
 			if (generateSecretReceiverVariable) {
 				this.lhs.generateCode(currentScope, codeStream, true);
@@ -225,7 +223,7 @@ public class ReferenceExpression extends FunctionalExpression implements IPolyEx
 			if (this.lhs instanceof NameReference nr
 					&& nr.binding instanceof LocalVariableBinding receiverLocal
 					&& receiverLocal.isValidBinding()
-					&& (receiverLocal.modifiers & ExtraCompilerModifiers.AccPatternVariable) != 0) {
+					&& (receiverLocal.modifiers & ExtraCompilerModifiers.AccOutOfFlowScope) != 0) {
 				// what was in scope during initial resolve must be in scope during resolve of synthetic AST, too:
 				patternVariablesInScope = new LocalVariableBinding[] { receiverLocal };
 			}
@@ -269,7 +267,7 @@ public class ReferenceExpression extends FunctionalExpression implements IPolyEx
 		BlockScope lambdaScope = this.receiverVariable != null ? this.receiverVariable.declaringScope : currentScope;
 		IErrorHandlingPolicy oldPolicy = lambdaScope.problemReporter().switchErrorHandlingPolicy(silentErrorHandlingPolicy);
 		try {
-			implicitLambda.resolveWithPatternVariablesInScope(patternVariablesInScope, lambdaScope, true);
+			implicitLambda.resolveTypeWithBindings(patternVariablesInScope, lambdaScope, true);
 			implicitLambda.analyseCode(lambdaScope,
 					new FieldInitsFakingFlowContext(null, this, Binding.NO_EXCEPTIONS, null, lambdaScope, FlowInfo.DEAD_END),
 					UnconditionalFlowInfo.fakeInitializedFlowInfo(implicitLambda.firstLocalLocal, lambdaScope.referenceType().maxFieldCount));
@@ -910,8 +908,7 @@ public class ReferenceExpression extends FunctionalExpression implements IPolyEx
 
 	        		TypeBinding descriptorParameter = this.descriptor.parameters[0];
 	    			if((descriptorParameter.tagBits & TagBits.AnnotationNullable) != 0) { // Note: normal dereferencing of 'unchecked' values is not reported, either
-		    			final TypeBinding receiver = scope.environment().createAnnotatedType(this.binding.declaringClass,
-								new AnnotationBinding[] { scope.environment().getNonNullAnnotation() });
+		    			final TypeBinding receiver = scope.environment().createNonNullAnnotatedType(this.binding.declaringClass);
     					scope.problemReporter().referenceExpressionArgumentNullityMismatch(this, receiver, descriptorParameter, this.descriptor, -1, NullAnnotationMatching.NULL_ANNOTATIONS_MISMATCH);
 	    			}
 	        	}

@@ -71,6 +71,8 @@ public class BlockScope extends Scope {
 	public boolean insideTypeAnnotation = false;
 	public Statement blockStatement;
 
+    private boolean reparentLocals = false;
+
 public BlockScope(BlockScope parent) {
 	this(parent, true);
 }
@@ -137,6 +139,12 @@ public final void addLocalType(TypeDeclaration localType) {
  * and checking there are not too many locals or arguments allocated.
  */
 public final void addLocalVariable(LocalVariableBinding binding) {
+	if (this.reparentLocals) {
+		BlockScope parentScope = (BlockScope) this.parent;
+		parentScope.addLocalVariable(binding);
+		this.startIndex = parentScope.localIndex;
+		return;
+	}
 	checkAndSetModifiersForVariable(binding);
 	// insert local in scope
 	if (this.localIndex == this.locals.length)
@@ -288,7 +296,8 @@ void computeLocalVariablePositions(int ilocal, int initOffset, CodeStream codeSt
 			// do not report fake used variable
 			if (local.useFlag == LocalVariableBinding.UNUSED
 				&& (local.declaration != null) // unused (and non secret) local
-				&& ((local.declaration.bits & ASTNode.IsLocalDeclarationReachable) != 0)) { // declaration is reachable
+				&& ((local.declaration.bits & ASTNode.IsLocalDeclarationReachable) != 0) // declaration is reachable
+				&& !local.declaration.isUnnamed(local.declaringScope)) {
 
 				if (local.isCatchParameter()) {
 					problemReporter().unusedExceptionParameter(local.declaration); // report unused catch arguments
@@ -300,7 +309,8 @@ void computeLocalVariablePositions(int ilocal, int initOffset, CodeStream codeSt
 
 			// could be optimized out, but does need to preserve unread variables ?
 			if (!generateCurrentLocalVar) {
-				if (local.declaration != null && compilerOptions().preserveAllLocalVariables) {
+				if ((local.declaration != null && compilerOptions().preserveAllLocalVariables) ||
+						local.isPatternVariable()) { // too much voodoo around pattern codegen. Having warned, just treat them as used.
 					generateCurrentLocalVar = true; // force it to be preserved in the generated code
 					if (local.useFlag == LocalVariableBinding.UNUSED)
 						local.useFlag = LocalVariableBinding.USED;
@@ -453,7 +463,7 @@ public LocalDeclaration[] findLocalVariableDeclarations(int position) {
 		} else {
 			// consider variable first
 			LocalVariableBinding local = this.locals[ilocal]; // if no local at all, will be locals[ilocal]==null
-			if (local != null && (local.modifiers & ExtraCompilerModifiers.AccPatternVariable) == 0) {
+			if (local != null && (local.modifiers & ExtraCompilerModifiers.AccOutOfFlowScope) == 0) {
 				LocalDeclaration localDecl = local.declaration;
 				if (localDecl != null) {
 					if (localDecl.declarationSourceStart <= position) {
@@ -476,39 +486,16 @@ public LocalDeclaration[] findLocalVariableDeclarations(int position) {
 	}
 	return null;
 }
-private boolean isPatternVariableInScope(InvocationSite invocationSite, LocalVariableBinding variable) {
-	LocalVariableBinding[] patternVariablesInScope = invocationSite.getPatternVariablesWhenTrue();
-	if (patternVariablesInScope == null)
-		return false;
-	for (LocalVariableBinding v : patternVariablesInScope) {
-		if (v == variable) {
-			return true;
-		}
-	}
-	return false;
-}
 @Override
 public LocalVariableBinding findVariable(char[] variableName, InvocationSite invocationSite) {
 	int varLength = variableName.length;
 	for (int i = this.localIndex-1; i >= 0; i--) { // lookup backward to reach latest additions first
 		LocalVariableBinding local = this.locals[i];
-		if ((local.modifiers & ExtraCompilerModifiers.AccPatternVariable) != 0)
+		if ((local.modifiers & ExtraCompilerModifiers.AccOutOfFlowScope) != 0)
 			continue;
 		char[] localName;
 		if ((localName = local.name).length == varLength && CharOperation.equals(localName, variableName))
 			return local;
-	}
-	// Look at the pattern variables now
-	for (int i = this.localIndex-1; i >= 0; i--) { // lookup backward to reach latest additions first
-		LocalVariableBinding local = this.locals[i];
-		if ((local.modifiers & ExtraCompilerModifiers.AccPatternVariable) == 0)
-			continue;
-		char[] localName;
-		if ((localName = local.name).length != varLength || !CharOperation.equals(localName, variableName))
-			continue;
-		if (isPatternVariableInScope(invocationSite, local)) {
-			return local;
-		}
 	}
 	return null;
 }
@@ -1436,6 +1423,38 @@ private boolean checkAppropriate(MethodBinding compileTimeDeclaration, MethodBin
 		return false;
 	}
 	return true;
+}
+
+public void reparentLocals(boolean reparent) {
+	this.reparentLocals = reparent;
+}
+public void reportClashingDeclarations(LocalVariableBinding [] left, LocalVariableBinding [] right) {
+	if (left != null && left.length > 0 && right != null && right.length > 0) {
+		for (LocalVariableBinding leftVar : left) {
+			for (LocalVariableBinding rightVar : right) {
+				if (CharOperation.equals(leftVar.name, rightVar.name)) {
+					problemReporter().illegalRedeclarationOfPatternVar(rightVar, rightVar.declaration);
+				}
+			}
+		}
+	}
+}
+public void include(LocalVariableBinding[] bindings) {
+	// `this` is assumed to be populated with bindings.
+	if (bindings != null) {
+		for (LocalVariableBinding binding : bindings) {
+			binding.modifiers &= ~ExtraCompilerModifiers.AccOutOfFlowScope;
+		}
+	}
+}
+
+public void exclude(LocalVariableBinding[] bindings) {
+	// `this` is assumed to be populated with bindings.
+	if (bindings != null) {
+		for (LocalVariableBinding binding : bindings) {
+			binding.modifiers |= ExtraCompilerModifiers.AccOutOfFlowScope;
+		}
+	}
 }
 
 }

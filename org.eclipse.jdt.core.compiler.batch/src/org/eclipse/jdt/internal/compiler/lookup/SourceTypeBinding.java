@@ -1588,9 +1588,10 @@ public char[] genericTypeSignature() {
     	this.genericReferenceTypeSignature = computeGenericTypeSignature(this.typeVariables);
     return this.genericReferenceTypeSignature;
 }
-/**
+/**{@code
  * <param1 ... paramN>superclass superinterface1 ... superinterfaceN
  * <T:LY<TT;>;U:Ljava/lang/Object;V::Ljava/lang/Runnable;:Ljava/lang/Cloneable;:Ljava/util/Map;>Ljava/lang/Exception;Ljava/lang/Runnable;
+ * }
  */
 public char[] genericSignature() {
 	if (!isPrototype())
@@ -2748,11 +2749,15 @@ public FieldBinding resolveTypeFor(FieldBinding field) {
 
 public MethodBinding resolveTypesFor(MethodBinding method) {
 	ProblemReporter problemReporter = this.scope.problemReporter();
-	IErrorHandlingPolicy suspendedPolicy = problemReporter.suspendTempErrorHandlingPolicy();
-	try (problemReporter) {
-		return resolveTypesWithSuspendedTempErrorHandlingPolicy(method);
+	try {
+		IErrorHandlingPolicy suspendedPolicy = problemReporter.suspendTempErrorHandlingPolicy();
+		try {
+			return resolveTypesWithSuspendedTempErrorHandlingPolicy(method);
+		} finally {
+			problemReporter.resumeTempErrorHandlingPolicy(suspendedPolicy);
+		}
 	} finally {
-		problemReporter.resumeTempErrorHandlingPolicy(suspendedPolicy);
+		problemReporter.close();
 	}
 }
 

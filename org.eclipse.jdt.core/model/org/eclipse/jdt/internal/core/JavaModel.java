@@ -337,6 +337,15 @@ public static Object getTarget(IPath path, boolean checkResourceExistence) {
 		return target;
 	return getExternalTarget(path, checkResourceExistence);
 }
+/** Return same as calling {@link #getTarget(IPath, boolean)} for {@link IClasspathEntry#getPath()} */
+public static Object getTarget(IClasspathEntry entry, boolean checkResourceExistence) {
+	return getTarget(entry.getPath(), checkResourceExistence);
+}
+/** Return same as calling {@link #getTarget(IPath, boolean)} for {@link IPackageFragmentRoot#getPath()} */
+public static Object getTarget(IPackageFragmentRoot root, boolean checkResourceExistence) {
+	return getTarget(root.getPath(), checkResourceExistence);
+}
+
 
 /**
  * Helper method - returns the {@link IResource} corresponding to the provided {@link IPath},
@@ -409,13 +418,14 @@ static private boolean isExternalFile(IPath path) {
 	if (JavaModelManager.getJavaModelManager().isExternalFile(path)) {
 		return true;
 	}
+	if (JavaModelManager.getJavaModelManager().knownToNotExistOnFileSystem(path)) {
+		return false;
+	}
 	if (JavaModelManager.ZIP_ACCESS_VERBOSE) {
 		JavaModelManager.trace("(" + Thread.currentThread() + ") [JavaModel.isExternalFile(...)] Checking existence of " + path.toString()); //$NON-NLS-1$ //$NON-NLS-2$
 	}
 	boolean isFile = path.toFile().isFile();
-	if (isFile) {
-		JavaModelManager.getJavaModelManager().addExternalFile(path);
-	}
+	JavaModelManager.getJavaModelManager().addExternalFile(path, isFile);
 	return isFile;
 }
 

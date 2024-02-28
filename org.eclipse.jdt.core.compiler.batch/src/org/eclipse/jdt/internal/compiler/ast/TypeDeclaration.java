@@ -132,7 +132,7 @@ public void abort(int abortLevel, CategorizedProblem problem) {
 }
 
 /**
- * This method is responsible for adding a <clinit> method declaration to the type method collections.
+ * This method is responsible for adding a {@code <clinit>} method declaration to the type method collections.
  * Note that this implementation is inserting it in first place (as VAJ or javac), and that this
  * impacts the behavior of the method ConstantPool.resetForClinit(int. int), in so far as
  * the latter will have to reset the constant pool state accordingly (if it was added first, it does
@@ -1105,7 +1105,7 @@ public void manageEnclosingInstanceAccessIfNecessary(ClassScope currentScope, Fl
 }
 
 /**
- * A <clinit> will be requested as soon as static fields or assertions are present. It will be eliminated during
+ * A {@code <clinit>} will be requested as soon as static fields or assertions are present. It will be eliminated during
  * classfile creation if no bytecode was actually produced based on some optimizations/compiler settings.
  */
 public final boolean needClassInitMethod() {
@@ -1526,7 +1526,8 @@ public void resolve() {
 		} else if (!sourceType.isLocalType()) {
 			// Set javadoc visibility
 			int visibility = sourceType.modifiers & ExtraCompilerModifiers.AccVisibilityMASK;
-			try (ProblemReporter reporter = this.scope.problemReporter()) {
+			ProblemReporter reporter = this.scope.problemReporter();
+			try {
 				int severity = reporter.computeSeverity(IProblem.JavadocMissing);
 				if (severity != ProblemSeverities.Ignore) {
 					if (this.enclosingType != null) {
@@ -1535,6 +1536,8 @@ public void resolve() {
 					int javadocModifiers = (this.binding.modifiers & ~ExtraCompilerModifiers.AccVisibilityMASK) | visibility;
 					reporter.javadocMissing(this.sourceStart, this.sourceEnd, severity, javadocModifiers);
 				}
+			} finally {
+				reporter.close();
 			}
 		}
 		updateNestHost();

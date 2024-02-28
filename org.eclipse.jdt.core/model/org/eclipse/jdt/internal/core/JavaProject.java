@@ -398,11 +398,14 @@ public class JavaProject
 	 * @return boolean
 	 */
 	public static boolean hasJavaNature(IProject project) {
+		if (ExternalJavaProject.EXTERNAL_PROJECT_NAME.equals(project.getName())){
+			return true;
+		}
 		try {
-			return project.hasNature(JavaCore.NATURE_ID);
+			if (project.isOpen()) {
+				return project.hasNature(JavaCore.NATURE_ID);
+			}
 		} catch (CoreException e) {
-			if (ExternalJavaProject.EXTERNAL_PROJECT_NAME.equals(project.getName()))
-				return true;
 			// project does not exist or is not open
 		}
 		return false;
@@ -720,7 +723,7 @@ public class JavaProject
 			case IClasspathEntry.CPE_SOURCE :
 
 				if (projectPath.isPrefixOf(entryPath)){
-					Object target = JavaModel.getTarget(entryPath, true/*check existency*/);
+					Object target = JavaModel.getTarget(resolvedEntry, true/*check existency*/);
 					if (target == null) return;
 
 					if (target instanceof IFolder || target instanceof IProject){
@@ -733,7 +736,7 @@ public class JavaProject
 			case IClasspathEntry.CPE_LIBRARY :
 				if (referringEntry != null  && !resolvedEntry.isExported())
 					return;
-				Object target = JavaModel.getTarget(entryPath, true/*check existency*/);
+				Object target = JavaModel.getTarget(resolvedEntry, true/*check existency*/);
 				if (target == null)
 					return;
 

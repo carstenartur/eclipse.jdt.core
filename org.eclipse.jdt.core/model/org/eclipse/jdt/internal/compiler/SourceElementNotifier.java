@@ -48,6 +48,7 @@ import org.eclipse.jdt.internal.compiler.ast.ThisReference;
 import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.TypeParameter;
 import org.eclipse.jdt.internal.compiler.ast.TypeReference;
+import org.eclipse.jdt.internal.compiler.ast.ImplicitTypeDeclaration;
 import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
 import org.eclipse.jdt.internal.compiler.lookup.ClassScope;
@@ -231,8 +232,7 @@ private TypeParameterInfo[] getTypeParameterInfos(TypeParameter[] typeParameters
  */
 private boolean hasDeprecatedAnnotation(Annotation[] annotations) {
 	if (annotations != null) {
-		for (int i = 0, length = annotations.length; i < length; i++) {
-			Annotation annotation = annotations[i];
+		for (Annotation annotation : annotations) {
 			if (CharOperation.equals(annotation.type.getLastToken(), TypeConstants.JAVA_LANG_DEPRECATED[2])) {
 				return true;
 			}
@@ -459,13 +459,13 @@ public void notifySourceElementRequestor(
 			nodes[index++] = currentPackage;
 		}
 		if (imports != null) {
-			for (int i = 0, max = imports.length; i < max; i++) {
-				nodes[index++] = imports[i];
+			for (ImportReference import1 : imports) {
+				nodes[index++] = import1;
 			}
 		}
 		if (types != null) {
-			for (int i = 0, max = types.length; i < max; i++) {
-				nodes[index++] = types[i];
+			for (TypeDeclaration type : types) {
+				nodes[index++] = type;
 			}
 		}
 
@@ -720,6 +720,7 @@ protected void notifySourceElementRequestor(TypeDeclaration typeDeclaration, boo
 					? (currentModifiers & ExtraCompilerModifiers.AccJustFlag) | ClassFileConstants.AccDeprecated
 					: currentModifiers & ExtraCompilerModifiers.AccJustFlag;
 			typeInfo.modifiers |= currentModifiers & (ExtraCompilerModifiers.AccSealed | ExtraCompilerModifiers.AccNonSealed);
+			typeInfo.modifiers |= typeDeclaration instanceof ImplicitTypeDeclaration ? ExtraCompilerModifiers.AccUnnamed : 0;
 			typeInfo.name = typeDeclaration.name;
 			typeInfo.nameSourceStart = isEnumInit ? typeDeclaration.allocation.enumConstant.sourceStart : typeDeclaration.sourceStart;
 			typeInfo.nameSourceEnd = sourceEnd(typeDeclaration);

@@ -56,7 +56,6 @@ import java.util.Set;
 
 import org.eclipse.jdt.core.compiler.CategorizedProblem;
 import org.eclipse.jdt.core.compiler.CharOperation;
-import org.eclipse.jdt.core.compiler.IProblem;
 import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.ClassFile;
 import org.eclipse.jdt.internal.compiler.CompilationResult;
@@ -128,7 +127,6 @@ public class LambdaExpression extends FunctionalExpression implements IPolyExpre
 	public boolean hasOuterClassMemberReference = false;
 	private int outerLocalVariablesSlotSize = 0;
 	private boolean assistNode = false;
-	private boolean hasIgnoredMandatoryErrors = false;
 	private ReferenceBinding classType;
 	private Set thrownExceptions;
 	private static final SyntheticArgumentBinding [] NO_SYNTHETIC_ARGUMENTS = new SyntheticArgumentBinding[0];
@@ -600,8 +598,8 @@ public class LambdaExpression extends FunctionalExpression implements IPolyExpre
 		AbstractMethodDeclaration.analyseArguments(currentScope.environment(), lambdaInfo, flowContext, this.arguments, methodWithParameterDeclaration);
 
 		if (this.arguments != null) {
-			for (int i = 0, count = this.arguments.length; i < count; i++) {
-				this.bits |= (this.arguments[i].bits & ASTNode.HasTypeAnnotations);
+			for (Argument argument : this.arguments) {
+				this.bits |= (argument.bits & ASTNode.HasTypeAnnotations);
 			}
 		}
 
@@ -656,8 +654,7 @@ public class LambdaExpression extends FunctionalExpression implements IPolyExpre
 			if (ourTagBits == 0L) {
 				if (descTagBits != 0L && !ourParameters[i].isBaseType()) {
 					AnnotationBinding [] annotations = descParameters[i].getTypeAnnotations();
-					for (int j = 0, length = annotations.length; j < length; j++) {
-						AnnotationBinding annotation = annotations[j];
+					for (AnnotationBinding annotation : annotations) {
 						if (annotation != null && annotation.getAnnotationType().hasNullBit(TypeIds.BitNonNullAnnotation|TypeIds.BitNullableAnnotation)) {
 							ourParameters[i] = env.createAnnotatedType(ourParameters[i], new AnnotationBinding [] { annotation });
 						}
@@ -728,8 +725,8 @@ public class LambdaExpression extends FunctionalExpression implements IPolyExpre
 		} else {
 			Expression [] returnExpressions = this.resultExpressions;
 			if (returnExpressions != NO_EXPRESSIONS) {
-				for (int i = 0, length = returnExpressions.length; i < length; i++) {
-					if (!returnExpressions[i].isPertinentToApplicability(targetType, method))
+				for (Expression returnExpression : returnExpressions) {
+					if (!returnExpression.isPertinentToApplicability(targetType, method))
 						return false;
 				}
 			} else {
@@ -807,17 +804,6 @@ public class LambdaExpression extends FunctionalExpression implements IPolyExpre
 
 	public MethodScope getScope() {
 		return this.scope;
-	}
-
-	private boolean enclosingScopesHaveErrors() {
-		Scope skope = this.enclosingScope;
-		while (skope != null) {
-			ReferenceContext context = skope.referenceContext();
-			if (context != null && context.hasErrors())
-				return true;
-			skope = skope.parent;
-		}
-		return false;
 	}
 
 	private void analyzeShape() { // Simple minded analysis for code assist & potential compatibility.
@@ -950,10 +936,10 @@ public class LambdaExpression extends FunctionalExpression implements IPolyExpre
 			return CompatibilityResult.INCOMPATIBLE;
 
 		Expression [] returnExpressions = copy.resultExpressions;
-		for (int i = 0, length = returnExpressions.length; i < length; i++) {
+		for (Expression returnExpression : returnExpressions) {
 			if (sam.returnType.isProperType(true) // inference variables can reach here during nested inference
-					&& this.enclosingScope.parameterCompatibilityLevel(returnExpressions[i].resolvedType, sam.returnType) == Scope.NOT_COMPATIBLE) {
-				if (!returnExpressions[i].isConstantValueOfTypeAssignableToType(returnExpressions[i].resolvedType, sam.returnType))
+					&& this.enclosingScope.parameterCompatibilityLevel(returnExpression.resolvedType, sam.returnType) == Scope.NOT_COMPATIBLE) {
+				if (!returnExpression.isConstantValueOfTypeAssignableToType(returnExpression.resolvedType, sam.returnType))
 					if (sam.returnType.id != TypeIds.T_void || this.body instanceof Block)
 						return CompatibilityResult.INCOMPATIBLE;
 			}
@@ -1023,8 +1009,7 @@ public class LambdaExpression extends FunctionalExpression implements IPolyExpre
 			if (!requireExceptionAnalysis)
 				return copy;
 			if (copy.thrownExceptions == null)
-				if (!copy.hasIgnoredMandatoryErrors && !enclosingScopesHaveErrors())
-					copy.analyzeExceptions();
+				copy.analyzeExceptions();
 			return copy;
 		} finally {
 			this.enclosingScope.problemReporter().switchErrorHandlingPolicy(oldPolicy);
@@ -1232,42 +1217,6 @@ public class LambdaExpression extends FunctionalExpression implements IPolyExpre
 		}
 	}
 
-	@Override
-	public void tagAsHavingIgnoredMandatoryErrors(int problemId) {
-		switch (problemId) {
-			// 15.27.3 requires exception throw related errors to not influence congruence. Other errors should. Also don't abort shape analysis.
-			case IProblem.UnhandledExceptionOnAutoClose:
-			case IProblem.UnhandledExceptionInDefaultConstructor:
-			case IProblem.UnhandledException:
-				return;
-			/* The following structural problems can occur only because of target type imposition. Filter, so we can distinguish inherent errors
-			   in explicit lambdas. This is to help decide whether to proceed with data/control flow analysis to discover shape. In case of inherent
-			   errors, we will not call analyze code as it is not prepared to analyze broken programs.
-			*/
-			case IProblem.VoidMethodReturnsValue:
-			case IProblem.ShouldReturnValueHintMissingDefault:
-			case IProblem.ShouldReturnValue:
-			case IProblem.ReturnTypeMismatch:
-			case IProblem.IncompatibleLambdaParameterType:
-			case IProblem.lambdaParameterTypeMismatched:
-			case IProblem.lambdaSignatureMismatched:
-			case IProblem.LambdaDescriptorMentionsUnmentionable:
-			case IProblem.TargetTypeNotAFunctionalInterface:
-			case IProblem.illFormedParameterizationOfFunctionalInterface:
-			case IProblem.NoGenericLambda:
-				return;
-			default:
-				this.hasIgnoredMandatoryErrors = true;
-				MethodScope enclosingLambdaScope = this.scope == null ? null : this.scope.enclosingLambdaScope();
-				while (enclosingLambdaScope != null) {
-					LambdaExpression enclosingLambda = (LambdaExpression) enclosingLambdaScope.referenceContext;
-					enclosingLambda.hasIgnoredMandatoryErrors = true;
-					enclosingLambdaScope = enclosingLambdaScope.enclosingLambdaScope();
-				}
-				return;
-		}
-	}
-
 	public Set<TypeBinding> getThrownExceptions() {
 		if (this.thrownExceptions == null)
 			return Collections.emptySet();
@@ -1314,18 +1263,18 @@ public class LambdaExpression extends FunctionalExpression implements IPolyExpre
 		// initialize local positions
 		this.scope.computeLocalVariablePositions(this.outerLocalVariablesSlotSize + (this.binding.isStatic() ? 0 : 1), codeStream);
 		if (this.outerLocalVariables != null) {
-			for (int i = 0, max = this.outerLocalVariables.length; i < max; i++) {
+			for (SyntheticArgumentBinding outerLocalVariable : this.outerLocalVariables) {
 				LocalVariableBinding argBinding;
-				codeStream.addVisibleLocalVariable(argBinding = this.outerLocalVariables[i]);
+				codeStream.addVisibleLocalVariable(argBinding = outerLocalVariable);
 				codeStream.record(argBinding);
 				argBinding.recordInitializationStartPC(0);
 			}
 		}
 		// arguments initialization for local variable debug attributes
 		if (this.arguments != null) {
-			for (int i = 0, max = this.arguments.length; i < max; i++) {
+			for (Argument argument : this.arguments) {
 				LocalVariableBinding argBinding;
-				codeStream.addVisibleLocalVariable(argBinding = this.arguments[i].binding);
+				codeStream.addVisibleLocalVariable(argBinding = argument.binding);
 				argBinding.recordInitializationStartPC(0);
 			}
 		}
@@ -1465,8 +1414,7 @@ public class LambdaExpression extends FunctionalExpression implements IPolyExpre
 			IntersectionTypeBinding18 intersectionType = (IntersectionTypeBinding18)this.expectedType;
 			TypeBinding[] intersectionTypes = intersectionType.intersectingTypes;
 			TypeBinding samType = intersectionType.getSAMType(this.enclosingScope);
-			for (int i = 0,max = intersectionTypes.length; i < max; i++) {
-				TypeBinding typeBinding = intersectionTypes[i];
+			for (TypeBinding typeBinding : intersectionTypes) {
 				if (!typeBinding.isInterface()							// only interfaces
 					|| TypeBinding.equalsEquals(samType, typeBinding)	// except for the samType itself
 					|| typeBinding.id == TypeIds.T_JavaIoSerializable)	// but Serializable is captured as a bitflag

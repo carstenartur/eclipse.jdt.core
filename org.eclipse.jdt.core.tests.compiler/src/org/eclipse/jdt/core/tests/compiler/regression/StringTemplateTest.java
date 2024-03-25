@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2023 IBM Corporation and others.
+ * Copyright (c) 2023, 2024 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -23,13 +23,13 @@ public class StringTemplateTest extends AbstractRegressionTest9 {
 	static {
 //		TESTS_NAMES = new String[] { "test003" };
 	}
-	private static final JavacTestOptions JAVAC_OPTIONS = new JavacTestOptions("--enable-preview -source 21");
+	private static final JavacTestOptions JAVAC_OPTIONS = new JavacTestOptions("--enable-preview -source 22");
 	private static final String[] VMARGS = new String[] {"--enable-preview"};
 	public static Class<?> testClass() {
 		return StringTemplateTest.class;
 	}
 	public static Test suite() {
-		return buildMinimalComplianceTestSuite(testClass(), F_21);
+		return buildMinimalComplianceTestSuite(testClass(), F_22);
 	}
 	public StringTemplateTest(String testName){
 		super(testName);
@@ -40,19 +40,19 @@ public class StringTemplateTest extends AbstractRegressionTest9 {
 	// Enables the tests to run individually
 	protected Map<String, String> getCompilerOptions(boolean previewFlag) {
 		Map<String, String> defaultOptions = super.getCompilerOptions();
-		defaultOptions.put(CompilerOptions.OPTION_Compliance, CompilerOptions.VERSION_21);
-		defaultOptions.put(CompilerOptions.OPTION_Source, CompilerOptions.VERSION_21);
-		defaultOptions.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_21);
+		defaultOptions.put(CompilerOptions.OPTION_Compliance, CompilerOptions.VERSION_22);
+		defaultOptions.put(CompilerOptions.OPTION_Source, CompilerOptions.VERSION_22);
+		defaultOptions.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_22);
 		defaultOptions.put(CompilerOptions.OPTION_EnablePreviews, previewFlag ? CompilerOptions.ENABLED : CompilerOptions.DISABLED);
 		defaultOptions.put(CompilerOptions.OPTION_ReportPreviewFeatures, CompilerOptions.IGNORE);
 		return defaultOptions;
 	}
 	protected void runConformTest(String[] testFiles, String expectedOutput) {
-		runConformTest(testFiles, expectedOutput, null, VMARGS, new JavacTestOptions("-source 21 --enable-preview"));
+		runConformTest(testFiles, expectedOutput, null, VMARGS, new JavacTestOptions("-source 22 --enable-preview"));
 	}
 	@Override
 	protected void runConformTest(String[] testFiles, String expectedOutput, Map<String, String> customOptions) {
-		if(!isJRE21Plus)
+		if(!isJRE22Plus)
 			return;
 		runConformTest(testFiles, expectedOutput, customOptions, VMARGS, JAVAC_OPTIONS);
 	}
@@ -1658,6 +1658,114 @@ s
 				"Hello Changed Changed!"
 		);
 	}
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/2125
+	// [String Templates] Compilation error when Template Processor used in unconditional for loop
+	public void testIssue2125() {
+		runConformTest(
+				new String[] {
+					"X.java",
+					"""
+					import java.lang.StringTemplate.Processor;
+
+					public class X implements Processor<String, RuntimeException> {
+					  public static void main(String [] args) {
+					    for(;;) {
+					      System.out.println(new X()."SELECT * FROM");
+					      break;
+					    }
+					  }
+
+					  @Override
+					  public String process(StringTemplate stringTemplate) throws RuntimeException {
+					    return STR.process(stringTemplate);
+					  }
+					}
+					"""
+				},
+				"SELECT * FROM"
+		);
+	}
+	public void testIssue2125_2() {
+		runConformTest(
+				new String[] {
+					"X.java",
+					"""
+					import java.lang.StringTemplate.Processor;
+
+					public class X implements Processor<String, RuntimeException> {
+					  public static void main(String [] args) {
+					    for (int i = 0; i < 3; i++) {
+					      System.out.println(new X()."SELECT * FROM");
+					    }
+					  }
+
+					  @Override
+					  public String process(StringTemplate stringTemplate) throws RuntimeException {
+					    return STR.process(stringTemplate);
+					  }
+					}
+					"""
+				},
+				"SELECT * FROM\n"
+				+ "SELECT * FROM\n"
+				+ "SELECT * FROM"
+		);
+	}
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/2125
+	// [String Templates] Compilation error when Template Processor used in unconditional for loop
+	public void testIssue2125_3() {
+		runConformTest(
+				new String[] {
+					"X.java",
+					"""
+					import java.lang.StringTemplate.Processor;
+
+					public class X implements Processor<String, RuntimeException> {
+					  public static void main(String [] args) {
+					    for(;;) {
+					      System.out.println(STR."SELECT * FROM");
+					      break;
+					    }
+					  }
+
+					  @Override
+					  public String process(StringTemplate stringTemplate) throws RuntimeException {
+					    return STR.process(stringTemplate);
+					  }
+					}
+					"""
+				},
+				"SELECT * FROM"
+		);
+	}
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/2125
+	// [String Templates] Compilation error when Template Processor used in unconditional for loop
+	public void testIssue2125_4() {
+		runConformTest(
+				new String[] {
+					"X.java",
+					"""
+					import java.lang.StringTemplate.Processor;
+
+					public class X implements Processor<String, RuntimeException> {
+					  public static void main(String [] args) {
+					    for (int i = 0; i < 3; i++) {
+					      System.out.println(STR."SELECT * FROM");
+					    }
+					  }
+
+					  @Override
+					  public String process(StringTemplate stringTemplate) throws RuntimeException {
+					    return STR.process(stringTemplate);
+					  }
+					}
+					"""
+				},
+				"SELECT * FROM\n"
+				+ "SELECT * FROM\n"
+				+ "SELECT * FROM"
+		);
+	}
 	// Test with read of the outer string literal inside the template expression
 	public void test0060() {
 		runNegativeTest(
@@ -1903,5 +2011,109 @@ s
 
 				\\{} plus \\{} equals \\{}
 				[10, 20, 30]""");
+	}
+	public void testIssue2121_01() {
+		runConformTest(
+				new String[] {
+					"X.java",
+					"""
+						interface TemplateProcessor extends java.lang.StringTemplate.Processor<Boolean, RuntimeException> {
+						    Boolean process(StringTemplate st);
+						}
+
+						public class X {
+						    public static void main(String argv[]) {
+						        TemplateProcessor STR = st -> st.interpolate().equals("abc");
+						        if (STR."abc") {
+						        	System.out.println("hello");
+						        }
+						    }
+						}
+					"""
+				},
+				"hello"
+		);
+	}
+	public void testIssue2121_02() {
+		runConformTest(
+				new String[] {
+					"X.java",
+					"""
+						interface TemplateProcessor extends java.lang.StringTemplate.Processor<Boolean, RuntimeException> {
+						    Boolean process(StringTemplate st);
+						}
+
+						public class X {
+						    public static void main(String argv[]) {
+						        TemplateProcessor STR = st -> st.interpolate().equals("abc");
+					   			int  i = 0;
+					   			while ((STR."abc") && i < 1) {
+					   				i++;
+						        	System.out.println("hello");
+						        }
+						    }
+						}
+					"""
+				},
+				"hello"
+		);
+	}
+	public void testIssue2121_03() {
+		runConformTest(
+				new String[] {
+					"X.java",
+					"""
+						interface TemplateProcessor extends java.lang.StringTemplate.Processor<Boolean, RuntimeException> {
+						    Boolean process(StringTemplate st);
+						}
+
+						public class X {
+						    public static void main(String argv[]) {
+						        TemplateProcessor STR = st -> st.interpolate().equals("abc");
+					   			for ( int i = 0; (STR."abc") && i < 1; i++) {
+						        	System.out.println("hello");
+						        }
+						    }
+						}
+					"""
+				},
+				"hello"
+		);
+	}
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/2062
+	// VerifyError with String Templates
+	public void testIssue2062() {
+		runConformTest(
+				new String[] {
+					"X.java",
+					"""
+					import java.lang.StringTemplate.Processor;
+					import java.util.Map;
+
+					public class X {
+
+					  public static void main(String[] args) throws Exception {
+					    Map<String, String> stuff = Map.of("a", "b");
+					    Transaction tx = new Transaction();
+
+					    for(Map.Entry<String, String> entry : stuff.entrySet()) {
+					      String name = entry.getKey();
+
+					      String s = tx.\"""
+					        INSERT INTO settings (a, b) VALUES (\\{name}, \\{entry.getValue()})\""";
+					      System.out.println(s);
+					    }
+					  }
+
+					  static class Transaction implements Processor<String, Exception> {
+					    @Override
+					    public String process(StringTemplate stringTemplate) throws Exception {
+					      return STR.process(stringTemplate);
+					    }
+					  }
+					}
+					"""
+				},
+				"INSERT INTO settings (a, b) VALUES (a, b)");
 	}
 }

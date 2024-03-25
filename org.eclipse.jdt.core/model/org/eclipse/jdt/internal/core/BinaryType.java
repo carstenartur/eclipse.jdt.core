@@ -32,9 +32,11 @@ import org.eclipse.jdt.internal.compiler.env.IBinaryAnnotation;
 import org.eclipse.jdt.internal.compiler.env.IBinaryType;
 import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 import org.eclipse.jdt.internal.compiler.lookup.Binding;
+import org.eclipse.jdt.internal.compiler.lookup.ExtraCompilerModifiers;
 import org.eclipse.jdt.internal.compiler.util.SuffixConstants;
 import org.eclipse.jdt.internal.core.JavaModelManager.PerProjectInfo;
 import org.eclipse.jdt.internal.core.hierarchy.TypeHierarchy;
+import org.eclipse.jdt.internal.core.util.DeduplicationUtil;
 import org.eclipse.jdt.internal.core.util.MementoTokenizer;
 import org.eclipse.jdt.internal.core.util.Messages;
 import org.eclipse.jdt.internal.core.util.Util;
@@ -218,8 +220,8 @@ public IJavaElement[] getChildrenForCategory(String category) throws JavaModelEx
 				IJavaElement child = children[i];
 				String[] cats = (String[]) categories.get(child);
 				if (cats != null) {
-					for (int j = 0, length2 = cats.length; j < length2; j++) {
-						if (cats[j].equals(category)) {
+					for (String cat : cats) {
+						if (cat.equals(category)) {
 							result[index++] = child;
 							break;
 						}
@@ -285,7 +287,7 @@ public IType getDeclaringType() {
 			return
 				new BinaryType(
 					(JavaElement)getPackageFragment().getClassFile(enclosingClassFileName),
-					Util.localTypeName(enclosingName, enclosingName.lastIndexOf('$'), enclosingName.length()));
+					DeduplicationUtil.intern(Util.localTypeName(enclosingName, enclosingName.lastIndexOf('$'), enclosingName.length())));
 		}
 	}
 }
@@ -980,7 +982,7 @@ public ITypeHierarchy newTypeHierarchy(
 }
 @Override
 public ResolvedBinaryType resolved(Binding binding) {
-	return new ResolvedBinaryType(this.getParent(), this.name, new String(binding.computeUniqueKey()), this.getOccurrenceCount());
+	return new ResolvedBinaryType(this.getParent(), this.name, DeduplicationUtil.toString(binding.computeUniqueKey()), this.getOccurrenceCount());
 }
 /*
  * Returns the source file name as defined in the given info.
@@ -1018,7 +1020,7 @@ public String sourceFileName(IBinaryType info) {
 	}
 }
 /*
- * @private Debugging purposes
+ * for debugging only
  */
 @Override
 protected void toStringInfo(int tab, StringBuilder buffer, Object info, boolean showResolvedInfo) {
@@ -1158,5 +1160,9 @@ private static boolean isComplianceJava11OrHigher(IJavaProject javaProject) {
 @Override
 public IBinaryType getElementInfo() throws JavaModelException {
 	return (IBinaryType) super.getElementInfo();
+}
+@Override
+public boolean isImplicitlyDeclared() throws JavaModelException {
+	return (this.getFlags() & ExtraCompilerModifiers.AccUnnamed) != 0;
 }
 }

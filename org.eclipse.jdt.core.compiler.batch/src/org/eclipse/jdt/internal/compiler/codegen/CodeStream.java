@@ -127,6 +127,7 @@ public class CodeStream {
 
 	public Map<BlockScope, List<ExceptionLabel>> patternAccessorMap = new HashMap<>();
 	public Stack<BlockScope> accessorExceptionTrapScopes = new Stack<>();
+	public boolean stmtInPreConContext = false;
 
 public CodeStream(ClassFile givenClassFile) {
 	this.targetLevel = givenClassFile.targetJDK;
@@ -4777,7 +4778,7 @@ public void invoke(byte opcode, MethodBinding methodBinding, TypeBinding declari
 		case Opcodes.OPC_invokespecial :
 			receiverAndArgsSize = 1; // receiver
 			if (methodBinding.isConstructor()) {
-				if (declaringClass.isNestedType()) {
+				if (declaringClass.isNestedType() && !this.stmtInPreConContext) {
 					ReferenceBinding nestedType = (ReferenceBinding) declaringClass;
 					// enclosing instances
 					receiverAndArgsSize += nestedType.getEnclosingInstancesSlotSize();
@@ -7745,10 +7746,8 @@ private void pushTypeBinding(int resolvedPosition) {
 private void pushTypeBindingArray() {
 	if (!isSwitchStackTrackingActive())
 		return;
-	assert this.switchSaveTypeBindings.size() >= 2; // atleast arrayref and index in the typebinding stack
-	TypeBinding[] arrayref_t = {popTypeBinding()/* index */, popTypeBinding()/* arrayref */};
-	TypeBinding type = arrayref_t[1]; // arrayref
-	assert type instanceof ArrayBinding;
+	popTypeBinding(); // index
+	TypeBinding type = popTypeBinding(); // arrayref
 	pushTypeBinding(((ArrayBinding) type).leafComponentType);
 }
 private TypeBinding getPopularBinding(char[] typeName) {
@@ -7776,6 +7775,7 @@ private void pushTypeBinding(int nPop, TypeBinding typeBinding) {
 	pushTypeBinding(typeBinding);
 }
 private TypeBinding popTypeBinding() {
+//	debugStackDepth(this.stackDepth);
 	return isSwitchStackTrackingActive() ? this.switchSaveTypeBindings.pop() : null;
 }
 private void popTypeBinding(int nPop) {
@@ -7831,5 +7831,9 @@ public void handleRecordAccessorExceptions(BlockScope scope) {
 	swap();                      // [MatchException, MatchException, String, Throwable]
 	invokeJavaLangMatchExceptionConstructor(); // [MatchException]
 	athrow();
+}
+void debugStackDepth(int stackDepth1) throws IllegalArgumentException{
+	if (stackDepth1 < 0)
+		throw new IllegalArgumentException();
 }
 }

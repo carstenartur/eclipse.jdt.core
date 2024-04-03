@@ -54,11 +54,28 @@ private static final String APACHE_DBUTILS_CONTENT = "package org.apache.commons
 
 // one.util.streamex.StreamEx stub
 private static final String STREAMEX_JAVA = "one/util/streamex/StreamEx.java";
-private static final String STREAMEX_CONTENT = "package one.util.streamex;\n" +
-	"import java.util.stream.*;\n" +
-	"public abstract class StreamEx<T> implements Stream<T> {\n" +
-	"    public static <T> StreamEx<T> create() { return null; }\n" +
-	"}\n";
+private static final String STREAMEX_CONTENT =
+	"""
+	package one.util.streamex;
+	import java.util.Spliterator;
+	import java.util.stream.*;
+	import java.util.function.*;
+	public abstract class StreamEx<T> extends AbstractStreamEx<T, StreamEx<T>> {
+	    public static <T> StreamEx<T> create() { return null; }
+	    public static <T> StreamEx<T> of(T element) { return null; }
+	    @Override public <R> StreamEx<R> flatMap(Function<? super T, ? extends Stream<? extends R>> mapper) { return null; }
+	}
+	abstract class AbstractStreamEx<T, S extends AbstractStreamEx<T, S>> extends
+			BaseStreamEx<T, Stream<T>, Spliterator<T>, S> implements Stream<T>, Iterable<T> {
+		@Override
+		public Spliterator<T> spliterator() {
+			return null;
+		}
+	}
+	abstract class BaseStreamEx<T, S extends BaseStream<T, S>, SPLTR extends Spliterator<T>, B extends BaseStreamEx<T, S, SPLTR, B>>
+			implements BaseStream<T, S> {
+	}
+	""";
 
 static {
 //	TESTS_NAMES = new String[] { "testBug463320" };
@@ -4756,6 +4773,27 @@ public void testStreamEx_572707() {
 		},
 		options);
 }
+public void testStreamEx_GH2919() {
+	if (this.complianceLevel < ClassFileConstants.JDK1_8) return; // uses JRE 8 API
+
+	Map options = getCompilerOptions();
+	options.put(CompilerOptions.OPTION_ReportPotentiallyUnclosedCloseable, CompilerOptions.ERROR);
+	options.put(CompilerOptions.OPTION_ReportUnclosedCloseable, CompilerOptions.ERROR);
+	runConformTest(
+		new String[] {
+			STREAMEX_JAVA,
+			STREAMEX_CONTENT,
+			"GH2919.java",
+			"import one.util.streamex.*;\n" +
+			"\n" +
+			"public class GH2919 {\n" +
+			"	public void m() {\n" +
+			"		StreamEx<Object> streamEx = StreamEx.of(new Object()).flatMap(obj->StreamEx.of(obj));\n" +
+			"	}\n" +
+			"}\n"
+		},
+		options);
+}
 // Functions java.nio.file.Files.x() returning *Stream* do produce a resource needing closing
 public void testStream2() {
 	if (this.complianceLevel < ClassFileConstants.JDK1_8)
@@ -7107,6 +7145,80 @@ public void testGH1867() {
 		"	^^^^^\n" +
 		potentialOrDefiniteLeak("<unassigned Closeable value>") +
 		"----------\n",
+		options);
+}
+public void testGH2207_1() {
+	if (this.complianceLevel < ClassFileConstants.JDK1_8)
+		return;
+	// relevant only since 19, where ExecutorService implements AutoCloseable
+	Map options = getCompilerOptions();
+	options.put(CompilerOptions.OPTION_ReportPotentiallyUnclosedCloseable, CompilerOptions.ERROR);
+	options.put(CompilerOptions.OPTION_ReportUnclosedCloseable, CompilerOptions.ERROR);
+	options.put(CompilerOptions.OPTION_ReportExplicitlyClosedAutoCloseable, CompilerOptions.ERROR);
+	runLeakTest(
+		new String[] {
+			"ResourceLeakTest.java",
+			"""
+			import java.util.Optional;
+			import java.util.concurrent.ExecutorService;
+			import java.util.concurrent.Executors;
+
+			public class ResourceLeakTest {
+				protected ExecutorService es;
+
+			    public ExecutorService t_supplier_lambda_returned(ExecutorService executor) {
+			        return Optional.ofNullable(executor).orElseGet(() -> Executors.newCachedThreadPool());
+			    }
+			}
+			"""
+		},
+		"",
+		options);
+}
+public void testGH2129() {
+	if (this.complianceLevel < ClassFileConstants.JDK1_6) // override for implementing interface method
+		return;
+	Map options = getCompilerOptions();
+	options.put(CompilerOptions.OPTION_ReportPotentiallyUnclosedCloseable, CompilerOptions.ERROR);
+	options.put(CompilerOptions.OPTION_ReportUnclosedCloseable, CompilerOptions.ERROR);
+	options.put(CompilerOptions.OPTION_ReportExplicitlyClosedAutoCloseable, CompilerOptions.ERROR);
+	runLeakTest(
+		new String[] {
+			"ExampleResourceLeakWarningInternalResource.java",
+			"""
+			import java.io.IOException;
+			import java.net.InetSocketAddress;
+			import java.net.SocketAddress;
+
+			import javax.net.ssl.SSLContext;
+			import javax.net.ssl.SSLServerSocket;
+			import javax.net.ssl.SSLServerSocketFactory;
+
+			public class ExampleResourceLeakWarningInternalResource implements AutoCloseable {
+
+				private SSLServerSocket sslServerSocket;
+
+				public ExampleResourceLeakWarningInternalResource(int aSecurePort, SSLContext aSSLContext) throws IOException {
+					sslServerSocket = initialise(aSSLContext, aSecurePort);
+				}
+
+				private SSLServerSocket initialise(SSLContext aSSLContext, int aPort) throws IOException {
+					SSLServerSocketFactory secure_server_socket_factory = aSSLContext.getServerSocketFactory();
+					// No warning here for Eclipse 2019.06 but warnings for Eclipse 2020.03 and later
+					SSLServerSocket server_secure_socket = (SSLServerSocket) secure_server_socket_factory.createServerSocket();
+					SocketAddress endpoint = new InetSocketAddress(aPort);
+					server_secure_socket.bind(endpoint, 1);
+
+					return server_secure_socket;
+				}
+				@Override
+				public void close() throws IOException {
+					sslServerSocket.close();
+				}
+			}
+			"""
+		},
+		"",
 		options);
 }
 }

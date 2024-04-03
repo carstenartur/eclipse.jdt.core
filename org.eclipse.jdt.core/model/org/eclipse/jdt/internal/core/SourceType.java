@@ -25,7 +25,9 @@ import org.eclipse.jdt.core.search.SearchEngine;
 import org.eclipse.jdt.internal.codeassist.CompletionEngine;
 import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
 import org.eclipse.jdt.internal.compiler.lookup.Binding;
+import org.eclipse.jdt.internal.compiler.lookup.ExtraCompilerModifiers;
 import org.eclipse.jdt.internal.core.hierarchy.TypeHierarchy;
+import org.eclipse.jdt.internal.core.util.DeduplicationUtil;
 import org.eclipse.jdt.internal.core.util.MementoTokenizer;
 import org.eclipse.jdt.internal.core.util.Messages;
 
@@ -50,13 +52,16 @@ private static final IField[] NO_FIELDS = new IField[0];
 protected SourceType(JavaElement parent, String name) {
 	super(parent, name);
 }
+protected SourceType(JavaElement parent, String name, int occurrenceCount) {
+	super(parent, name, occurrenceCount);
+}
 @Override
 protected void closing(Object info) throws JavaModelException {
 	super.closing(info);
 	SourceTypeElementInfo elementInfo = (SourceTypeElementInfo) info;
 	ITypeParameter[] typeParameters = elementInfo.typeParameters;
-	for (int i = 0, length = typeParameters.length; i < length; i++) {
-		((TypeParameter) typeParameters[i]).close();
+	for (ITypeParameter typeParameter : typeParameters) {
+		((TypeParameter) typeParameter).close();
 	}
 }
 /**
@@ -232,8 +237,8 @@ public IJavaElement[] getChildrenForCategory(String category) throws JavaModelEx
 		IJavaElement child = children[i];
 		String[] elementCategories = (String[]) categories.get(child);
 		if (elementCategories != null)
-			for (int j = 0, length2 = elementCategories.length; j < length2; j++) {
-				if (elementCategories[j].equals(category))
+			for (String elementCategory : elementCategories) {
+				if (elementCategory.equals(category))
 					result[index++] = child;
 			}
 	}
@@ -530,7 +535,7 @@ public JavaElement getPrimaryElement(boolean checkOwner) {
 		case IJavaElement.FIELD:
 		case IJavaElement.INITIALIZER:
 		case IJavaElement.METHOD:
-			return (JavaElement)((IMember)primaryParent).getType(this.name, this.occurrenceCount);
+			return (JavaElement)((IMember)primaryParent).getType(this.name, this.getOccurrenceCount());
 	}
 	return this;
 }
@@ -785,7 +790,7 @@ public ITypeHierarchy loadTypeHierachy(InputStream input, IProgressMonitor monit
  * <li>IType#newTypeHierarchy(IJavaProject, WorkingCopyOwner, IProgressMonitor)</li>
  * <li>IType#newTypeHierarchy(IProgressMonitor)</li>
  * <li>IType#newTypeHierarchy(WorkingCopyOwner, IProgressMonitor)</li>
- * </u>
+ * </ul>
  *
  * @param input stream where hierarchy will be read
  * @param monitor the given progress monitor
@@ -951,13 +956,13 @@ public ITypeHierarchy newTypeHierarchy(
 }
 @Override
 public JavaElement resolved(Binding binding) {
-	ResolvedSourceType resolvedHandle = new ResolvedSourceType(this.getParent(), this.name, new String(binding.computeUniqueKey()));
-	resolvedHandle.occurrenceCount = this.occurrenceCount;
+	ResolvedSourceType resolvedHandle = new ResolvedSourceType(this.getParent(), this.name,
+			DeduplicationUtil.toString(binding.computeUniqueKey()), this.getOccurrenceCount());
 	resolvedHandle.localOccurrenceCount = this.localOccurrenceCount;
 	return resolvedHandle;
 }
 /**
- * @private Debugging purposes
+ * for debugging only
  */
 @Override
 protected void toStringInfo(int tab, StringBuilder buffer, Object info, boolean showResolvedInfo) {
@@ -965,7 +970,7 @@ protected void toStringInfo(int tab, StringBuilder buffer, Object info, boolean 
 	if (info == null) {
 		if (isAnonymous()) {
 			buffer.append("<anonymous #"); //$NON-NLS-1$
-			buffer.append(this.occurrenceCount);
+			buffer.append(this.getOccurrenceCount());
 			buffer.append(">"); //$NON-NLS-1$
 		} else {
 			toStringName(buffer);
@@ -974,7 +979,7 @@ protected void toStringInfo(int tab, StringBuilder buffer, Object info, boolean 
 	} else if (info == NO_INFO) {
 		if (isAnonymous()) {
 			buffer.append("<anonymous #"); //$NON-NLS-1$
-			buffer.append(this.occurrenceCount);
+			buffer.append(this.getOccurrenceCount());
 			buffer.append(">"); //$NON-NLS-1$
 		} else {
 			toStringName(buffer);
@@ -997,7 +1002,7 @@ protected void toStringInfo(int tab, StringBuilder buffer, Object info, boolean 
 			}
 			if (isAnonymous()) {
 				buffer.append("<anonymous #"); //$NON-NLS-1$
-				buffer.append(this.occurrenceCount);
+				buffer.append(this.getOccurrenceCount());
 				buffer.append(">"); //$NON-NLS-1$
 			} else {
 				toStringName(buffer);
@@ -1010,5 +1015,9 @@ protected void toStringInfo(int tab, StringBuilder buffer, Object info, boolean 
 @Override
 public boolean isLambda() {
 	return false;
+}
+@Override
+public boolean isImplicitlyDeclared() throws JavaModelException {
+	return (this.getFlags() & ExtraCompilerModifiers.AccImplicitlyDeclared) != 0;
 }
 }

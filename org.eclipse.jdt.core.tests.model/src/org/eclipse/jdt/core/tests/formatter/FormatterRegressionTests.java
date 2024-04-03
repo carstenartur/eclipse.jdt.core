@@ -24,7 +24,7 @@ import java.util.Hashtable;
 import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
-import junit.framework.Test;
+
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.resources.IWorkspaceDescription;
 import org.eclipse.core.resources.IWorkspaceRoot;
@@ -49,6 +49,8 @@ import org.eclipse.jdt.internal.formatter.DefaultCodeFormatterOptions.Alignment;
 import org.eclipse.jface.text.IRegion;
 import org.eclipse.jface.text.Region;
 import org.eclipse.text.edits.TextEdit;
+
+import junit.framework.Test;
 
 @SuppressWarnings({"rawtypes", "unchecked"})
 public class FormatterRegressionTests extends AbstractJavaModelTests {
@@ -15961,10 +15963,52 @@ public void testBug573949() {
 		"}\n" +
 		"}";
 	formatSource(source,
+			"public class X {\n" +
+			"	private static void foo(Object o) {\n" +
+			"		switch (o) {\n" +
+			"		case Integer t, String:\n" +
+			"			System.out.println(\"Error should be flagged for Integer and String\");\n" +
+			"		default:\n" +
+			"			System.out.println(\"Object\");\n" +
+			"		}\n" +
+			"	}\n" +
+			"\n" +
+			"	static void testTriangle(Shape s) {\n" +
+			"		switch (s) {\n" +
+			"		case Triangle t when t.calculateArea() > 100 -> System.out.println(\"Large triangle\");\n" +
+			"		default -> System.out.println(\"A shape, possibly a small triangle\");\n" +
+			"		}\n" +
+			"	}\n" +
+			"}"
+		);
+}
+
+public void testBug573949_0() {
+	setComplianceLevel(CompilerOptions.VERSION_21);
+	this.formatterOptions.put(JavaCore.COMPILER_PB_ENABLE_PREVIEW_FEATURES, JavaCore.ENABLED);
+	String source =
+		"public class X {\n" +
+		" private static void foo(Object o) {\n" +
+		"   switch (o) {\n" +
+		"     case Integer t, String s : System.out.println(\"Error should be flagged for Integer and String\");\n" +
+		"     default : System.out.println(\"Object\");\n" +
+		"   }\n" +
+		" }\n" +
+		"\n" +
+		"static void testTriangle(Shape s) {\n" +
+		"    switch (s) {\n" +
+		"        case Triangle t when t.calculateArea() > 100 ->\n" +
+		"            System.out.println(\"Large triangle\");\n" +
+		"        default ->\n" +
+		"            System.out.println(\"A shape, possibly a small triangle\");\n" +
+		"    }\n" +
+		"}\n" +
+		"}";
+	formatSource(source,
 		"public class X {\n" +
 		"	private static void foo(Object o) {\n" +
 		"		switch (o) {\n" +
-		"		case Integer t, String:\n" +
+		"		case Integer t,String s:\n" +
 		"			System.out.println(\"Error should be flagged for Integer and String\");\n" +
 		"		default:\n" +
 		"			System.out.println(\"Object\");\n" +
@@ -16328,5 +16372,30 @@ public void testGH1817b() {
 			}
 		}
 		""");
+}
+
+/**
+ * https://github.com/eclipse-jdt/eclipse.jdt/issues/1473 - Java formatter setting for switch arror opening brace position
+ */
+public void testGH1473a() throws JavaModelException {
+	setComplianceLevel(CompilerOptions.VERSION_14);
+	this.formatterPrefs.brace_position_for_block_in_case = DefaultCodeFormatterConstants.NEXT_LINE;
+	this.formatterPrefs.brace_position_for_block_in_case_after_arrow = DefaultCodeFormatterConstants.END_OF_LINE;
+	String input = getCompilationUnit("Formatter", "", "testGH1473", "in.java").getSource();
+	formatSource(input, getCompilationUnit("Formatter", "", "testGH1473", "A_out.java").getSource());
+}
+public void testGH1473b() throws JavaModelException {
+	setComplianceLevel(CompilerOptions.VERSION_14);
+	this.formatterPrefs.brace_position_for_block_in_case = DefaultCodeFormatterConstants.END_OF_LINE;
+	this.formatterPrefs.brace_position_for_block_in_case_after_arrow = DefaultCodeFormatterConstants.NEXT_LINE;
+	String input = getCompilationUnit("Formatter", "", "testGH1473", "in.java").getSource();
+	formatSource(input, getCompilationUnit("Formatter", "", "testGH1473", "B_out.java").getSource());
+}
+public void testGH1473c() throws JavaModelException {
+	setComplianceLevel(CompilerOptions.VERSION_14);
+	this.formatterPrefs.brace_position_for_block_in_case = DefaultCodeFormatterConstants.NEXT_LINE_SHIFTED;
+	this.formatterPrefs.brace_position_for_block_in_case_after_arrow = DefaultCodeFormatterConstants.NEXT_LINE_SHIFTED;
+	String input = getCompilationUnit("Formatter", "", "testGH1473", "in.java").getSource();
+	formatSource(input, getCompilationUnit("Formatter", "", "testGH1473", "C_out.java").getSource());
 }
 }

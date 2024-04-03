@@ -252,10 +252,10 @@ public class ASTParser {
 				}
 			}
 			if (this.classpaths != null) {
-				for (int i = 0, max = this.classpaths.length; i < max; i++) {
+				for (String classpath : this.classpaths) {
 					main.processPathEntries(
 							Main.DEFAULT_SIZE_CLASSPATH,
-							allClasspaths, this.classpaths[i], null, false, false);
+							allClasspaths, classpath, null, false, false);
 				}
 			}
 			ArrayList pendingErrors = main.pendingErrors;
@@ -378,7 +378,8 @@ public class ASTParser {
 			// copy client's options so as to not do any side effect on them
 			options = new HashMap<>(options);
 		}
-		options.remove(JavaCore.COMPILER_TASK_TAGS); // no need to parse task tags
+		// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/2179
+		// options.remove(JavaCore.COMPILER_TASK_TAGS); // no need to parse task tags
 		this.compilerOptions = options;
 	}
 
@@ -1185,7 +1186,7 @@ public class ASTParser {
 							BinaryType type = (BinaryType) this.typeRoot.findPrimaryType();
 							String fileNameString = null;
 							if (type != null) {
-								IBinaryType binaryType = (IBinaryType) type.getElementInfo();
+								IBinaryType binaryType = type.getElementInfo();
 								// file name is used to recreate the Java element, so it has to be the toplevel .class file name
 								char[] fileName = binaryType.getFileName();
 

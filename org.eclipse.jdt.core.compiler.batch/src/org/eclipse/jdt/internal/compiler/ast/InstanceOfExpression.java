@@ -24,6 +24,8 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
+import java.util.stream.Stream;
+
 import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.ast.TypeReference.AnnotationPosition;
 import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
@@ -37,11 +39,10 @@ public class InstanceOfExpression extends OperatorExpression {
 
 	public Expression expression;
 	public TypeReference type;
-	public LocalDeclaration elementVariable;
 	public Pattern pattern;
-	static final char[] SECRET_INSTANCEOF_PATTERN_EXPRESSION_VALUE = " instanceOfPatternExpressionValue".toCharArray(); //$NON-NLS-1$
 
-	public LocalVariableBinding secretInstanceOfPatternExpressionValue = null;
+	private static final char[] SECRET_EXPRESSION_VALUE = " secretExpressionValue".toCharArray(); //$NON-NLS-1$
+	private LocalVariableBinding secretExpressionValue = null;
 
 public InstanceOfExpression(Expression expression, TypeReference type) {
 	this.expression = expression;
@@ -51,10 +52,10 @@ public InstanceOfExpression(Expression expression, TypeReference type) {
 	this.sourceStart = expression.sourceStart;
 	this.sourceEnd = type.sourceEnd;
 }
+
 public InstanceOfExpression(Expression expression, Pattern pattern) {
 	this.expression = expression;
 	this.pattern = pattern;
-	this.elementVariable = pattern.getPatternVariable();
 	this.type = pattern.getType();
 	this.type.bits |= IgnoreRawTypeCheck;
 	this.bits |= INSTANCEOF << OperatorSHIFT;
@@ -86,13 +87,6 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
 	if (initsWhenTrue == null) {
 		flowInfo = this.expression.analyseCode(currentScope, flowContext, flowInfo).
 				unconditionalInits();
-		if (this.elementVariable != null) {
-			initsWhenTrue = flowInfo.copy();
-		}
-	}
-	if (this.elementVariable != null) {
-		initsWhenTrue.markAsDefinitelyAssigned(this.elementVariable.binding);
-		initsWhenTrue.markAsDefinitelyNonNull(this.elementVariable.binding);
 	}
 	if (this.pattern != null) {
 		FlowInfo patternFlow = this.pattern.analyseCode(currentScope, flowContext, (initsWhenTrue == null) ? flowInfo : initsWhenTrue);
@@ -101,152 +95,116 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
 	return (initsWhenTrue == null) ? flowInfo :
 			FlowInfo.conditional(initsWhenTrue, flowInfo.copy());
 }
-/**
- * Code generation for instanceOfExpression
- *
- * @param currentScope org.eclipse.jdt.internal.compiler.lookup.BlockScope
- * @param codeStream org.eclipse.jdt.internal.compiler.codegen.CodeStream
- * @param valueRequired boolean
-*/
+
 @Override
 public void generateCode(BlockScope currentScope, CodeStream codeStream, boolean valueRequired) {
-	if (this.elementVariable != null && this.elementVariable.binding != null) {
-		this.elementVariable.binding.modifiers &= ~ExtraCompilerModifiers.AccPatternVariable;
-	}
-	addPatternVariables(currentScope, codeStream);
 
-	int pc = codeStream.position;
+	BranchLabel falseLabel, continueLabel;
 
-	if (this.elementVariable != null) {
-		addAssignment(currentScope, codeStream, this.secretInstanceOfPatternExpressionValue);
-		codeStream.load(this.secretInstanceOfPatternExpressionValue);
+	if (this.pattern != null) {
+		falseLabel = new BranchLabel(codeStream);
+		continueLabel = new BranchLabel(codeStream);
 	} else {
-		this.expression.generateCode(currentScope, codeStream, true);
+		falseLabel = null;
+		continueLabel = null;
 	}
 
-	codeStream.instance_of(this.type, this.type.resolvedType);
-	if (this.elementVariable != null) {
-		BranchLabel actionLabel = new BranchLabel(codeStream);
-		codeStream.dup();
-		codeStream.ifeq(actionLabel);
-		codeStream.load(this.secretInstanceOfPatternExpressionValue);
-		codeStream.removeVariable(this.secretInstanceOfPatternExpressionValue);
-		codeStream.checkcast(this.type, this.type.resolvedType, codeStream.position);
-		this.elementVariable.binding.recordInitializationStartPC(codeStream.position);
-		codeStream.store(this.elementVariable.binding, false);
-		codeStream.removeVariable(this.elementVariable.binding);
-		codeStream.recordPositionsFrom(codeStream.position, this.sourceEnd);
-		actionLabel.place();
+	generateOptimizedBoolean(currentScope, codeStream, null, falseLabel, true);
+
+	if (this.pattern != null) {
+
+		if (valueRequired) {
+			codeStream.iconst_1();
+			codeStream.goto_(continueLabel);
+		}
+		falseLabel.place();
+		/* We are generating a "thunk" of sorts now, that flow analysis has no clue about.
+		   so, we need to manage the live variables manually. Pattern bindings are not definitely
+		   assigned here as we are in instanceof false region.
+	    */
+		Stream.of(bindingsWhenTrue()).forEach(v->v.recordInitializationEndPC(codeStream.position));
+
+		if (valueRequired)
+			codeStream.iconst_0();
+
+		continueLabel.place();
 	}
+
 	if (valueRequired) {
 		codeStream.generateImplicitConversion(this.implicitConversion);
-	} else {
-		codeStream.pop();
+	} else if (this.pattern == null) {
+		codeStream.pop(); // in the pattern case, if (!valueRequired), we have nothing on the stack to pop
 	}
-	codeStream.recordPositionsFrom(pc, this.sourceStart);
+
+	codeStream.recordPositionsFrom(codeStream.position, this.sourceEnd);
 }
+
 @Override
 public void generateOptimizedBoolean(BlockScope currentScope, CodeStream codeStream, BranchLabel trueLabel, BranchLabel falseLabel, boolean valueRequired) {
-	// a label valued to nil means: by default we fall through the case...
-	// both nil means we leave the value on the stack
 
-	if (this.elementVariable == null && this.pattern == null) {
-		super.generateOptimizedBoolean(currentScope, codeStream, trueLabel, falseLabel, valueRequired);
-		return;
-	}
-	Constant cst = optimizedBooleanConstant();
-	addPatternVariables(currentScope, codeStream);
+	/* A label valued to null is supposed to mean: by default we fall through the case ...
+	   Both null means no "optimization" and we leave the value on the stack
+	   But we have trouble when
+	        this.pattern != null && trueLabel != null && falseLabel == null
+
+	   In this case, since we have no control over placement of the trueLabel, we won't know where to emit the pattern binding code.
+	   So what we do is always emit ifeq even when optimization would call for ifne and treat the whole "blob" of pattern matching
+	   code as part of the predicate. if you think about long and hard you can convince yourself this is semantically correct.
+	*/
 
 	int pc = codeStream.position;
 
-	addAssignment(currentScope, codeStream, this.secretInstanceOfPatternExpressionValue);
-	codeStream.load(this.secretInstanceOfPatternExpressionValue);
-
-	BranchLabel nextSibling = falseLabel != null ? falseLabel : new BranchLabel(codeStream);
-	codeStream.instance_of(this.type, this.type.resolvedType);
-	codeStream.ifeq(nextSibling);
-	codeStream.load(this.secretInstanceOfPatternExpressionValue);
-	if (this.pattern instanceof RecordPattern) {
-		this.pattern.generateOptimizedBoolean(currentScope, codeStream, trueLabel, nextSibling);
-		codeStream.load(this.secretInstanceOfPatternExpressionValue);
-		codeStream.checkcast(this.type, this.type.resolvedType, codeStream.position);
-	} else {
-		codeStream.checkcast(this.type, this.type.resolvedType, codeStream.position);
-		codeStream.dup();
-		codeStream.store(this.elementVariable.binding, false);
+	this.expression.generateCode(currentScope, codeStream, true);
+	if (this.secretExpressionValue != null) {
+		codeStream.store(this.secretExpressionValue, true);
+		codeStream.addVariable(this.secretExpressionValue);
 	}
 
-	codeStream.load(this.secretInstanceOfPatternExpressionValue);
-	codeStream.removeVariable(this.secretInstanceOfPatternExpressionValue);
-	codeStream.checkcast(this.type, this.type.resolvedType, codeStream.position);
+	BranchLabel internalFalseLabel = falseLabel != null ? falseLabel : this.pattern != null ? new BranchLabel(codeStream) : null;
+	codeStream.instance_of(this.type, this.type.resolvedType);
 
-	if (valueRequired && cst == Constant.NotAConstant) {
-		codeStream.generateImplicitConversion(this.implicitConversion);
-	} else {
+	if (this.pattern != null) {
+		codeStream.ifeq(internalFalseLabel);
+		if (this.secretExpressionValue != null) {
+			codeStream.load(this.secretExpressionValue);
+			codeStream.removeVariable(this.secretExpressionValue);
+		} else {
+			this.expression.generateCode(currentScope, codeStream, true);
+		}
+		this.pattern.generateCode(currentScope, codeStream, trueLabel, internalFalseLabel);
+	} else if (!valueRequired) {
 		codeStream.pop();
 	}
+
 	codeStream.recordPositionsFrom(pc, this.sourceStart);
 
+	int position = codeStream.position;
 
-	if ((cst != Constant.NotAConstant) && (cst.typeID() == TypeIds.T_boolean)) {
-		pc = codeStream.position;
-		if (cst.booleanValue() == true) {
-			// constant == true
-			if (valueRequired) {
-				if (falseLabel == null) {
-					// implicit falling through the FALSE case
-					if (trueLabel != null) {
-						codeStream.goto_(trueLabel);
-					}
+	if (valueRequired) {
+		if (falseLabel == null) {
+			if (trueLabel != null) {
+				if (this.pattern != null) {
+					// Implicit falling through the FALSE case, any bindings defined when true cease to be live
+					Stream.of(bindingsWhenTrue()).forEach(v->v.recordInitializationEndPC(codeStream.position));
+					codeStream.goto_(trueLabel);
+				} else {
+					codeStream.ifne(trueLabel);
 				}
 			}
 		} else {
-			if (valueRequired) {
-				if (falseLabel != null) {
-					// implicit falling through the TRUE case
-					if (trueLabel == null) {
-						codeStream.goto_(falseLabel);
-					}
-				}
-			}
-		}
-		codeStream.recordPositionsFrom(pc, this.sourceStart);
-	} else  {
-		// branching
-		int position = codeStream.position;
-		if (valueRequired) {
-			if (falseLabel == null) {
-				if (trueLabel != null) {
-					// Implicit falling through the FALSE case
-					codeStream.pop2();
-					codeStream.goto_(trueLabel);
-				}
+			if (trueLabel == null) {
+				// Implicit falling through the TRUE case
+				if (this.pattern == null)
+					codeStream.ifeq(falseLabel);
 			} else {
-				if (trueLabel == null) {
-					// Implicit falling through the TRUE case
-					codeStream.pop2();
-				} else {
-					// No implicit fall through TRUE/FALSE --> should never occur
-				}
+				// No implicit fall through TRUE/FALSE --> classic instanceof code generation called from generateCode above
 			}
 		}
-		codeStream.recordPositionsFrom(position, this.sourceEnd);
 	}
-	if (nextSibling != falseLabel)
-		nextSibling.place();
-}
+	codeStream.recordPositionsFrom(position, this.sourceEnd);
 
-private void addAssignment(BlockScope currentScope, CodeStream codeStream, LocalVariableBinding local) {
-	assert local != null;
-	SingleNameReference lhs = new SingleNameReference(local.name, 0);
-	lhs.binding = local;
-	lhs.bits &= ~ASTNode.RestrictiveFlagMASK; // clear bits
-	lhs.bits |= Binding.LOCAL;
-	lhs.bits |= ASTNode.IsSecretYieldValueUsage;
-	((LocalVariableBinding) lhs.binding).markReferenced(); // TODO : Can be skipped?
-	Assignment assignment = new Assignment(lhs, this.expression, 0);
-	assignment.generateCode(currentScope, codeStream);
-	codeStream.addVariable(this.secretInstanceOfPatternExpressionValue);
+	if (internalFalseLabel != falseLabel)
+		internalFalseLabel.place();
 }
 
 @Override
@@ -256,82 +214,48 @@ public StringBuilder printExpressionNoParenthesis(int indent, StringBuilder outp
 }
 
 @Override
-public void addPatternVariables(BlockScope currentScope, CodeStream codeStream) {
-	if (this.elementVariable != null) {
-		codeStream.addVisibleLocalVariable(this.elementVariable.binding);
-	}
-}
-public boolean resolvePatternVariable(BlockScope scope) {
-	if (this.pattern != null) {
-		this.pattern.resolve(scope);
-		if (this.elementVariable == null) return false;
-		if (this.elementVariable.binding == null) {
-			this.elementVariable.modifiers |= ExtraCompilerModifiers.AccPatternVariable;
-			this.elementVariable.resolve(scope, true);
-			// Kludge - to remove the AccBlankFinal added by the LocalDeclaration#resolve() due to the
-			// missing initializer
-			this.elementVariable.modifiers &= ~ExtraCompilerModifiers.AccBlankFinal;
-			this.elementVariable.binding.modifiers |= ExtraCompilerModifiers.AccPatternVariable;
-			this.elementVariable.binding.useFlag = LocalVariableBinding.USED;
-			// Why cant this be done in the constructor?
-			this.type = this.elementVariable.type;
-		}
-	}
-	return true;
-}
-@Override
-public void collectPatternVariablesToScope(LocalVariableBinding[] variables, BlockScope scope) {
-	this.expression.collectPatternVariablesToScope(variables, scope);
-	if (this.pattern != null) {
-		this.pattern.collectPatternVariablesToScope(variables, scope);
-		this.addPatternVariablesWhenTrue(this.pattern.patternVarsWhenTrue);
-	}
-}
-@Override
-public boolean containsPatternVariable() {
-	return this.elementVariable != null || this.pattern != null;
-}
-@Override
-public LocalDeclaration getPatternVariable() {
-	return this.elementVariable;
-}
-private void addSecretInstanceOfPatternExpressionValue(BlockScope scope1) {
-	LocalVariableBinding local =
-			new LocalVariableBinding(
-				InstanceOfExpression.SECRET_INSTANCEOF_PATTERN_EXPRESSION_VALUE,
-				TypeBinding.wellKnownType(scope1, T_JavaLangObject),
-				ClassFileConstants.AccDefault,
-				false);
-	local.setConstant(Constant.NotAConstant);
-	local.useFlag = LocalVariableBinding.USED;
-	scope1.addLocalVariable(local);
-	this.secretInstanceOfPatternExpressionValue = local;
+public LocalVariableBinding[] bindingsWhenTrue() {
+	return this.pattern != null ? this.pattern.bindingsWhenTrue() : NO_VARIABLES;
 }
 
 @Override
 public TypeBinding resolveType(BlockScope scope) {
 	this.constant = Constant.NotAConstant;
-	if (this.elementVariable != null || this.pattern != null)
-		addSecretInstanceOfPatternExpressionValue(scope);
-	resolvePatternVariable(scope);
+
 	TypeBinding checkedType = this.type.resolveType(scope, true /* check bounds*/);
 	if (this.expression instanceof CastExpression) {
 		((CastExpression) this.expression).setInstanceofType(checkedType); // for cast expression we need to know instanceof type to not tag unnecessary when needed
 	}
 	TypeBinding expressionType = this.expression.resolveType(scope);
 	if (this.pattern != null) {
-		this.pattern.resolveWithExpression(scope, this.expression);
+		this.pattern.setExpressionContext(ExpressionContext.INSTANCEOF_CONTEXT);
+		this.pattern.setExpectedType(this.expression.resolvedType);
+		this.pattern.resolveType(scope);
+
+		if ((this.expression.bits & ASTNode.RestrictiveFlagMASK) != Binding.LOCAL) {
+			// reevaluation may double jeopardize as side effects may recur, compute once and cache
+			LocalVariableBinding local =
+					new LocalVariableBinding(
+						InstanceOfExpression.SECRET_EXPRESSION_VALUE,
+						TypeBinding.wellKnownType(scope, T_JavaLangObject),
+						ClassFileConstants.AccDefault,
+						false);
+			local.setConstant(Constant.NotAConstant);
+			local.useFlag = LocalVariableBinding.USED;
+			scope.addLocalVariable(local);
+			this.secretExpressionValue = local;
+			if (expressionType != TypeBinding.NULL)
+				this.secretExpressionValue.type = expressionType;
+		}
 	}
 	if (expressionType != null && checkedType != null && this.type.hasNullTypeAnnotation(AnnotationPosition.ANY)) {
 		// don't complain if the entire operation is redundant anyway
 		if (!expressionType.isCompatibleWith(checkedType) || NullAnnotationMatching.analyse(checkedType, expressionType, -1).isAnyMismatch())
 			scope.problemReporter().nullAnnotationUnsupportedLocation(this.type);
 	}
+
 	if (expressionType == null || checkedType == null)
 		return null;
-
-	if (this.secretInstanceOfPatternExpressionValue != null && expressionType != TypeBinding.NULL)
-		this.secretInstanceOfPatternExpressionValue.type = expressionType;
 
 	if (!checkedType.isReifiable()) {
 		CompilerOptions options = scope.compilerOptions();
@@ -354,8 +278,10 @@ public TypeBinding resolveType(BlockScope scope) {
 			scope.problemReporter().notCompatibleTypesError(this, expressionType, checkedType);
 		}
 	}
+
 	return this.resolvedType = TypeBinding.BOOLEAN;
 }
+
 @Override
 public boolean checkUnsafeCast(Scope scope, TypeBinding castType, TypeBinding expressionType, TypeBinding match, boolean isNarrowing) {
 	if (!castType.isReifiable())
@@ -363,12 +289,12 @@ public boolean checkUnsafeCast(Scope scope, TypeBinding castType, TypeBinding ex
 	else
 		return super.checkUnsafeCast(scope, castType, expressionType, match, isNarrowing);
 }
-/**
- * @see org.eclipse.jdt.internal.compiler.ast.Expression#tagAsUnnecessaryCast(Scope,TypeBinding)
- */
 
 @Override
 public void tagAsUnnecessaryCast(Scope scope, TypeBinding castType) {
+	// record deconstruction and binding type pattern variable are legitimate operations.
+	if (this.pattern != null)
+		return;
 	// null is not instanceof Type, recognize direct scenario
 	if (this.expression.resolvedType != TypeBinding.NULL)
 		scope.problemReporter().unnecessaryInstanceof(this, castType);

@@ -144,6 +144,7 @@ public class OR_OR_Expression extends BinaryExpression {
 			}
 			if (this.rightInitStateIndex != -1) {
 				codeStream.addDefinitelyAssignedVariables(currentScope, this.rightInitStateIndex);
+				codeStream.removeNotDefinitelyAssignedVariables(currentScope, this.rightInitStateIndex);
 			}
 			if (rightIsConst) {
 				this.right.generateCode(currentScope, codeStream, false);
@@ -178,7 +179,6 @@ public class OR_OR_Expression extends BinaryExpression {
 						codeStream.iconst_1();
 					} else {
 						codeStream.goto_(endLabel = new BranchLabel(codeStream));
-						codeStream.decrStackSize(1);
 						trueLabel.place();
 						codeStream.iconst_1();
 						endLabel.place();
@@ -238,6 +238,7 @@ public class OR_OR_Expression extends BinaryExpression {
 					}
 					if (this.rightInitStateIndex != -1) {
 						codeStream.addDefinitelyAssignedVariables(currentScope, this.rightInitStateIndex);
+						codeStream.removeNotDefinitelyAssignedVariables(currentScope, this.rightInitStateIndex);
 					}
 					this.right.generateOptimizedBoolean(currentScope, codeStream, trueLabel, null, valueRequired && !rightIsConst);
 					if (valueRequired && rightIsTrue) {
@@ -256,8 +257,8 @@ public class OR_OR_Expression extends BinaryExpression {
 						break generateOperands; // no need to generate right operand
 					}
 					if (this.rightInitStateIndex != -1) {
-						codeStream
-								.addDefinitelyAssignedVariables(currentScope, this.rightInitStateIndex);
+						codeStream.addDefinitelyAssignedVariables(currentScope, this.rightInitStateIndex);
+						codeStream.removeNotDefinitelyAssignedVariables(currentScope, this.rightInitStateIndex);
 					}
 					this.right.generateOptimizedBoolean(currentScope, codeStream, null, falseLabel, valueRequired && !rightIsConst);
 					int pc = codeStream.position;
@@ -275,35 +276,22 @@ public class OR_OR_Expression extends BinaryExpression {
 			codeStream.removeNotDefinitelyAssignedVariables(currentScope, this.mergedInitStateIndex);
 		}
 	}
+
 	@Override
-	public void collectPatternVariablesToScope(LocalVariableBinding[] variables, BlockScope scope) {
-		LocalVariableBinding[] temp = variables;
-		this.left.collectPatternVariablesToScope(variables, scope);
+	public LocalVariableBinding[] bindingsWhenFalse() {
 
-		// Just keep the ones in false scope
-		variables = this.left.getPatternVariablesWhenFalse();
-		this.addPatternVariablesWhenFalse(variables);
+		LocalVariableBinding [] leftVars =  this.left.bindingsWhenFalse();
+		LocalVariableBinding [] rightVars = this.right.bindingsWhenFalse();
 
-		int length = (variables == null ? 0 : variables.length) + (temp == null ? 0 : temp.length);
-		LocalVariableBinding[] newArray = new LocalVariableBinding[length];
-		if (variables != null) {
-			System.arraycopy(variables, 0, newArray, 0, variables.length);
-		}
-		if (temp != null) {
-			System.arraycopy(temp, 0, newArray, (variables == null ? 0 : variables.length), temp.length);
-		}
-		this.right.collectPatternVariablesToScope(newArray, scope);
-		variables = this.right.getPatternVariablesWhenFalse();
-		this.addPatternVariablesWhenFalse(variables);
+		if (leftVars == NO_VARIABLES)
+			return rightVars;
 
-		// do this at the end, otherwise we will end up with
-		// same variable we just added from left to right
-		variables = this.left.getPatternVariablesWhenTrue();
-		this.right.addPatternVariablesWhenFalse(variables);
+		if (rightVars == NO_VARIABLES)
+			return leftVars;
 
-		variables = this.left.getPatternVariablesWhenFalse();
-		this.right.addPatternVariablesWhenTrue(variables);
+		return LocalVariableBinding.merge(leftVars, rightVars);
 	}
+
 	@Override
 	public boolean isCompactableOperation() {
 		return false;

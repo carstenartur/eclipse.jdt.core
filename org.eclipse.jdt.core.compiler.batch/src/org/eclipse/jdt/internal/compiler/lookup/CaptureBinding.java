@@ -160,8 +160,8 @@ public class CaptureBinding extends TypeVariableBinding {
 	}
 
 	/**
-	 * Initialize capture bounds using substituted supertypes
-	 * e.g. given X<U, V extends X<U, V>>,     capture(X<E,?>) = X<E,capture>, where capture extends X<E,capture>
+	 * Initialize capture bounds using substituted supertypes e.g. given
+	 * {@code X<U, V extends X<U, V>>, capture(X<E,?>) = X<E,capture>,} where {@code capture extends X<E,capture>}
 	 */
 	public void initializeBounds(Scope scope, ParameterizedTypeBinding capturedParameterizedType) {
 		boolean is18plus = scope.compilerOptions().complianceLevel >= ClassFileConstants.JDK1_8;
@@ -290,8 +290,8 @@ public class CaptureBinding extends TypeVariableBinding {
 	public ReferenceBinding upwardsProjection(Scope scope, TypeBinding[] mentionedTypeVariables) {
 		if (enterRecursiveProjectionFunction()) {
 			try {
-				for (int i = 0; i < mentionedTypeVariables.length; ++i) {
-					if (TypeBinding.equalsEquals(this, mentionedTypeVariables[i])) {
+				for (TypeBinding mentionedTypeVariable : mentionedTypeVariables) {
+					if (TypeBinding.equalsEquals(this, mentionedTypeVariable)) {
 						TypeBinding upperBoundForProjection = this.upperBoundForProjection();
 						if (upperBoundForProjection == null)
 							upperBoundForProjection = scope.getJavaLangObject();
@@ -541,8 +541,8 @@ public class CaptureBinding extends TypeVariableBinding {
 	public ReferenceBinding downwardsProjection(Scope scope, TypeBinding[] mentionedTypeVariables) {
 		ReferenceBinding result = null;
 		if (enterRecursiveProjectionFunction()) {
-			for (int i = 0; i < mentionedTypeVariables.length; ++i) {
-				if (TypeBinding.equalsEquals(this, mentionedTypeVariables[i])) {
+			for (TypeBinding mentionedTypeVariable : mentionedTypeVariables) {
+				if (TypeBinding.equalsEquals(this, mentionedTypeVariable)) {
 					if (this.lowerBound != null) {
 						result = (ReferenceBinding) this.lowerBound.downwardsProjection(scope, mentionedTypeVariables);
 					}

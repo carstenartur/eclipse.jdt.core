@@ -21,7 +21,7 @@ import org.eclipse.jdt.core.*;
 
 public class PackageDeclaration extends SourceRefElement implements IPackageDeclaration {
 
-	String name;
+	private final String name;
 
 protected PackageDeclaration(CompilationUnit parent, String name) {
 	super(parent);
@@ -66,7 +66,7 @@ public JavaElement getPrimaryElement(boolean checkOwner) {
 	return cu.getPackageDeclaration(this.name);
 }
 /**
- * @private Debugging purposes
+ * for debugging only
  */
 @Override
 protected void toStringInfo(int tab, StringBuilder buffer, Object info, boolean showResolvedInfo) {

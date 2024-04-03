@@ -51,7 +51,6 @@ import org.eclipse.jdt.internal.compiler.lookup.BaseTypeBinding;
 import org.eclipse.jdt.internal.compiler.lookup.Binding;
 import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
 import org.eclipse.jdt.internal.compiler.lookup.ClassScope;
-import org.eclipse.jdt.internal.compiler.lookup.ExtraCompilerModifiers;
 import org.eclipse.jdt.internal.compiler.lookup.FieldBinding;
 import org.eclipse.jdt.internal.compiler.lookup.InferenceContext18;
 import org.eclipse.jdt.internal.compiler.lookup.LocalVariableBinding;
@@ -82,7 +81,6 @@ public abstract class Expression extends Statement {
 	public TypeBinding resolvedType;
 
 	public static Expression [] NO_EXPRESSIONS = new Expression[0];
-
 
 public static final boolean isConstantValueRepresentable(Constant constant, int constantTypeID, int targetTypeID) {
 	//true if there is no loss of precision while casting.
@@ -324,8 +322,8 @@ public final boolean checkCastTypesCompatibility(Scope scope, TypeBinding castTy
 
 	if (castType.isIntersectionType18()) {
 		ReferenceBinding [] intersectingTypes = castType.getIntersectingTypes();
-		for (int i = 0, length = intersectingTypes.length; i < length; i++) {
-			if (!checkCastTypesCompatibility(scope, intersectingTypes[i], expressionType, expression, useAutoBoxing))
+		for (ReferenceBinding intersectingType : intersectingTypes) {
+			if (!checkCastTypesCompatibility(scope, intersectingType, expressionType, expression, useAutoBoxing))
 				return false;
 		}
 		return true;
@@ -419,8 +417,8 @@ public final boolean checkCastTypesCompatibility(Scope scope, TypeBinding castTy
 			return checkCastTypesCompatibility(scope, castType, bound, expression, useAutoBoxing);
 		case Binding.INTERSECTION_TYPE18:
 			ReferenceBinding [] intersectingTypes = expressionType.getIntersectingTypes();
-			for (int i = 0, length = intersectingTypes.length; i < length; i++) {
-				if (checkCastTypesCompatibility(scope, castType, intersectingTypes[i], expression, useAutoBoxing))
+			for (ReferenceBinding intersectingType : intersectingTypes) {
+				if (checkCastTypesCompatibility(scope, castType, intersectingType, expression, useAutoBoxing))
 					return true;
 			}
 			return false;
@@ -482,11 +480,11 @@ public final boolean checkCastTypesCompatibility(Scope scope, TypeBinding castTy
 								MethodBinding[] castTypeMethods = getAllOriginalInheritedMethods((ReferenceBinding) castType);
 								MethodBinding[] expressionTypeMethods = getAllOriginalInheritedMethods((ReferenceBinding) expressionType);
 								int exprMethodsLength = expressionTypeMethods.length;
-								for (int i = 0, castMethodsLength = castTypeMethods.length; i < castMethodsLength; i++) {
+								for (MethodBinding castTypeMethod : castTypeMethods) {
 									for (int j = 0; j < exprMethodsLength; j++) {
-										if ((TypeBinding.notEquals(castTypeMethods[i].returnType, expressionTypeMethods[j].returnType))
-												&& (CharOperation.equals(castTypeMethods[i].selector, expressionTypeMethods[j].selector))
-												&& castTypeMethods[i].areParametersEqual(expressionTypeMethods[j])) {
+										if ((TypeBinding.notEquals(castTypeMethod.returnType, expressionTypeMethods[j].returnType))
+												&& (CharOperation.equals(castTypeMethod.selector, expressionTypeMethods[j].selector))
+												&& castTypeMethod.areParametersEqual(expressionTypeMethods[j])) {
 											return false;
 
 										}
@@ -783,42 +781,6 @@ public void generateCode(BlockScope currentScope, CodeStream codeStream, boolean
 		throw new ShouldNotImplement(Messages.ast_missingCode);
 	}
 }
-public void addPatternVariables(BlockScope scope, CodeStream codeStream) {
-	// Nothing by default
-}
-public LocalDeclaration getPatternVariable() {
-	return null;
-}
-public void collectPatternVariablesToScope(LocalVariableBinding[] variables, BlockScope scope) {
-	new ASTVisitor() {
-		LocalVariableBinding[] patternVariablesInScope;
-		@Override
-		public boolean visit(Argument argument, BlockScope skope) {
-			// Most likely to be a lambda parameter
-			argument.addPatternVariablesWhenTrue(this.patternVariablesInScope);
-			return true;
-		}
-		@Override
-		public boolean visit(
-				QualifiedNameReference nameReference,
-				BlockScope skope) {
-			nameReference.addPatternVariablesWhenTrue(this.patternVariablesInScope);
-			return true;
-		}
-		@Override
-		public boolean visit(
-				SingleNameReference nameReference,
-				BlockScope skope) {
-			nameReference.addPatternVariablesWhenTrue(this.patternVariablesInScope);
-			return true;
-		}
-
-		public void propagatePatternVariablesInScope(LocalVariableBinding[] vars, BlockScope skope) {
-			this.patternVariablesInScope = vars;
-			Expression.this.traverse(this, skope);
-		}
-	}.propagatePatternVariablesInScope(variables, scope);
-}
 
 /**
  * Default generation of a boolean value
@@ -938,8 +900,6 @@ private void addArgumentToRecipe(BlockScope blockScope, CodeStream codeStream, S
 		recipe.delete(0, recipe.length());
 		recipe.append(TypeConstants.STRING_CONCAT_MARKER_1);
 		args.add(blockScope.getJavaLangString());
-		// We popped 190 and adding 1 for the invokeDynamic
-		codeStream.stackDepth -= 189;
 	}
 }
 public void buildStringForConcatation(BlockScope blockScope, CodeStream codeStream, int typeID, StringBuilder recipe, List<TypeBinding> argTypes) {
@@ -989,12 +949,12 @@ private MethodBinding[] getAllOriginalInheritedMethods(ReferenceBinding binding)
 private void getAllInheritedMethods0(ReferenceBinding binding, ArrayList<MethodBinding> collector) {
 	if (!binding.isInterface()) return;
 	MethodBinding[] methodBindings = binding.methods();
-	for (int i = 0, max = methodBindings.length; i < max; i++) {
-		collector.add(methodBindings[i]);
+	for (MethodBinding methodBinding : methodBindings) {
+		collector.add(methodBinding);
 	}
 	ReferenceBinding[] superInterfaces = binding.superInterfaces();
-	for (int i = 0, max = superInterfaces.length; i < max; i++) {
-		getAllInheritedMethods0(superInterfaces[i], collector);
+	for (ReferenceBinding superInterface : superInterfaces) {
+		getAllInheritedMethods0(superInterface, collector);
 	}
 }
 
@@ -1158,24 +1118,23 @@ public void resolve(BlockScope scope) {
 	this.resolveType(scope);
 	return;
 }
-@Override
-public TypeBinding resolveExpressionType(BlockScope scope) {
-	return resolveType(scope);
+
+public TypeBinding resolveTypeWithBindings(LocalVariableBinding[] bindings, BlockScope scope) {
+	scope.include(bindings);
+	try {
+		return this.resolveType(scope);
+	} finally {
+		scope.exclude(bindings);
+	}
 }
 
-public TypeBinding resolveTypeWithPatternVariablesInScope(LocalVariableBinding[] patternVariablesInScope, BlockScope scope) {
-	if (patternVariablesInScope != null) {
-		for (LocalVariableBinding binding : patternVariablesInScope) {
-			binding.modifiers &= ~ExtraCompilerModifiers.AccPatternVariable;
-		}
+public TypeBinding resolveTypeExpectingWithBindings(LocalVariableBinding[] bindings, BlockScope scope, TypeBinding expectedType) {
+	scope.include(bindings);
+	try {
+		return this.resolveTypeExpecting(scope, expectedType);
+	} finally {
+		scope.exclude(bindings);
 	}
-	TypeBinding retVal = this.resolveType(scope);
-	if (patternVariablesInScope != null) {
-		for (LocalVariableBinding binding : patternVariablesInScope) {
-			binding.modifiers |= ExtraCompilerModifiers.AccPatternVariable;
-		}
-	}
-	return retVal;
 }
 
 /**
@@ -1295,7 +1254,7 @@ public boolean forcedToBeRaw(ReferenceContext referenceContext) {
 /**
  * Returns an object which can be used to identify identical JSR sequence targets
  * (see TryStatement subroutine codegen)
- * or <code>null</null> if not reusable
+ * or <code>null</code> if not reusable
  */
 public Object reusableJSRTarget() {
 	if (this.constant != Constant.NotAConstant && (this.implicitConversion & TypeIds.BOXING) == 0) {

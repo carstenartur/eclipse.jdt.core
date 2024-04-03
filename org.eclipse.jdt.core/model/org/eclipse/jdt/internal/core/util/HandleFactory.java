@@ -13,8 +13,10 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.core.util;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Objects;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IProject;
@@ -87,18 +89,14 @@ public class HandleFactory {
 		if ((separatorIndex= resourcePath.indexOf(IJavaSearchScope.JAR_FILE_ENTRY_SEPARATOR)) > -1) {
 			// path to a class file inside a jar
 			// Optimization: cache package fragment root handle and package handles
-			int rootPathLength;
-			PackageFragmentRoot root = null;
-			if (this.lastPkgFragmentRootPath == null
-					|| (rootPathLength = this.lastPkgFragmentRootPath.length()) != resourcePath.length()
-					|| !resourcePath.regionMatches(0, this.lastPkgFragmentRootPath, 0, rootPathLength)) {
-				String jarPath= resourcePath.substring(0, separatorIndex);
-				root= getJarPkgFragmentRoot(resourcePath, separatorIndex, jarPath, scope);
+			String jarPath = resourcePath.substring(0, separatorIndex);
+			if (!Objects.equals(this.lastPkgFragmentRootPath, jarPath)) {
+				PackageFragmentRoot root = getJarPkgFragmentRoot(resourcePath, separatorIndex, jarPath, scope);
 				if (root == null)
 					return null; // match is outside classpath
-				this.lastPkgFragmentRootPath= jarPath;
-				this.lastPkgFragmentRoot= root;
-				this.packageHandles= new HashtableOfArrayToObject(5);
+				this.lastPkgFragmentRootPath = jarPath;
+				this.lastPkgFragmentRoot = root;
+				this.packageHandles = new HashtableOfArrayToObject(5);
 			}
 			// create handle
 			String module = null;
@@ -109,13 +107,12 @@ public class HandleFactory {
 			}
 			String classFilePath= resourcePath.substring(separatorIndex + 1);
 			if (classFilePath.endsWith(TypeConstants.AUTOMATIC_MODULE_NAME))
-				return root;
+				return this.lastPkgFragmentRoot;
 			String[] simpleNames = new Path(classFilePath).segments();
 			String[] pkgName;
 			int length = simpleNames.length-1;
 			if (length > 0) {
-				pkgName = new String[length];
-				System.arraycopy(simpleNames, 0, pkgName, 0, length);
+				pkgName = Arrays.copyOf(simpleNames, length);
 			} else {
 				pkgName = CharOperation.NO_STRINGS;
 			}
@@ -158,7 +155,7 @@ public class HandleFactory {
 				pkgFragment= this.lastPkgFragmentRoot.getPackageFragment(pkgName);
 				this.packageHandles.put(pkgName, pkgFragment);
 			}
-			String simpleName= simpleNames[length];
+			String simpleName= DeduplicationUtil.intern(simpleNames[length]);
 			if (org.eclipse.jdt.internal.core.util.Util.isJavaLikeFileName(simpleName)) {
 				ICompilationUnit unit= pkgFragment.getCompilationUnit(simpleName);
 				return (Openable) unit;
@@ -212,10 +209,10 @@ public class HandleFactory {
 				IJavaElement parentElement = createElement(scope.parent, elementPosition, unit, existingElements, knownScopes);
 				switch (parentElement.getElementType()) {
 					case IJavaElement.COMPILATION_UNIT :
-						newElement = ((ICompilationUnit)parentElement).getType(new String(scope.enclosingSourceType().sourceName));
+						newElement = ((ICompilationUnit)parentElement).getType(DeduplicationUtil.toString(scope.enclosingSourceType().sourceName));
 						break;
 					case IJavaElement.TYPE :
-						newElement = ((IType)parentElement).getType(new String(scope.enclosingSourceType().sourceName));
+						newElement = ((IType)parentElement).getType(DeduplicationUtil.toString(scope.enclosingSourceType().sourceName));
 						break;
 					case IJavaElement.FIELD :
 					case IJavaElement.INITIALIZER :
@@ -224,11 +221,11 @@ public class HandleFactory {
 					    if (member.isBinary()) {
 					        return null;
 					    } else {
-							newElement = member.getType(new String(scope.enclosingSourceType().sourceName), 1);
-							// increment occurrence count if collision is detected
-							if (newElement != null) {
-								while (!existingElements.add(newElement)) ((SourceRefElement)newElement).occurrenceCount++;
-							}
+							String name = DeduplicationUtil.toString(scope.enclosingSourceType().sourceName);
+							int occurrenceCount = 0;
+							do {
+								newElement = member.getType(name, ++occurrenceCount);
+							} while (!existingElements.add(newElement));
 					    }
 						break;
 				}
@@ -262,7 +259,7 @@ public class HandleFactory {
 							switch (field.getKind()) {
 								case AbstractVariableDeclaration.FIELD :
 								case AbstractVariableDeclaration.ENUM_CONSTANT :
-									newElement = parentType.getField(new String(field.name));
+									newElement = parentType.getField(DeduplicationUtil.toString(field.name));
 									break;
 								case AbstractVariableDeclaration.INITIALIZER :
 									newElement = parentType.getInitializer(occurenceCount);
@@ -276,7 +273,7 @@ public class HandleFactory {
 				} else {
 					// method element
 					AbstractMethodDeclaration method = methodScope.referenceMethod();
-					newElement = parentType.getMethod(new String(method.selector), Util.typeParameterSignatures(method));
+					newElement = parentType.getMethod(DeduplicationUtil.toString(method.selector), Util.typeParameterSignatures(method));
 					if (newElement != null) {
 						knownScopes.put(scope, newElement);
 					}
@@ -358,9 +355,9 @@ public class HandleFactory {
 		IPath jarPath,
 		Object target,
 		IJavaProject[] projects) {
-		for (int i= 0, projectCount= projects.length; i < projectCount; i++) {
+		for (IJavaProject project : projects) {
 			try {
-				JavaProject javaProject= (JavaProject)projects[i];
+				JavaProject javaProject= (JavaProject)project;
 				IClasspathEntry classpathEnty = javaProject.getClasspathEntryFor(jarPath);
 				if (classpathEnty != null) {
 					if (target instanceof IFile) {
@@ -385,15 +382,14 @@ public class HandleFactory {
 
 		IPath path= new Path(pathString);
 		IProject[] projects= ResourcesPlugin.getWorkspace().getRoot().getProjects();
-		for (int i= 0, max= projects.length; i < max; i++) {
+		for (IProject project : projects) {
 			try {
-				IProject project = projects[i];
 				if (!project.isAccessible()
 					|| !project.hasNature(JavaCore.NATURE_ID)) continue;
 				IJavaProject javaProject= this.javaModel.getJavaProject(project);
 				IPackageFragmentRoot[] roots= javaProject.getPackageFragmentRoots();
-				for (int j= 0, rootCount= roots.length; j < rootCount; j++) {
-					PackageFragmentRoot root= (PackageFragmentRoot)roots[j];
+				for (IPackageFragmentRoot r : roots) {
+					PackageFragmentRoot root= (PackageFragmentRoot)r;
 					if (root.internalPath().isPrefixOf(path) && !Util.isExcluded(path, root.fullInclusionPatternChars(), root.fullExclusionPatternChars(), false)) {
 						return root;
 					}

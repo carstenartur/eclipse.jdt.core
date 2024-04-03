@@ -30,6 +30,10 @@ public class ResolvedSourceType extends SourceType {
 		super(parent, name);
 		this.uniqueKey = uniqueKey;
 	}
+	public ResolvedSourceType(JavaElement parent, String name, String uniqueKey, int occurrenceCount) {
+		super(parent, name, occurrenceCount);
+		this.uniqueKey = uniqueKey;
+	}
 
 	@Override
 	public String getFullyQualifiedParameterizedName() throws JavaModelException {
@@ -47,7 +51,7 @@ public class ResolvedSourceType extends SourceType {
 	}
 
 	/**
-	 * @private Debugging purposes
+	 * for debugging only
 	 */
 	@Override
 	protected void toStringInfo(int tab, StringBuilder buffer, Object info, boolean showResolvedInfo) {
@@ -60,9 +64,8 @@ public class ResolvedSourceType extends SourceType {
 	}
 
 	@Override
-	public JavaElement unresolved() {
-		SourceType handle = new SourceType(this.getParent(), this.name);
-		handle.occurrenceCount = this.occurrenceCount;
+	public SourceType unresolved() {
+		SourceType handle = new SourceType(this.getParent(), this.name, this.getOccurrenceCount());
 		handle.localOccurrenceCount = this.localOccurrenceCount;
 		return handle;
 	}

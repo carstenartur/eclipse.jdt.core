@@ -95,8 +95,8 @@ public boolean contains(IResource resource) {
 	} catch (JavaModelException e) {
 		return false;
 	}
-	for (int i = 0, length = projects.length; i < length; i++) {
-		JavaProject project = (JavaProject)projects[i];
+	for (IJavaProject p : projects) {
+		JavaProject project = (JavaProject)p;
 		if (!project.contains(resource)) {
 			return false;
 		}
@@ -118,7 +118,7 @@ public void copy(IJavaElement[] elements, IJavaElement[] containers, IJavaElemen
  * Returns a new element info for this element.
  */
 @Override
-protected Object createElementInfo() {
+protected JavaModelInfo createElementInfo() {
 	return new JavaModelInfo();
 }
 
@@ -308,7 +308,7 @@ protected void runOperation(MultiOperation op, IJavaElement[] elements, IJavaEle
 	op.runOperation(monitor);
 }
 /**
- * @private Debugging purposes
+ * for debugging only
  */
 @Override
 protected void toStringInfo(int tab, StringBuilder buffer, Object info, boolean showResolvedInfo) {
@@ -337,6 +337,15 @@ public static Object getTarget(IPath path, boolean checkResourceExistence) {
 		return target;
 	return getExternalTarget(path, checkResourceExistence);
 }
+/** Return same as calling {@link #getTarget(IPath, boolean)} for {@link IClasspathEntry#getPath()} */
+public static Object getTarget(IClasspathEntry entry, boolean checkResourceExistence) {
+	return getTarget(entry.getPath(), checkResourceExistence);
+}
+/** Return same as calling {@link #getTarget(IPath, boolean)} for {@link IPackageFragmentRoot#getPath()} */
+public static Object getTarget(IPackageFragmentRoot root, boolean checkResourceExistence) {
+	return getTarget(root.getPath(), checkResourceExistence);
+}
+
 
 /**
  * Helper method - returns the {@link IResource} corresponding to the provided {@link IPath},
@@ -385,12 +394,9 @@ public static Object getExternalTarget(IPath path, boolean checkResourceExistenc
  * Helper method - returns whether an object is a file (i.e., it returns <code>true</code>
  * to {@link File#isFile()}.
  */
-public static boolean isFile(Object target) {
-	if (target instanceof File) {
-		IPath path = Path.fromOSString(((File) target).getPath());
-		return isExternalFile(path);
-	}
-	return false;
+public static boolean isFile(File target) {
+	IPath path = Path.fromOSString(target.getPath());
+	return isExternalFile(path);
 }
 
 public static boolean isJimage(File file) {
@@ -409,13 +415,14 @@ static private boolean isExternalFile(IPath path) {
 	if (JavaModelManager.getJavaModelManager().isExternalFile(path)) {
 		return true;
 	}
+	if (JavaModelManager.getJavaModelManager().knownToNotExistOnFileSystem(path)) {
+		return false;
+	}
 	if (JavaModelManager.ZIP_ACCESS_VERBOSE) {
 		JavaModelManager.trace("(" + Thread.currentThread() + ") [JavaModel.isExternalFile(...)] Checking existence of " + path.toString()); //$NON-NLS-1$ //$NON-NLS-2$
 	}
 	boolean isFile = path.toFile().isFile();
-	if (isFile) {
-		JavaModelManager.getJavaModelManager().addExternalFile(path);
-	}
+	JavaModelManager.getJavaModelManager().addExternalFile(path, isFile);
 	return isFile;
 }
 
@@ -423,8 +430,8 @@ static private boolean isExternalFile(IPath path) {
  * Helper method - returns the {@link File} item if <code>target</code> is a file (i.e., the target
  * returns <code>true</code> to {@link File#isFile()}. Otherwise returns <code>null</code>.
  */
-public static File getFile(Object target) {
-	return isFile(target) ? (File) target : null;
+public static File getFile(File target) {
+	return isFile(target) ? target : null;
 }
 
 @Override

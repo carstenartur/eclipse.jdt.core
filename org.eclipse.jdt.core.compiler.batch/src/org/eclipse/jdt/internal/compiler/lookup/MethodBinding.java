@@ -71,7 +71,7 @@ public class MethodBinding extends Binding {
 
 	public int defaultNullness; // for null *type* annotations
 
-	/** Store flow-related information from declaration annotations (nullness & owning) (incl. applicable default). */
+	/** Store flow-related information from declaration annotations (nullness and owning) (incl. applicable default). */
 	public byte[] parameterFlowBits;
 	// bit constant per each cell of the above:
 	public static byte PARAM_NONNULL = 1;
@@ -416,18 +416,17 @@ public final boolean canBeSeenBy(TypeBinding receiverType, InvocationSite invoca
 public List<TypeBinding> collectMissingTypes(List<TypeBinding> missingTypes) {
 	if ((this.tagBits & TagBits.HasMissingType) != 0) {
 		missingTypes = this.returnType.collectMissingTypes(missingTypes);
-		for (int i = 0, max = this.parameters.length; i < max; i++) {
-			missingTypes = this.parameters[i].collectMissingTypes(missingTypes);
+		for (TypeBinding parameter : this.parameters) {
+			missingTypes = parameter.collectMissingTypes(missingTypes);
 		}
-		for (int i = 0, max = this.thrownExceptions.length; i < max; i++) {
-			missingTypes = this.thrownExceptions[i].collectMissingTypes(missingTypes);
+		for (ReferenceBinding thrownException : this.thrownExceptions) {
+			missingTypes = thrownException.collectMissingTypes(missingTypes);
 		}
-		for (int i = 0, max = this.typeVariables.length; i < max; i++) {
-			TypeVariableBinding variable = this.typeVariables[i];
+		for (TypeVariableBinding variable : this.typeVariables) {
 			missingTypes = variable.superclass().collectMissingTypes(missingTypes);
 			ReferenceBinding[] interfaces = variable.superInterfaces();
-			for (int j = 0, length = interfaces.length; j < length; j++) {
-				missingTypes = interfaces[j].collectMissingTypes(missingTypes);
+			for (ReferenceBinding binding : interfaces) {
+				missingTypes = binding.collectMissingTypes(missingTypes);
 			}
 		}
 	}
@@ -577,7 +576,7 @@ protected void fillInDefaultNonNullness18(AbstractMethodDeclaration sourceMethod
 			if (existing == 0L) {
 				added = true;
 				if (!parameter.isBaseType()) {
-					this.parameters[i] = env.createAnnotatedType(parameter, new AnnotationBinding[]{env.getNonNullAnnotation()});
+					this.parameters[i] = env.createNonNullAnnotatedType(parameter);
 					if (sourceMethod != null)
 						sourceMethod.arguments[i].binding.type = this.parameters[i];
 				}
@@ -604,34 +603,34 @@ public MethodBinding findOriginalInheritedMethod(MethodBinding inheritedMethod) 
 	if (TypeBinding.notEquals(inheritedOriginal.declaringClass, superType)) {
 		// must find inherited method with the same substituted variables
 		MethodBinding[] superMethods = ((ReferenceBinding) superType).getMethods(inheritedOriginal.selector, inheritedOriginal.parameters.length);
-		for (int m = 0, l = superMethods.length; m < l; m++)
-			if (superMethods[m].original() == inheritedOriginal)
-				return superMethods[m];
+		for (MethodBinding superMethod : superMethods)
+			if (superMethod.original() == inheritedOriginal)
+				return superMethod;
 	}
 	return inheritedOriginal;
 }
 
 /**
- * <pre>
+ * <pre>{@code
  *<typeParam1 ... typeParamM>(param1 ... paramN)returnType thrownException1 ... thrownExceptionP
  * T foo(T t) throws X<T>   --->   (TT;)TT;LX<TT;>;
  * void bar(X<T> t)   -->   (LX<TT;>;)V
  * <T> void bar(X<T> t)   -->  <T:Ljava.lang.Object;>(LX<TT;>;)V
- * </pre>
+ * }</pre>
  */
 public char[] genericSignature() {
 	if ((this.modifiers & ExtraCompilerModifiers.AccGenericSignature) == 0) return null;
 	StringBuilder sig = new StringBuilder(10);
 	if (this.typeVariables != Binding.NO_TYPE_VARIABLES) {
 		sig.append('<');
-		for (int i = 0, length = this.typeVariables.length; i < length; i++) {
-			sig.append(this.typeVariables[i].genericSignature());
+		for (TypeVariableBinding typeVariable : this.typeVariables) {
+			sig.append(typeVariable.genericSignature());
 		}
 		sig.append('>');
 	}
 	sig.append('(');
-	for (int i = 0, length = this.parameters.length; i < length; i++) {
-		sig.append(this.parameters[i].genericTypeSignature());
+	for (TypeBinding parameter : this.parameters) {
+		sig.append(parameter.genericTypeSignature());
 	}
 	sig.append(')');
 	if (this.returnType != null)
@@ -891,6 +890,25 @@ public final boolean isMain() {
 	}
 	return false;
 }
+public final boolean isCandindateMain() {
+	if (this.parameters.length > 1) {
+		return false;
+	}
+	if (this.selector.length == 4 && CharOperation.equals(this.selector, TypeConstants.MAIN)
+			&& ((this.modifiers & ClassFileConstants.AccPrivate) == 0)
+			&& TypeBinding.VOID == this.returnType) {
+		if (this.parameters.length == 0) {
+			return true;
+		}
+		if (this.parameters.length == 1) {
+			TypeBinding paramType = this.parameters[0];
+			if (paramType.dimensions() == 1 && paramType.leafComponentType().id == TypeIds.T_JavaLangString) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
 
 /* Answer true if the receiver is a native method
 */
@@ -992,7 +1010,7 @@ public MethodBinding original() {
 }
 
 /**
- * Strips one level of parameterization, so if both class & method are parameterized,
+ * Strips one level of parameterization, so if both class and method are parameterized,
  * leave the class parameters in place.
  */
 public MethodBinding shallowOriginal() {
@@ -1106,13 +1124,13 @@ public final char[] computeSignature(ClassFile classFile) {
 	}
 	boolean needSynthetics = isConstructor
 			&& this.declaringClass.isNestedType()
-			&& !this.declaringClass.isStatic();
+			&& !this.declaringClass.isStatic()
+			&& !this.declaringClass.isInPreconstructorContext();
 	if (needSynthetics) {
 		// take into account the synthetic argument type signatures as well
 		ReferenceBinding[] syntheticArgumentTypes = this.declaringClass.syntheticEnclosingInstanceTypes();
 		if (syntheticArgumentTypes != null) {
-			for (int i = 0, count = syntheticArgumentTypes.length; i < count; i++) {
-				ReferenceBinding syntheticArgumentType = syntheticArgumentTypes[i];
+			for (ReferenceBinding syntheticArgumentType : syntheticArgumentTypes) {
 				if ((syntheticArgumentType.tagBits & TagBits.ContainsNestedTypeReferences) != 0) {
 					this.tagBits |= TagBits.ContainsNestedTypeReferences;
 					if (classFile != null)
@@ -1128,8 +1146,7 @@ public final char[] computeSignature(ClassFile classFile) {
 	}
 
 	if (targetParameters != Binding.NO_PARAMETERS) {
-		for (int i = 0, max = targetParameters.length; i < max; i++) {
-			TypeBinding targetParameter = targetParameters[i];
+		for (TypeBinding targetParameter : targetParameters) {
 			TypeBinding leafTargetParameterType = targetParameter.leafComponentType();
 			if ((leafTargetParameterType.tagBits & TagBits.ContainsNestedTypeReferences) != 0) {
 				this.tagBits |= TagBits.ContainsNestedTypeReferences;
@@ -1193,8 +1210,7 @@ public char[] signature(ClassFile classFile) {
 				// take into account the synthetic argument type signatures as well
 				ReferenceBinding[] syntheticArgumentTypes = this.declaringClass.syntheticEnclosingInstanceTypes();
 				if (syntheticArgumentTypes != null) {
-					for (int i = 0, count = syntheticArgumentTypes.length; i < count; i++) {
-						ReferenceBinding syntheticArgumentType = syntheticArgumentTypes[i];
+					for (ReferenceBinding syntheticArgumentType : syntheticArgumentTypes) {
 						if ((syntheticArgumentType.tagBits & TagBits.ContainsNestedTypeReferences) != 0) {
 							Util.recordNestedType(classFile, syntheticArgumentType);
 						}
@@ -1206,8 +1222,7 @@ public char[] signature(ClassFile classFile) {
 			}
 
 			if (targetParameters != Binding.NO_PARAMETERS) {
-				for (int i = 0, max = targetParameters.length; i < max; i++) {
-					TypeBinding targetParameter = targetParameters[i];
+				for (TypeBinding targetParameter : targetParameters) {
 					TypeBinding leafTargetParameterType = targetParameter.leafComponentType();
 					if ((leafTargetParameterType.tagBits & TagBits.ContainsNestedTypeReferences) != 0) {
 						Util.recordNestedType(classFile, leafTargetParameterType);
@@ -1348,8 +1363,8 @@ static int getNonNullByDefaultValue(AnnotationBinding annotation) {
 	} else if (elementValuePairs.length > 0) {
 		// evaluate the contained EnumConstantSignatures:
 		int nullness = 0;
-		for (int i = 0; i < elementValuePairs.length; i++)
-			nullness |= Annotation.nullLocationBitsFromAnnotationValue(elementValuePairs[i].getValue());
+		for (ElementValuePair elementValuePair : elementValuePairs)
+			nullness |= Annotation.nullLocationBitsFromAnnotationValue(elementValuePair.getValue());
 		return nullness;
 	} else {
 		// empty argument: cancel all defaults from enclosing scopes
@@ -1449,10 +1464,11 @@ public void updateTypeVariableBinding(TypeVariableBinding previousBinding, TypeV
  * Definition reproduced here. <br/><br/>
  *
  * A method is signature polymorphic if all of the following are true:
+ * <ul>
  *  <li> It is declared in the java.lang.invoke.MethodHandle class or the java.lang.invoke.VarHandle class. </li>
  *  <li> It has a single variable arity parameter (§8.4.1) whose declared type is Object[]. </li>
  *  <li> It is native. </li>
- * <br/>
+ * </ul>
  * @return true if the method has Polymorphic Signature
  */
 public boolean hasPolymorphicSignature(Scope scope) {
@@ -1519,6 +1535,14 @@ public void verifyOverrideCompatibility(MethodBinding inheritedMethod, ClassScop
 		if ((inheritedMethod.tagBits & TagBits.AnnotationOwning) == 0)
 			scope.problemReporter().overrideAddingReturnOwning(sourceMethod);
 	}
+}
+public boolean isWellknownMethod(char[][] compoundClassName, char[] wellKnownSelector) {
+	return CharOperation.equals(this.declaringClass.compoundName, compoundClassName)
+			&& CharOperation.equals(this.selector, wellKnownSelector);
+}
+public boolean isWellknownMethod(int typeId, char[] wellKnownSelector) {
+	return this.declaringClass.id == typeId
+			&& CharOperation.equals(this.selector, wellKnownSelector);
 }
 }
 

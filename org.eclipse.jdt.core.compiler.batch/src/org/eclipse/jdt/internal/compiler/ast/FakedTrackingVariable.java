@@ -19,7 +19,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -348,6 +347,8 @@ public class FakedTrackingVariable extends LocalDeclaration {
 				if (messageSend.binding != null && ((messageSend.binding.tagBits & TagBits.AnnotationNotOwning) == 0))
 					closeTracker.owningState = OWNED;
 			}
+		} else if (rhs instanceof CastExpression cast) {
+			preConnectTrackerAcrossAssignment(location, local, cast.expression, flowInfo, useAnnotations);
 		}
 		return closeTracker;
 	}
@@ -1041,7 +1042,7 @@ public class FakedTrackingVariable extends LocalDeclaration {
 	}
 
 	/**
-	 * Unassigned closeables are not visible beyond their enclosing statement, immediately report & remove after each statement.
+	 * Unassigned closeables are not visible beyond their enclosing statement, immediately report and remove after each statement.
 	 * @param returnMissingOwning at a return statement this signals {@code true} when the enclosing method lacks an {@code @Owning} annotation.
 	 */
 	public static void cleanUpUnassigned(BlockScope scope, ASTNode location, FlowInfo flowInfo, boolean returnMissingOwning) {
@@ -1445,10 +1446,8 @@ public class FakedTrackingVariable extends LocalDeclaration {
 		}
 		boolean hasReported = false;
 		if (this.recordedLocations != null) {
-			Iterator<Map.Entry<ASTNode,Integer>> locations = this.recordedLocations.entrySet().iterator();
 			int reportFlags = 0;
-			while (locations.hasNext()) {
-				Entry<ASTNode, Integer> entry = locations.next();
+			for (Entry<ASTNode, Integer> entry : this.recordedLocations.entrySet()) {
 				reportFlags |= reportError(scope.problemReporter(), entry.getKey(), entry.getValue().intValue());
 				hasReported = true;
 			}

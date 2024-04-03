@@ -1183,7 +1183,7 @@ private void buildMoreCompletionContext(Expression expression) {
 								length);
 						}
 					}
-					CaseStatement caseStatement = new CaseStatement(expression, expression.sourceStart, expression.sourceEnd);
+					CaseStatement caseStatement = new CaseStatement(new Expression[] { expression }, expression.sourceStart, expression.sourceEnd);
 					if(switchStatement.statements == null) {
 						switchStatement.statements = new Statement[]{caseStatement};
 					} else {
@@ -4232,6 +4232,7 @@ protected void consumeToken(int token) {
 					case TokenNamesuper: // e.g. super[.]fred()
 						this.invocationType = SUPER_RECEIVER;
 						break;
+					case TokenNameUNDERSCORE:
 					case TokenNameIdentifier: // e.g. bar[.]fred()
 						if (topKnownElementKind(COMPLETION_OR_ASSIST_PARSER) != K_BETWEEN_NEW_AND_LEFT_BRACKET) {
 							if (this.identifierPtr != prevIdentifierPtr) { // if identifier has been consumed, e.g. this.x[.]fred()
@@ -4246,6 +4247,7 @@ protected void consumeToken(int token) {
 			case TokenNameCOLON_COLON:
 				this.inReferenceExpression = true;
 				break;
+			case TokenNameUNDERSCORE:
 			case TokenNameIdentifier:
 				if (this.inReferenceExpression)
 					break;
@@ -4317,6 +4319,7 @@ protected void consumeToken(int token) {
 					this.qualifier = this.expressionPtr; // remenber the last expression so that arguments are correctly computed
 				}
 				switch (previous) {
+					case TokenNameUNDERSCORE:
 					case TokenNameIdentifier: // e.g. fred[(]) or foo.fred[(])
 						if (topKnownElementKind(COMPLETION_OR_ASSIST_PARSER) == K_SELECTOR) {
 							int info = 0;
@@ -4436,6 +4439,7 @@ protected void consumeToken(int token) {
 					pushOnElementStack(K_BETWEEN_LEFT_AND_RIGHT_BRACKET);
 				} else {
 					switch (previous) {
+						case TokenNameUNDERSCORE:
 						case TokenNameIdentifier:
 						case TokenNameboolean:
 						case TokenNamebyte:
@@ -5146,8 +5150,8 @@ public TypeReference createQualifiedAssistTypeReference(char[][] previousIdentif
 @Override
 public TypeReference createParameterizedQualifiedAssistTypeReference(char[][] previousIdentifiers, TypeReference[][] typeArguments, char[] assistName, TypeReference[] assistTypeArguments, long[] positions) {
 	boolean isParameterized = false;
-	for (int i = 0; i < typeArguments.length; i++) {
-		if(typeArguments[i] != null) {
+	for (TypeReference[] typeArgument : typeArguments) {
+		if(typeArgument != null) {
 			isParameterized = true;
 			break;
 		}
@@ -5469,8 +5473,8 @@ protected TypeReference getTypeReferenceForGenericType(int dim,	int identifierLe
 		if (identifierLength == 1 && numberOfIdentifiers == 1) {
 			ParameterizedSingleTypeReference singleRef = (ParameterizedSingleTypeReference) ref;
 			TypeReference[] typeArguments = singleRef.typeArguments;
-			for (int i = 0; i < typeArguments.length; i++) {
-				if(typeArguments[i] == this.assistNode) {
+			for (TypeReference typeArgument : typeArguments) {
+				if(typeArgument == this.assistNode) {
 					this.assistNodeParent = ref;
 					return ref;
 				}
@@ -5478,10 +5482,10 @@ protected TypeReference getTypeReferenceForGenericType(int dim,	int identifierLe
 		} else {
 			ParameterizedQualifiedTypeReference qualifiedRef = (ParameterizedQualifiedTypeReference) ref;
 			TypeReference[][] typeArguments = qualifiedRef.typeArguments;
-			for (int i = 0; i < typeArguments.length; i++) {
-				if(typeArguments[i] != null) {
-					for (int j = 0; j < typeArguments[i].length; j++) {
-						if(typeArguments[i][j] == this.assistNode) {
+			for (TypeReference[] typeArgument : typeArguments) {
+				if(typeArgument != null) {
+					for (int j = 0; j < typeArgument.length; j++) {
+						if(typeArgument[j] == this.assistNode) {
 							this.assistNodeParent = ref;
 							return ref;
 						}

@@ -269,9 +269,9 @@ public class ExecutableElementImpl extends ElementImpl implements
 	 * the inherited C.f() override A.f().  If B.f() were private, for instance, then in the context
 	 * of C it would still not override A.f().
 	 *
+     * <p>see jls3 8.4.8 Inheritance, Overriding, and Hiding
+     * <p>see jls3 9.4.1 Inheritance and Overriding
 	 * @see javax.lang.model.util.Elements#overrides(ExecutableElement, ExecutableElement, TypeElement)
-     * @jls3 8.4.8 Inheritance, Overriding, and Hiding
-     * @jls3 9.4.1 Inheritance and Overriding
 	 */
 	public boolean overrides(ExecutableElement overridden, TypeElement type)
 	{
@@ -309,9 +309,9 @@ public class ExecutableElementImpl extends ElementImpl implements
 		LookupEnvironment lookupEnvironment = this._env.getLookupEnvironment();
 		if (lookupEnvironment == null) return false;
 		MethodVerifier methodVerifier = lookupEnvironment.methodVerifier();
-		for (int i = 0, length = superMethods.length; i < length; i++) {
-			if (superMethods[i].original() == overriddenBinding) {
-				return methodVerifier.doesMethodOverride(overriderBinding, superMethods[i]);
+		for (MethodBinding superMethod : superMethods) {
+			if (superMethod.original() == overriddenBinding) {
+				return methodVerifier.doesMethodOverride(overriderBinding, superMethod);
 			}
 		}
 		return false;

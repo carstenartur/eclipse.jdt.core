@@ -60,8 +60,8 @@ public class TypeParameter extends AbstractVariableDeclaration {
 			this.type.checkBounds(scope);
 		}
 		if (this.bounds != null) {
-			for (int i = 0, length = this.bounds.length; i < length; i++) {
-				this.bounds[i].checkBounds(scope);
+			for (TypeReference bound : this.bounds) {
+				bound.checkBounds(scope);
 			}
 		}
 	}
@@ -154,9 +154,8 @@ public class TypeParameter extends AbstractVariableDeclaration {
 							if ((this.binding.tagBits & TagBits.AnnotationNonNull) != 0)
 								scope.problemReporter().nullAnnotationIsRedundant(this);
 						} else { // no explicit type annos, add the default:
-							AnnotationBinding[] annots = new AnnotationBinding[] { environment.getNonNullAnnotation() };
 							TypeVariableBinding previousBinding = this.binding;
-							this.binding = (TypeVariableBinding) environment.createAnnotatedType(this.binding, annots);
+							this.binding = (TypeVariableBinding) environment.createNonNullAnnotatedType(this.binding);
 
 							if (scope instanceof MethodScope) {
 								/*
@@ -193,9 +192,9 @@ public class TypeParameter extends AbstractVariableDeclaration {
 			this.type.print(0, output);
 		}
 		if (this.bounds != null){
-			for (int i = 0; i < this.bounds.length; i++) {
+			for (TypeReference bound : this.bounds) {
 				output.append(" & "); //$NON-NLS-1$
-				this.bounds[i].print(0, output);
+				bound.print(0, output);
 			}
 		}
 		return output;
@@ -261,8 +260,7 @@ public class TypeParameter extends AbstractVariableDeclaration {
 			}
 		}
 		if (this.bounds != null) {
-			for (int i = 0; i < this.bounds.length; i++) {
-				TypeReference bound = this.bounds[i];
+			for (TypeReference bound : this.bounds) {
 				TypeBinding prevType = bound.resolvedType;
 				bound.updateWithAnnotations(scope, Binding.DefaultLocationTypeBound);
 				if (bound.resolvedType instanceof ReferenceBinding && prevType != bound.resolvedType) { //$IDENTITY-COMPARISON$

@@ -13,278 +13,163 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-import java.util.HashSet;
-import java.util.Set;
-
-import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.internal.compiler.ASTVisitor;
-import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.codegen.BranchLabel;
 import org.eclipse.jdt.internal.compiler.codegen.CodeStream;
 import org.eclipse.jdt.internal.compiler.flow.FlowContext;
 import org.eclipse.jdt.internal.compiler.flow.FlowInfo;
-import org.eclipse.jdt.internal.compiler.impl.Constant;
+import org.eclipse.jdt.internal.compiler.lookup.Binding;
 import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
 import org.eclipse.jdt.internal.compiler.lookup.ExtraCompilerModifiers;
 import org.eclipse.jdt.internal.compiler.lookup.LocalVariableBinding;
 import org.eclipse.jdt.internal.compiler.lookup.RecordComponentBinding;
 import org.eclipse.jdt.internal.compiler.lookup.ReferenceBinding;
-import org.eclipse.jdt.internal.compiler.lookup.Scope;
+import org.eclipse.jdt.internal.compiler.lookup.TagBits;
 import org.eclipse.jdt.internal.compiler.lookup.TypeBinding;
-import org.eclipse.jdt.internal.compiler.lookup.TypeBindingVisitor;
 import org.eclipse.jdt.internal.compiler.lookup.TypeVariableBinding;
 
 public class TypePattern extends Pattern {
 
 	public LocalDeclaration local;
-	Expression expression;
-	public int index = -1; // denoting position
+
+	private boolean isEitherOrPattern = false;
 
 	public TypePattern(LocalDeclaration local) {
 		this.local = local;
 	}
-	protected TypePattern() {
+
+	public static TypePattern createTypePattern(LocalDeclaration lokal) {
+		if (lokal.name.length == 1 && lokal.name[0] == '_') {
+			return new TypePattern(lokal) {
+				@Override
+				public boolean isUnnamed() {
+					return true;
+				}
+			};
+		}
+		return new TypePattern(lokal);
 	}
+
 	@Override
 	public TypeReference getType() {
 		return this.local.type;
 	}
+
 	@Override
-	public void collectPatternVariablesToScope(LocalVariableBinding[] variables, BlockScope scope) {
-		if (this.resolvedType == null) {
-			this.resolveType(scope);
-		}
-		if (this.local != null && this.local.binding != null) {
-			LocalVariableBinding binding = this.local.binding;
-			if (variables != null) {
-				for (LocalVariableBinding variable : variables) {
-					if (variable == binding) continue; // Shouldn't happen
-					if (CharOperation.equals(binding.name, variable.name)) {
-						scope.problemReporter().redefineLocal(this.local);
-					}
-				}
-			}
-			if (this.patternVarsWhenTrue == null) {
-				this.patternVarsWhenTrue = new LocalVariableBinding[1];
-				this.patternVarsWhenTrue[0] = binding;
-			} else {
-				LocalVariableBinding[] vars = new LocalVariableBinding[1];
-				vars[0] = binding;
-				this.addPatternVariablesWhenTrue(vars);
-			}
-		}
+	public void setIsEitherOrPattern() {
+		this.isEitherOrPattern = true;
 	}
+
 	@Override
-	public boolean checkUnsafeCast(Scope scope, TypeBinding castType, TypeBinding expressionType, TypeBinding match, boolean isNarrowing) {
-		if (!castType.isReifiable())
-			return CastExpression.checkUnsafeCast(this, scope, castType, expressionType, match, isNarrowing);
-		else
-			return super.checkUnsafeCast(scope, castType, expressionType, match, isNarrowing);
+	public LocalVariableBinding[] bindingsWhenTrue() {
+		return this.isUnnamed() || this.local.binding == null ? NO_VARIABLES : new LocalVariableBinding[] { this.local.binding };
 	}
 
 	@Override
 	public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, FlowInfo flowInfo) {
-		if (this.local != null) {
-			FlowInfo patternInfo = flowInfo.copy();
-			patternInfo.markAsDefinitelyAssigned(this.local.binding);
-			if (!this.isTotalTypeNode) {
-				// non-total type patterns create a nonnull local:
-				patternInfo.markAsDefinitelyNonNull(this.local.binding);
-			} else {
-				// total type patterns inherit the nullness of the value being switched over, unless ...
-				if (flowContext.associatedNode instanceof SwitchStatement) {
-					SwitchStatement swStmt = (SwitchStatement) flowContext.associatedNode;
-					int nullStatus = swStmt.containsNull
-							? FlowInfo.NON_NULL // ... null is handled in a separate case
-							: swStmt.expression.nullStatus(patternInfo, flowContext);
-					patternInfo.markNullStatus(this.local.binding, nullStatus);
+		flowInfo = this.local.analyseCode(currentScope, flowContext, flowInfo);
+		FlowInfo patternInfo = flowInfo.copy();
+
+		if (this.isUnnamed())
+			return patternInfo; // exclude anonymous blokes from flow analysis.
+
+		patternInfo.markAsDefinitelyAssigned(this.local.binding);
+		if (!this.isTotalTypeNode) {
+			// non-total type patterns create a nonnull local:
+			patternInfo.markAsDefinitelyNonNull(this.local.binding);
+		} else {
+			// total type patterns inherit the nullness of the value being switched over, unless ...
+			if (flowContext.associatedNode instanceof SwitchStatement swStmt) {
+				int nullStatus = swStmt.containsNull
+						? FlowInfo.NON_NULL // ... null is handled in a separate case
+						: swStmt.expression.nullStatus(patternInfo, flowContext);
+				patternInfo.markNullStatus(this.local.binding, nullStatus);
+			}
+		}
+		return patternInfo;
+	}
+
+	@Override
+	public void generateCode(BlockScope currentScope, CodeStream codeStream, BranchLabel patternMatchLabel, BranchLabel matchFailLabel) {
+		if (isUnnamed()) {
+			if (this.getEnclosingPattern() == null || this.isTotalTypeNode) {
+				switch (this.local.binding.type.id) {
+					case T_long :
+					case T_double :
+						codeStream.pop2();
+						break;
+					default :
+						codeStream.pop();
 				}
-			}
-			return patternInfo;
-		}
-		return flowInfo;
-	}
-	@Override
-	public void generateOptimizedBoolean(BlockScope currentScope, CodeStream codeStream, BranchLabel trueLabel, BranchLabel falseLabel) {
-		if (this.local != null) {
-			LocalVariableBinding localBinding = this.local.binding;
+			} // else we don't value on stack.
+		} else {
 			if (!this.isTotalTypeNode) {
-				codeStream.checkcast(localBinding.type);
+				codeStream.checkcast(this.local.binding.type);
 			}
 			this.local.generateCode(currentScope, codeStream);
-			codeStream.store(localBinding, false);
-			localBinding.recordInitializationStartPC(codeStream.position);
 		}
 	}
-	public void initializePatternVariables(BlockScope currentScope, CodeStream codeStream) {
-		codeStream.addVariable(this.secretPatternVariable);
-		codeStream.store(this.secretPatternVariable, false);
-	}
-	@Override
-	protected void generatePatternVariable(BlockScope currentScope, CodeStream codeStream, BranchLabel trueLabel, BranchLabel falseLabel) {
-		if (this.local != null) {
-			codeStream.load(this.secretPatternVariable);
-			LocalVariableBinding localBinding = this.local.binding;
-			if (!this.isTotalTypeNode)
-				codeStream.checkcast(localBinding.type);
-			this.local.generateCode(currentScope, codeStream);
-			codeStream.store(localBinding, false);
-			localBinding.recordInitializationStartPC(codeStream.position);
-		}
-	}
-	@Override
-	public void wrapupGeneration(CodeStream codeStream) {
-		codeStream.removeVariable(this.secretPatternVariable);
-	}
-	@Override
-	public LocalDeclaration getPatternVariable() {
-		return this.local;
-	}
-	@Override
-	public void resolveWithExpression(BlockScope scope, Expression exp) {
-		this.expression = exp;
-	}
-	@Override
-	public void resolve(BlockScope scope) {
-		this.resolveType(scope);
-	}
-	@Override
-	public boolean coversType(TypeBinding type) {
-		if (type == null || this.resolvedType == null)
-			return false;
-		return (type.isSubtypeOf(this.resolvedType, false));
-	}
-	@Override
-	protected boolean isPatternTypeCompatible(TypeBinding other, BlockScope scope) {
-		TypeBinding patternType = this.resolvedType;
-		if (patternType.isBaseType()) {
-			if (!TypeBinding.equalsEquals(other, patternType)) {
-				scope.problemReporter().incompatiblePatternType(this, other, patternType);
-				return false;
-			}
-		} else if (!checkCastTypesCompatibility(scope, other, patternType, this.expression, true)) {
-			scope.problemReporter().incompatiblePatternType(this, other, patternType);
-			return false;
-		}
-		return true;
-	}
+
 	@Override
 	public boolean dominates(Pattern p) {
+		if (!isUnguarded())
+			return false;
 		if (p.resolvedType == null || this.resolvedType == null)
 			return false;
 		return p.resolvedType.erasure().isSubtypeOf(this.resolvedType.erasure(), false);
 	}
 
-	/*
-	 * A type pattern, p, declaring a pattern variable x of type T, that is total for U,
-	 * is resolved to an any pattern that declares x of type T;
-	 * otherwise it is resolved to p.
-	 */
 	@Override
-	public TypeBinding resolveAtType(BlockScope scope, TypeBinding u) {
-		if (this.resolvedType == null) {
-			this.resolvedType = this.local.binding.type;
-		}
-		return this.resolvedType;
-	}
-	@Override
-	public TypeBinding resolveType(BlockScope scope, boolean isPatternVariable) {
+	public TypeBinding resolveType(BlockScope scope) {
 		if (this.resolvedType != null)
 			return this.resolvedType;
-		if (this.local != null) {
-			this.local.modifiers |= ExtraCompilerModifiers.AccPatternVariable;
-//			this.local.resolve(scope, isPatternVariable);
 
-			if (this.local.isTypeNameVar(scope) ) {
-				/* If the LocalVariableType is var then the pattern variable must appear in
-				 *  a pattern list of a record pattern with type R. Let T be the type of the
-				 *  corresponding component field in R. The type of the pattern variable is
-				 *  the upward projection of T with respect to all synthetic type variables
-				 *  mentioned by T.*/
-				Pattern enclosingPattern = this.getEnclosingPattern();
-				if (enclosingPattern instanceof RecordPattern) {
-					ReferenceBinding recType = (ReferenceBinding) enclosingPattern.resolvedType;
-					if (recType != null) {
-						RecordComponentBinding[] components = recType.components();
-						if (components.length > this.index) {
-							RecordComponentBinding rcb = components[this.index];
-							TypeVariableBinding[] mentionedTypeVariables = findSyntheticTypeVariables(rcb.type);
-							if  (mentionedTypeVariables != null && mentionedTypeVariables.length > 0) {
-								this.local.type.resolvedType = recType.upwardsProjection(scope, mentionedTypeVariables);
-							} else {
-								this.local.type.resolvedType = rcb.type;
-							}
+		Pattern enclosingPattern = this.getEnclosingPattern();
+		if (this.local.type == null || this.local.type.isTypeNameVar(scope)) {
+			if (enclosingPattern instanceof RecordPattern) {
+				// 14.30.1: The type of a pattern variable declared in a nested type pattern is determined as follows ...
+				ReferenceBinding recType = (ReferenceBinding) enclosingPattern.resolvedType;
+				if (recType != null) {
+					RecordComponentBinding[] components = recType.components();
+					if (components.length > this.index) {
+						RecordComponentBinding rcb = components[this.index];
+						if (rcb.type != null && (rcb.tagBits & TagBits.HasMissingType) != 0) {
+							scope.problemReporter().invalidType(this, rcb.type);
 						}
+						TypeVariableBinding[] mentionedTypeVariables = rcb.type != null ? rcb.type.syntheticTypeVariablesMentioned() : Binding.NO_TYPE_VARIABLES;
+						this.resolvedType = mentionedTypeVariables.length > 0 ? rcb.type.upwardsProjection(scope, mentionedTypeVariables) : rcb.type;
+						if (this.local.type != null)
+							this.local.type.resolvedType = this.resolvedType;
 					}
 				}
 			}
-			this.local.resolve(scope, isPatternVariable);
-			if (this.local.binding != null) {
-				this.local.binding.modifiers |= ExtraCompilerModifiers.AccPatternVariable;
-				this.local.binding.useFlag = LocalVariableBinding.USED;
+		}
+		this.local.resolve(scope, true);
+		if (this.local.binding != null) {
+			this.local.binding.modifiers |= ExtraCompilerModifiers.AccOutOfFlowScope; // start out this way, will be BlockScope.include'd when definitely assigned
+			if (enclosingPattern != null)
+				this.local.binding.useFlag = LocalVariableBinding.USED; // syntactically required even if untouched
+			if (this.local.type != null)
 				this.resolvedType = this.local.binding.type;
-			}
-//			initSecretPatternVariable(scope);
+		}
+
+		if (this.isEitherOrPattern && !this.isUnnamed()) {
+			scope.problemReporter().namedPatternVariablesDisallowedHere(this.local);
 		}
 
 		return this.resolvedType;
-	}
-	// Synthetics? Ref 4.10.5 also watch out for spec changes in rec pattern..
-	private TypeVariableBinding[] findSyntheticTypeVariables(TypeBinding typeBinding) {
-		final Set<TypeVariableBinding> mentioned = new HashSet<>();
-		TypeBindingVisitor.visit(new TypeBindingVisitor() {
-			@Override
-			public boolean visit(TypeVariableBinding typeVariable) {
-				if (typeVariable.isCapture())
-					mentioned.add(typeVariable);
-				return super.visit(typeVariable);
-			}
-		}, typeBinding);
-		if (mentioned.isEmpty()) return null;
-		return mentioned.toArray(new TypeVariableBinding[mentioned.size()]);
-	}
-	protected void getSecretVariable(BlockScope scope, TypeBinding type) {
-		if (this.secretPatternVariable != null)
-			return;
-		this.secretPatternVariable = getSecretVariable(scope,
-				SECRET_PATTERN_VARIABLE_NAME, this.nestingLevel,
-				type);
-	}
-
-	private LocalVariableBinding getSecretVariable(BlockScope scope, String name, int nestingLevel1, TypeBinding type) {
-		return TypePattern.getNewLocalVariableBinding(scope,
-				(name + nestingLevel1).toCharArray(),
-				type);
-	}
-	private static LocalVariableBinding getNewLocalVariableBinding(BlockScope scope, char[] name,
-			TypeBinding type) {
-		LocalVariableBinding l =
-				new LocalVariableBinding(
-					name,
-					type,
-					ClassFileConstants.AccDefault,
-					false);
-		l.setConstant(Constant.NotAConstant);
-		l.useFlag = LocalVariableBinding.USED;
-		scope.addLocalVariable(l);
-//		int delta =  ((TypeBinding.equalsEquals(type, TypeBinding.LONG)) ||
-//				(TypeBinding.equalsEquals(type, TypeBinding.DOUBLE))) ?
-//				2 : 1;
-		l.resolvedPosition = scope.localIndex;
-		return l;
 	}
 
 	@Override
 	public void traverse(ASTVisitor visitor, BlockScope scope) {
 		if (visitor.visit(this, scope)) {
-			if (this.local != null)
-				this.local.traverse(visitor, scope);
+			this.local.traverse(visitor, scope);
 		}
 		visitor.endVisit(this, scope);
 	}
 
 	@Override
 	public StringBuilder printExpression(int indent, StringBuilder output) {
-		return this.local != null ? this.local.printAsExpression(indent, output) : output;
+		return this.local.printAsExpression(indent, output);
 	}
 }

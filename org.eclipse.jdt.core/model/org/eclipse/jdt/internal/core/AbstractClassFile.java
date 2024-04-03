@@ -43,7 +43,7 @@ import org.eclipse.jdt.internal.core.util.Util;
  */
 public abstract class AbstractClassFile extends Openable implements IClassFile, SuffixConstants  {
 
-	protected String name;
+	protected final String name;
 
 	protected AbstractClassFile(PackageFragment parent, String nameWithoutExtension) {
 		super(parent);
@@ -123,19 +123,22 @@ public abstract class AbstractClassFile extends Openable implements IClassFile, 
 	 * Returns a new element info for this element.
 	 */
 	@Override
-	protected Object createElementInfo() {
+	protected ClassFileInfo createElementInfo() {
 		return new ClassFileInfo();
 	}
 	@Override
 	public boolean equals(Object o) {
-		if (!(o instanceof AbstractClassFile)) return false;
-		AbstractClassFile other = (AbstractClassFile) o;
+		if (!(o instanceof AbstractClassFile other)) return false;
 		return this.name.equals(other.name) && this.getParent().equals(other.getParent());
+	}
+	@Override
+	protected int calculateHashCode() {
+		return Util.combineHashCodes(this.name.hashCode(), this.getParent().hashCode());
 	}
 
 	/**
 	 * Finds the deepest <code>IJavaElement</code> in the hierarchy of
-	 * <code>elt</elt>'s children (including <code>elt</code> itself)
+	 * <code>elt</code>'s children (including <code>elt</code> itself)
 	 * which has a source range that encloses <code>position</code>
 	 * according to <code>mapper</code>.
 	 */
@@ -147,8 +150,8 @@ public abstract class AbstractClassFile extends Openable implements IClassFile, 
 		if (elt instanceof IParent) {
 			try {
 				IJavaElement[] children = ((IParent) elt).getChildren();
-				for (int i = 0; i < children.length; i++) {
-					IJavaElement match = findElement(children[i], position, mapper);
+				for (IJavaElement child : children) {
+					IJavaElement match = findElement(child, position, mapper);
 					if (match != null) {
 						return match;
 					}
@@ -289,9 +292,9 @@ public abstract class AbstractClassFile extends Openable implements IClassFile, 
 			int start = -1;
 			int end = Integer.MAX_VALUE;
 			IJavaElement[] children = fragment.getChildren();
-			for (int i = 0; i < children.length; i++) {
-				if (children[i] instanceof IOrdinaryClassFile) {
-					IOrdinaryClassFile classFile = (IOrdinaryClassFile) children[i];
+			for (IJavaElement child : children) {
+				if (child instanceof IOrdinaryClassFile) {
+					IOrdinaryClassFile classFile = (IOrdinaryClassFile) child;
 					String childName = classFile.getElementName();
 
 					int childIndex = childName.indexOf('$');
@@ -393,10 +396,7 @@ public abstract class AbstractClassFile extends Openable implements IClassFile, 
 	protected boolean hasBuffer() {
 		return true;
 	}
-	@Override
-	public int hashCode() {
-		return Util.combineHashCodes(this.name.hashCode(), this.getParent().hashCode());
-	}
+
 	/**
 	 * Returns true - class files are always read only.
 	 */

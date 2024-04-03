@@ -198,13 +198,16 @@ public class DiagnoseParser implements ParserBasicInformation, TerminalTokens, C
 			this.deferredErrorStart = this.deferredErrorEnd = -1;
 			diagnoseParse0(record);
 		} finally {
-			try (ProblemReporter problemReporter = this.problemReporter()) {
+			ProblemReporter problemReporter = this.problemReporter();
+			try {
 				ReferenceContext referenceContext = problemReporter.referenceContext;
 				CompilationResult compilationResult = referenceContext != null ? referenceContext.compilationResult() : null;
 				if (compilationResult != null && !compilationResult.hasSyntaxError) {
 					reportMisplacedConstruct(this.deferredErrorStart, this.deferredErrorEnd, true);
 				}
 				this.deferredErrorStart = this.deferredErrorEnd = -1;
+			} finally {
+				problemReporter.close();
 			}
 		}
 	}
@@ -405,12 +408,14 @@ public class DiagnoseParser implements ParserBasicInformation, TerminalTokens, C
 					if(this.parser.reportOnlyOneSyntaxError) {
 						return;
 					}
-
-					try (ProblemReporter problemReporter = this.parser.problemReporter()) {
+					ProblemReporter problemReporter = this.parser.problemReporter();
+					try {
 						if(problemReporter.options.maxProblemsPerUnit < this.parser.compilationUnit.compilationResult.problemCount) {
 							if(this.recoveryScanner == null || !this.recoveryScanner.record) return;
 							this.reportProblem = false;
 						}
+					} finally {
+						problemReporter.close();
 					}
 
 					act = this.stack[this.stateStackTop];
@@ -2270,12 +2275,12 @@ public class DiagnoseParser implements ParserBasicInformation, TerminalTokens, C
 		                } else {
 		                	int[] template = getNTermTemplate(-tmpAddedToken);
 		                	if(template != null) {
-			                	for (int j = 0; j < template.length; j++) {
+			                	for (int t : template) {
 									int length = addedTokens.length;
 		                			if(addedTokenCount == length) {
 				                		System.arraycopy(addedTokens, 0, addedTokens = new int[length * 2], 0, length);
 				                	}
-		                			addedTokens[addedTokenCount++] = template[j];
+		                			addedTokens[addedTokenCount++] = t;
 								}
 		                	} else {
 			                	addedTokenCount = 0;
@@ -2491,12 +2496,12 @@ public class DiagnoseParser implements ParserBasicInformation, TerminalTokens, C
 		                } else {
 		                	int[] template = getNTermTemplate(-tmpAddedToken);
 		                	if(template != null) {
-			                	for (int j = 0; j < template.length; j++) {
+			                	for (int t : template) {
 									int length = addedTokens.length;
 		                			if(addedTokenCount == length) {
 				                		System.arraycopy(addedTokens, 0, addedTokens = new int[length * 2], 0, length);
 				                	}
-		                			addedTokens[addedTokenCount++] = template[j];
+		                			addedTokens[addedTokenCount++] = t;
 								}
 		                	} else {
 			                	addedTokenCount = 0;

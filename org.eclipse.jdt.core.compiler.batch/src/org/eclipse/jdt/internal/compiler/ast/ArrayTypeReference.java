@@ -167,11 +167,9 @@ public class ArrayTypeReference extends SingleTypeReference {
 				}
 			}
 			if (this.annotationsOnDimensions != null) {
-				for (int i = 0, max = this.annotationsOnDimensions.length; i < max; i++) {
-					Annotation[] annotations2 = this.annotationsOnDimensions[i];
-					if (annotations2 != null) {
-						for (int j = 0, max2 = annotations2.length; j < max2; j++) {
-							Annotation annotation = annotations2[j];
+				for (Annotation[] annotationsOnDimension : this.annotationsOnDimensions) {
+					if (annotationsOnDimension != null) {
+						for (Annotation annotation : annotationsOnDimension) {
 							annotation.traverse(visitor, scope);
 						}
 					}
@@ -191,11 +189,9 @@ public class ArrayTypeReference extends SingleTypeReference {
 				}
 			}
 			if (this.annotationsOnDimensions != null) {
-				for (int i = 0, max = this.annotationsOnDimensions.length; i < max; i++) {
-					Annotation[] annotations2 = this.annotationsOnDimensions[i];
-					if (annotations2 != null) {
-						for (int j = 0, max2 = annotations2.length; j < max2; j++) {
-							Annotation annotation = annotations2[j];
+				for (Annotation[] annotationsOnDimension : this.annotationsOnDimensions) {
+					if (annotationsOnDimension != null) {
+						for (Annotation annotation : annotationsOnDimension) {
 							annotation.traverse(visitor, scope);
 						}
 					}
@@ -218,15 +214,13 @@ public class ArrayTypeReference extends SingleTypeReference {
 		LookupEnvironment environment = scope.environment();
 		if (environment.usesNullTypeAnnotations()
 				&& scope.hasDefaultNullnessFor(Binding.DefaultLocationArrayContents, sourceStart)) {
-			AnnotationBinding nonNullAnnotation = environment.getNonNullAnnotation();
-			typeBinding = addNonNullToDimensions(scope, typeBinding, nonNullAnnotation, dimensions);
+			typeBinding = addNonNullToDimensions(scope, typeBinding, environment.getNonNullAnnotation(), dimensions);
 
 			TypeBinding leafComponentType = typeBinding.leafComponentType();
 			if ((leafComponentType.tagBits & TagBits.AnnotationNullMASK) == 0 && leafComponentType.acceptsNonNullDefault()) {
 				if (leafConsumer != null)
 					leafConsumer.accept(leafComponentType);
-				TypeBinding nonNullLeafComponentType = scope.environment().createAnnotatedType(leafComponentType,
-						new AnnotationBinding[] { nonNullAnnotation });
+				TypeBinding nonNullLeafComponentType = scope.environment().createNonNullAnnotatedType(leafComponentType);
 				typeBinding = scope.createArrayType(nonNullLeafComponentType, typeBinding.dimensions(),
 						typeBinding.getTypeAnnotations());
 			}
@@ -297,8 +291,7 @@ public class ArrayTypeReference extends SingleTypeReference {
 				if (this.resolvedType != null && !this.resolvedType.hasNullTypeAnnotations())
 					return false; // shortcut
 				if (this.annotationsOnDimensions != null) {
-					for (int i = 0; i < this.annotationsOnDimensions.length; i++) {
-						Annotation[] innerAnnotations = this.annotationsOnDimensions[i];
+					for (Annotation[] innerAnnotations : this.annotationsOnDimensions) {
 						if (containsNullAnnotation(innerAnnotations))
 							return true;
 					}

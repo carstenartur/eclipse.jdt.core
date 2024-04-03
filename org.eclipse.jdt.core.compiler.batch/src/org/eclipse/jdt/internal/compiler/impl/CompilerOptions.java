@@ -548,7 +548,7 @@ public class CompilerOptions {
 	/** When checking for unlikely argument types of of Map.get() et al, perform strict analysis against the expected type */
 	public boolean reportUnlikelyCollectionMethodArgumentTypeStrict;
 
-	/** Should the compiler tolerate illegal ambiguous varargs invocation in compliance < 1.7
+	/** Should the compiler tolerate illegal ambiguous varargs invocation in {@code compliance < 1.7}
 	 * to be bug compatible with javac? (bug 383780) */
 	public static boolean tolerateIllegalAmbiguousVarargsInvocation;
 	{
@@ -646,7 +646,7 @@ public class CompilerOptions {
 	 * Return the latest Java language version supported by the Eclipse compiler
 	 */
 	public static String getLatestVersion() {
-		return VERSION_21;
+		return VERSION_22;
 	}
 	/**
 	 * Return the most specific option key controlling this irritant. Note that in some case, some irritant is controlled by

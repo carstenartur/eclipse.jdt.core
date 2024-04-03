@@ -52,13 +52,11 @@ import org.eclipse.jdt.internal.compiler.flow.FlowContext;
 import org.eclipse.jdt.internal.compiler.flow.FlowInfo;
 import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 import org.eclipse.jdt.internal.compiler.impl.Constant;
-import org.eclipse.jdt.internal.compiler.lookup.AnnotationBinding;
 import org.eclipse.jdt.internal.compiler.lookup.ArrayBinding;
 import org.eclipse.jdt.internal.compiler.lookup.Binding;
 import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
 import org.eclipse.jdt.internal.compiler.lookup.ClassScope;
 import org.eclipse.jdt.internal.compiler.lookup.LocalVariableBinding;
-import org.eclipse.jdt.internal.compiler.lookup.LookupEnvironment;
 import org.eclipse.jdt.internal.compiler.lookup.ParameterizedTypeBinding;
 import org.eclipse.jdt.internal.compiler.lookup.ProblemReasons;
 import org.eclipse.jdt.internal.compiler.lookup.ProblemReferenceBinding;
@@ -449,11 +447,10 @@ public void getAllAnnotationContexts(int targetType, int info, List<AnnotationCo
 	AnnotationCollector collector = new AnnotationCollector(this, targetType, info, allAnnotationContexts, annotationsOnDimensions, dimensions);
 	this.traverse(collector, (BlockScope) null);
 	if (annotationsOnDimensions != null) {
-		for (int i = 0, max = annotationsOnDimensions.length; i < max; i++) {
-			Annotation[] annotationsOnDimension = annotationsOnDimensions[i];
+		for (Annotation[] annotationsOnDimension : annotationsOnDimensions) {
 			if (annotationsOnDimension != null) {
-				for (int j = 0, max2 = annotationsOnDimension.length; j< max2; j++) {
-					annotationsOnDimension[j].traverse(collector, (BlockScope) null);
+				for (Annotation annotation : annotationsOnDimension) {
+					annotation.traverse(collector, (BlockScope) null);
 				}
 			}
 		}
@@ -749,9 +746,7 @@ protected void resolveAnnotations(Scope scope, int location) {
 			if (location == Binding.DefaultLocationTypeBound && this.resolvedType.id == TypeIds.T_JavaLangObject) {
 				scope.problemReporter().implicitObjectBoundNoNullDefault(this);
 			} else {
-				LookupEnvironment environment = scope.environment();
-				AnnotationBinding[] annots = new AnnotationBinding[]{environment.getNonNullAnnotation()};
-				this.resolvedType = environment.createAnnotatedType(this.resolvedType, annots);
+				this.resolvedType = scope.environment().createNonNullAnnotatedType(this.resolvedType);
 			}
 		} else if (nullTagBits == TagBits.AnnotationNonNull) {
 			if (location != Binding.DefaultLocationParameter) { // parameters are handled in MethodBinding.fillInDefaultNonNullness18()
@@ -789,8 +784,7 @@ public int getAnnotatableLevels() {
 /** Check all typeArguments for illegal null annotations on base types. */
 protected void checkIllegalNullAnnotations(Scope scope, TypeReference[] typeArguments) {
 	if (scope.environment().usesNullTypeAnnotations() && typeArguments != null) {
-		for (int i = 0; i < typeArguments.length; i++) {
-			TypeReference arg = typeArguments[i];
+		for (TypeReference arg : typeArguments) {
 			if (arg.resolvedType != null)
 				arg.checkIllegalNullAnnotation(scope);
 		}
@@ -817,9 +811,9 @@ public Annotation findAnnotation(long nullTagBits) {
 		Annotation[] innerAnnotations = this.annotations[this.annotations.length-1];
 		if (innerAnnotations != null) {
 			int annBit = nullTagBits == TagBits.AnnotationNonNull ? TypeIds.BitNonNullAnnotation : TypeIds.BitNullableAnnotation;
-			for (int i = 0; i < innerAnnotations.length; i++) {
-				if (innerAnnotations[i] != null && innerAnnotations[i].hasNullBit(annBit))
-					return innerAnnotations[i];
+			for (Annotation innerAnnotation : innerAnnotations) {
+				if (innerAnnotation != null && innerAnnotation.hasNullBit(annBit))
+					return innerAnnotation;
 			}
 		}
 	}
@@ -841,8 +835,8 @@ public boolean hasNullTypeAnnotation(AnnotationPosition position) {
 }
 public static boolean containsNullAnnotation(Annotation[] annotations) {
 	if (annotations != null) {
-		for (int i = 0; i < annotations.length; i++) {
-			if (annotations[i] != null && (annotations[i].hasNullBit(TypeIds.BitNonNullAnnotation|TypeIds.BitNullableAnnotation)))
+		for (Annotation annotation : annotations) {
+			if (annotation != null && (annotation.hasNullBit(TypeIds.BitNonNullAnnotation|TypeIds.BitNullableAnnotation)))
 				return true;
 		}
 	}

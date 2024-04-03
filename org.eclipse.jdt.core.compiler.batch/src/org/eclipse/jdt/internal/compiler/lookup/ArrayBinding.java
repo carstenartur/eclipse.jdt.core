@@ -446,8 +446,7 @@ public void setTypeAnnotations(AnnotationBinding[] annotations, boolean evalNull
 			this.nullTagBitsPerDimension = new long[this.dimensions + 1];
 
 		int dimension = 0;
-		for (int i = 0, length = annotations.length; i < length; i++) {
-			AnnotationBinding annotation = annotations[i];
+		for (AnnotationBinding annotation : annotations) {
 			if (annotation != null) {
 				if (annotation.type.hasNullBit(TypeIds.BitNullableAnnotation)) {
 					nullTagBits  |= TagBits.AnnotationNullable;
@@ -562,7 +561,7 @@ public MethodBinding getCloneMethod(final MethodBinding originalMethod) {
 	method.returnType = this.environment.globalOptions.sourceLevel >= ClassFileConstants.JDK1_5 ? this : originalMethod.returnType;
 	if (this.environment.globalOptions.isAnnotationBasedNullAnalysisEnabled) {
 		if (this.environment.usesNullTypeAnnotations())
-			method.returnType = this.environment.createAnnotatedType(method.returnType, new AnnotationBinding[] { this.environment.getNonNullAnnotation() });
+			method.returnType = this.environment.createNonNullAnnotatedType(method.returnType);
 		else
 			method.tagBits |= TagBits.AnnotationNonNull;
 	}

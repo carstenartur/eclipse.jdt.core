@@ -24,7 +24,7 @@ import org.eclipse.jdt.internal.compiler.codegen.*;
 import org.eclipse.jdt.internal.compiler.flow.*;
 import org.eclipse.jdt.internal.compiler.lookup.*;
 
-//dedicated treatment for the &&
+/** dedicated treatment for the {@code &&} */
 public class AND_AND_Expression extends BinaryExpression {
 
 	int rightInitStateIndex = -1;
@@ -138,6 +138,7 @@ public class AND_AND_Expression extends BinaryExpression {
 			}
 			if (this.rightInitStateIndex != -1) {
 				codeStream.addDefinitelyAssignedVariables(currentScope, this.rightInitStateIndex);
+				codeStream.removeNotDefinitelyAssignedVariables(currentScope, this.rightInitStateIndex);
 			}
 			if (rightIsConst) {
 				this.right.generateCode(currentScope, codeStream, false);
@@ -170,7 +171,6 @@ public class AND_AND_Expression extends BinaryExpression {
 						codeStream.iconst_0();
 					} else {
 						codeStream.goto_(endLabel = new BranchLabel(codeStream));
-						codeStream.decrStackSize(1);
 						falseLabel.place();
 						codeStream.iconst_0();
 						endLabel.place();
@@ -187,7 +187,7 @@ public class AND_AND_Expression extends BinaryExpression {
 	}
 
 	/**
-	 * Boolean operator code generation Optimized operations are: &&
+	 * Boolean operator code generation Optimized operations are: {@code &&}
 	 */
 	@Override
 	public void generateOptimizedBoolean(BlockScope currentScope, CodeStream codeStream, BranchLabel trueLabel, BranchLabel falseLabel, boolean valueRequired) {
@@ -230,8 +230,8 @@ public class AND_AND_Expression extends BinaryExpression {
 						break generateOperands; // no need to generate right operand
 					}
 					if (this.rightInitStateIndex != -1) {
-						codeStream
-								.addDefinitelyAssignedVariables(currentScope, this.rightInitStateIndex);
+						codeStream.addDefinitelyAssignedVariables(currentScope, this.rightInitStateIndex);
+						codeStream.removeNotDefinitelyAssignedVariables(currentScope, this.rightInitStateIndex);
 					}
 					this.right.generateOptimizedBoolean(currentScope, codeStream, trueLabel, null,
 							valueRequired && !rightIsConst);
@@ -255,8 +255,8 @@ public class AND_AND_Expression extends BinaryExpression {
 						break generateOperands; // no need to generate right operand
 					}
 					if (this.rightInitStateIndex != -1) {
-						codeStream
-								.addDefinitelyAssignedVariables(currentScope, this.rightInitStateIndex);
+						codeStream.addDefinitelyAssignedVariables(currentScope, this.rightInitStateIndex);
+						codeStream.removeNotDefinitelyAssignedVariables(currentScope, this.rightInitStateIndex);
 					}
 					this.right.generateOptimizedBoolean(currentScope, codeStream, null, falseLabel, valueRequired && !rightIsConst);
 					if (valueRequired && rightIsConst && !rightIsTrue) {
@@ -272,25 +272,22 @@ public class AND_AND_Expression extends BinaryExpression {
 			codeStream.removeNotDefinitelyAssignedVariables(currentScope, this.mergedInitStateIndex);
 		}
 	}
+
 	@Override
-	public void collectPatternVariablesToScope(LocalVariableBinding[] variables, BlockScope scope) {
-		this.addPatternVariablesWhenTrue(variables);
-		// If upper level already supplied positive new vars for us, also make those available to the left expr
-		this.left.addPatternVariablesWhenTrue(this.patternVarsWhenTrue);
+	public LocalVariableBinding[] bindingsWhenTrue() {
 
-		this.left.collectPatternVariablesToScope(this.patternVarsWhenTrue, scope);
+		LocalVariableBinding [] leftVars =  this.left.bindingsWhenTrue();
+		LocalVariableBinding [] rightVars = this.right.bindingsWhenTrue();
 
-		variables = this.left.getPatternVariablesWhenTrue();
-		this.addPatternVariablesWhenTrue(variables);
-		this.right.addPatternVariablesWhenTrue(variables);
+		if (leftVars == NO_VARIABLES)
+			return rightVars;
 
-		variables = this.left.getPatternVariablesWhenFalse();
-		this.right.addPatternVariablesWhenFalse(variables);
+		if (rightVars == NO_VARIABLES)
+			return leftVars;
 
-		this.right.collectPatternVariablesToScope(this.patternVarsWhenTrue, scope);
-		variables = this.right.getPatternVariablesWhenTrue();
-		this.addPatternVariablesWhenTrue(variables);
+		return LocalVariableBinding.merge(leftVars, rightVars);
 	}
+
 	@Override
 	public boolean isCompactableOperation() {
 		return false;

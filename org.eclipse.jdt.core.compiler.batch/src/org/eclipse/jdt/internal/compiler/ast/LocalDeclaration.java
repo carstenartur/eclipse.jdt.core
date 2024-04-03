@@ -42,17 +42,24 @@ package org.eclipse.jdt.internal.compiler.ast;
 import static org.eclipse.jdt.internal.compiler.ast.ExpressionContext.ASSIGNMENT_CONTEXT;
 import static org.eclipse.jdt.internal.compiler.ast.ExpressionContext.VANILLA_CONTEXT;
 
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
-
 import org.eclipse.jdt.internal.compiler.ASTVisitor;
-import org.eclipse.jdt.internal.compiler.impl.*;
 import org.eclipse.jdt.internal.compiler.ast.TypeReference.AnnotationCollector;
 import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
-import org.eclipse.jdt.internal.compiler.codegen.*;
-import org.eclipse.jdt.internal.compiler.flow.*;
-import org.eclipse.jdt.internal.compiler.lookup.*;
+import org.eclipse.jdt.internal.compiler.codegen.AnnotationContext;
+import org.eclipse.jdt.internal.compiler.codegen.CodeStream;
+import org.eclipse.jdt.internal.compiler.flow.FlowContext;
+import org.eclipse.jdt.internal.compiler.flow.FlowInfo;
+import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
+import org.eclipse.jdt.internal.compiler.impl.Constant;
+import org.eclipse.jdt.internal.compiler.lookup.ArrayBinding;
+import org.eclipse.jdt.internal.compiler.lookup.Binding;
+import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
+import org.eclipse.jdt.internal.compiler.lookup.ExtraCompilerModifiers;
+import org.eclipse.jdt.internal.compiler.lookup.LocalVariableBinding;
+import org.eclipse.jdt.internal.compiler.lookup.Scope;
+import org.eclipse.jdt.internal.compiler.lookup.TagBits;
+import org.eclipse.jdt.internal.compiler.lookup.TypeBinding;
 import org.eclipse.jdt.internal.compiler.parser.RecoveryScanner;
 
 public class LocalDeclaration extends AbstractVariableDeclaration {
@@ -77,6 +84,9 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
 		this.bits |= ASTNode.IsLocalDeclarationReachable; // only set if actually reached
 	}
 	if (this.initialization == null) {
+		if (this.binding != null && this.binding.isPatternVariable())
+			if (!this.binding.declaration.isUnnamed(currentScope))
+				this.bits |= FirstAssignmentToLocal;
 		return flowInfo;
 	}
 	this.initialization.checkNPEbyUnboxing(currentScope, flowContext, flowInfo);
@@ -139,7 +149,6 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
 	 */
 	@Override
 	public void generateCode(BlockScope currentScope, CodeStream codeStream) {
-
 		// even if not reachable, variable must be added to visible if allocated (28298)
 		if (this.binding.resolvedPosition != -1) {
 			codeStream.addVisibleLocalVariable(this.binding);
@@ -151,22 +160,24 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
 
 		// something to initialize?
 		generateInit: {
-			if (this.initialization == null)
+			if (this.initialization == null && !this.binding.isPatternVariable())
 				break generateInit;
-			// forget initializing unused or final locals set to constant value (final ones are inlined)
-			if (this.binding.resolvedPosition < 0) {
-				if (this.initialization.constant != Constant.NotAConstant)
+			if (this.initialization != null) {
+				// forget initializing unused or final locals set to constant value (final ones are inlined)
+				if (this.binding.resolvedPosition < 0) {
+					if (this.initialization.constant != Constant.NotAConstant)
+						break generateInit;
+					// if binding unused generate then discard the value
+					this.initialization.generateCode(currentScope, codeStream, false);
 					break generateInit;
-				// if binding unused generate then discard the value
-				this.initialization.generateCode(currentScope, codeStream, false);
-				break generateInit;
-			}
-			this.initialization.generateCode(currentScope, codeStream, true);
-			// 26903, need extra cast to store null in array local var
-			if (this.binding.type.isArrayType()
-				&& ((this.initialization instanceof CastExpression)	// arrayLoc = (type[])null
-						&& (((CastExpression)this.initialization).innermostCastedExpression().resolvedType == TypeBinding.NULL))){
-				codeStream.checkcast(this.binding.type);
+				}
+				this.initialization.generateCode(currentScope, codeStream, true);
+				// 26903, need extra cast to store null in array local var
+				if (this.binding.type.isArrayType()
+					&& ((this.initialization instanceof CastExpression)	// arrayLoc = (type[])null
+							&& (((CastExpression)this.initialization).innermostCastedExpression().resolvedType == TypeBinding.NULL))){
+						codeStream.checkcast(this.binding.type);
+				}
 			}
 			codeStream.store(this.binding, false);
 			if ((this.bits & ASTNode.FirstAssignmentToLocal) != 0) {
@@ -207,7 +218,7 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
 	}
 	public TypeBinding patchType(TypeBinding newType) {
 		// Perform upwards projection on type wrt mentioned type variables
-		TypeBinding[] mentionedTypeVariables= findCapturedTypeVariables(newType);
+		TypeBinding[] mentionedTypeVariables= newType != null ? newType.syntheticTypeVariablesMentioned() : null;
 		if (mentionedTypeVariables != null && mentionedTypeVariables.length > 0) {
 			newType = newType.upwardsProjection(this.binding.declaringScope, mentionedTypeVariables);
 		}
@@ -217,20 +228,6 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
 			this.binding.markInitialized();
 		}
 		return this.type.resolvedType;
-	}
-
-	private TypeVariableBinding[] findCapturedTypeVariables(TypeBinding typeBinding) {
-		final Set<TypeVariableBinding> mentioned = new HashSet<>();
-		TypeBindingVisitor.visit(new TypeBindingVisitor() {
-			@Override
-			public boolean visit(TypeVariableBinding typeVariable) {
-				if (typeVariable.isCapture())
-					mentioned.add(typeVariable);
-				return super.visit(typeVariable);
-			}
-		}, typeBinding);
-		if (mentioned.isEmpty()) return null;
-		return mentioned.toArray(new TypeVariableBinding[mentioned.size()]);
 	}
 
 	private static Expression findPolyExpression(Expression e) {
@@ -260,9 +257,12 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
 	public void resolve(BlockScope scope) {
 		resolve(scope, false);
 	}
-	public void resolve(BlockScope scope, boolean isPatternVariable) {
-		// prescan NNBD
+	public void resolve(BlockScope scope, boolean isPatternVariable) {		// prescan NNBD
 		handleNonNullByDefault(scope, this.annotations, this);
+
+		if (!isPatternVariable && (this.bits & ASTNode.IsForeachElementVariable) == 0 && this.initialization == null && this.isUnnamed(scope)) {
+			scope.problemReporter().unnamedVariableMustHaveInitializer(this);
+		}
 
 		TypeBinding variableType = null;
 		boolean variableTypeInferenceError = false;
@@ -284,34 +284,39 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
 				}
 			}
 		} else {
-			variableType = this.type.resolveType(scope, true /* check bounds*/);
+			variableType = this.type == null ? null : this.type.resolveType(scope, true /* check bounds*/);
 		}
 
-		this.bits |= (this.type.bits & ASTNode.HasTypeAnnotations);
-		checkModifiers();
-		if (variableType != null) {
-			if (variableType == TypeBinding.VOID) {
-				scope.problemReporter().variableTypeCannotBeVoid(this);
-				return;
+		if (this.type != null) {
+			this.bits |= (this.type.bits & ASTNode.HasTypeAnnotations);
+			checkModifiers();
+			if (variableType != null) {
+				if (variableType == TypeBinding.VOID) {
+					scope.problemReporter().variableTypeCannotBeVoid(this);
+					return;
+				}
+				if (variableType.isArrayType() && ((ArrayBinding) variableType).leafComponentType == TypeBinding.VOID) {
+					scope.problemReporter().variableTypeCannotBeVoidArray(this);
+					return;
+				}
 			}
-			if (variableType.isArrayType() && ((ArrayBinding) variableType).leafComponentType == TypeBinding.VOID) {
-				scope.problemReporter().variableTypeCannotBeVoidArray(this);
-				return;
-			}
-		}
 
 		Binding existingVariable = scope.getBinding(this.name, Binding.VARIABLE, this, false /*do not resolve hidden field*/);
-		if (existingVariable != null && existingVariable.isValidBinding()){
-			boolean localExists = existingVariable instanceof LocalVariableBinding;
+			if (existingVariable != null && existingVariable.isValidBinding() && !this.isUnnamed(scope)) {
+				boolean localExists = existingVariable instanceof LocalVariableBinding;
 			if (localExists && (this.bits & ASTNode.ShadowsOuterLocal) != 0 && scope.isLambdaSubscope() && this.hiddenVariableDepth == 0) {
-				scope.problemReporter().lambdaRedeclaresLocal(this);
-			} else if (localExists && this.hiddenVariableDepth == 0) {
-				scope.problemReporter().redefineLocal(this);
-			} else {
-				scope.problemReporter().localVariableHiding(this, existingVariable, false);
+					scope.problemReporter().lambdaRedeclaresLocal(this);
+				} else if (localExists && this.hiddenVariableDepth == 0) {
+					if (existingVariable.isPatternVariable()) {
+					scope.problemReporter().illegalRedeclarationOfPatternVar((LocalVariableBinding) existingVariable, this);
+					} else {
+						scope.problemReporter().redefineLocal(this);
+					}
+				} else {
+					scope.problemReporter().localVariableHiding(this, existingVariable, false);
+				}
 			}
 		}
-
 		if ((this.modifiers & ClassFileConstants.AccFinal)!= 0 && this.initialization == null) {
 			this.modifiers |= ExtraCompilerModifiers.AccBlankFinal;
 		}
@@ -338,6 +343,8 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
 			// create a binding from the specified type
 			this.binding = new LocalVariableBinding(this, variableType, this.modifiers, false /*isArgument*/);
 		}
+		if (isPatternVariable)
+			this.binding.tagBits |= TagBits.IsPatternBinding;
 		scope.addLocalVariable(this.binding);
 		this.binding.setConstant(Constant.NotAConstant);
 		// allow to recursivelly target the binding....
@@ -484,7 +491,9 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
 				for (int i = 0; i < annotationsLength; i++)
 					this.annotations[i].traverse(visitor, scope);
 			}
-			this.type.traverse(visitor, scope);
+			if (this.type != null) {
+				this.type.traverse(visitor, scope);
+			}
 			if (this.initialization != null)
 				this.initialization.traverse(visitor, scope);
 		}

@@ -45,7 +45,6 @@ import org.eclipse.jdt.internal.core.util.Messages;
  * for detailed comment), now uses basic engine functionalities.
  * Note that search basic engine does not implement deprecated functionalities...
  */
-@SuppressWarnings({ "rawtypes", "unchecked" })
 public class BasicSearchEngine {
 
 	/*
@@ -154,16 +153,14 @@ public class BasicSearchEngine {
 	 * @see SearchEngine#createJavaSearchScope(boolean, IJavaElement[], int) for detailed comment.
 	 */
 	public static IJavaSearchScope createJavaSearchScope(boolean excludeTestCode, IJavaElement[] elements, int includeMask) {
-		HashSet projectsToBeAdded = new HashSet(2);
-		for (int i = 0, length = elements.length; i < length; i++) {
-			IJavaElement element = elements[i];
-			if (element instanceof JavaProject) {
-				projectsToBeAdded.add(element);
+		Set<JavaProject> projectsToBeAdded = new HashSet<>(2);
+		for (IJavaElement element : elements) {
+			if (element instanceof JavaProject p) {
+				projectsToBeAdded.add(p);
 			}
 		}
 		JavaSearchScope scope = new JavaSearchScope(excludeTestCode);
-		for (int i = 0, length = elements.length; i < length; i++) {
-			IJavaElement element = elements[i];
+		for (IJavaElement element : elements) {
 			if (element != null) {
 				try {
 					if (projectsToBeAdded.contains(element)) {
@@ -374,13 +371,11 @@ public class BasicSearchEngine {
 				if (copies == null) {
 					copies = this.workingCopies;
 				} else {
-					HashMap pathToCUs = new HashMap();
-					for (int i = 0, length = copies.length; i < length; i++) {
-						ICompilationUnit unit = copies[i];
+					Map<IPath, ICompilationUnit> pathToCUs = new HashMap<>();
+					for (ICompilationUnit unit : copies) {
 						pathToCUs.put(unit.getPath(), unit);
 					}
-					for (int i = 0, length = this.workingCopies.length; i < length; i++) {
-						ICompilationUnit unit = this.workingCopies[i];
+					for (ICompilationUnit unit : this.workingCopies) {
 						pathToCUs.put(unit.getPath(), unit);
 					}
 					int length = pathToCUs.size();
@@ -664,7 +659,7 @@ public class BasicSearchEngine {
 					validatedTypeMatchRule);
 
 			// Get working copy path(s). Store in a single string in case of only one to optimize comparison in requestor
-			final HashSet workingCopyPaths = new HashSet();
+			final Set<String> workingCopyPaths = new HashSet<>();
 			String workingCopyPath = null;
 			ICompilationUnit[] copies = getWorkingCopies();
 			final int copiesLength = copies == null ? 0 : copies.length;
@@ -776,8 +771,7 @@ public class BasicSearchEngine {
 						IPackageDeclaration[] packageDeclarations = workingCopy.getPackageDeclarations();
 						char[] packageDeclaration = packageDeclarations.length == 0 ? CharOperation.NO_CHAR : packageDeclarations[0].getElementName().toCharArray();
 						IType[] allTypes = workingCopy.getAllTypes();
-						for (int j = 0, allTypesLength = allTypes.length; j < allTypesLength; j++) {
-							IType type = allTypes[j];
+						for (IType type : allTypes) {
 							char[] simpleName = type.getElementName().toCharArray();
 							if (match(NoSuffix, packageName, pkgMatchRule, typeName, validatedTypeMatchRule, 0/*no kind*/, packageDeclaration, simpleName) && !type.isMember()) {
 
@@ -786,8 +780,7 @@ public class BasicSearchEngine {
 								boolean hasConstructor = false;
 
 								IMethod[] methods = type.getMethods();
-								for (int k = 0; k < methods.length; k++) {
-									IMethod method = methods[k];
+								for (IMethod method : methods) {
 									if (method.isConstructor()) {
 										hasConstructor = true;
 
@@ -1008,7 +1001,7 @@ public class BasicSearchEngine {
 			final MethodDeclarationPattern pattern = new MethodDeclarationPattern(qualifier, methodName, methodMatchRule);
 
 			// Get working copy path(s). Store in a single string in case of only one to optimize comparison in requestor
-			final HashSet workingCopyPaths = new HashSet();
+			Set<String> workingCopyPaths = new HashSet<>();
 			String workingCopyPath = null;
 			ICompilationUnit[] copies = getWorkingCopies();
 			final int copiesLength = copies == null ? 0 : copies.length;
@@ -1125,8 +1118,7 @@ public class BasicSearchEngine {
 						char[] packageDeclaration = packageDeclarations.length == 0 ? CharOperation.NO_CHAR : packageDeclarations[0].getElementName().toCharArray();
 
 						IType[] allTypes = workingCopy.getAllTypes();
-						for (int j = 0, allTypesLength = allTypes.length; j < allTypesLength; j++) {
-							IType type = allTypes[j];
+						for (IType type : allTypes) {
 							IJavaElement parent = type.getParent();
 							char[] rDeclaringQualification = parent instanceof IType ? ((IType) parent).getTypeQualifiedName('.').toCharArray() : CharOperation.NO_CHAR;
 							char[] rSimpleName = type.getElementName().toCharArray();
@@ -1278,7 +1270,7 @@ public class BasicSearchEngine {
 			final MethodDeclarationPattern pattern = new MethodDeclarationPattern(packageName, declaringQualification, declaringSimpleName, methodName, methodMatchRule);
 
 			// Get working copy path(s). Store in a single string in case of only one to optimize comparison in requestor
-			final HashSet workingCopyPaths = new HashSet();
+			Set<String> workingCopyPaths = new HashSet<>();
 			String workingCopyPath = null;
 			ICompilationUnit[] copies = getWorkingCopies();
 			final int copiesLength = copies == null ? 0 : copies.length;
@@ -1398,8 +1390,7 @@ public class BasicSearchEngine {
 							continue;
 
 						IType[] allTypes = workingCopy.getAllTypes();
-						for (int j = 0, allTypesLength = allTypes.length; j < allTypesLength; j++) {
-							IType type = allTypes[j];
+						for (IType type : allTypes) {
 							IJavaElement parent = type.getParent();
 							char[] rDeclaringQualification = parent instanceof IType ? ((IType) parent).getTypeQualifiedName('.').toCharArray() : CharOperation.NO_CHAR;
 							char[] rSimpleName = type.getElementName().toCharArray();
@@ -1634,7 +1625,7 @@ public class BasicSearchEngine {
 			final TypeDeclarationPattern pattern = new SecondaryTypeDeclarationPattern();
 
 			// Get working copy path(s). Store in a single string in case of only one to optimize comparison in requestor
-			final HashSet workingCopyPaths = new HashSet();
+			Set<String> workingCopyPaths = new HashSet<>();
 			String workingCopyPath = null;
 			ICompilationUnit[] copies = getWorkingCopies();
 			final int copiesLength = copies == null ? 0 : copies.length;
@@ -1845,7 +1836,7 @@ public class BasicSearchEngine {
 					validatedTypeMatchRule);
 
 			// Get working copy path(s). Store in a single string in case of only one to optimize comparison in requestor
-			final HashSet workingCopyPaths = new HashSet();
+			Set<String> workingCopyPaths = new HashSet<>();
 			String workingCopyPath = null;
 			ICompilationUnit[] copies = getWorkingCopies();
 			final int copiesLength = copies == null ? 0 : copies.length;
@@ -1944,8 +1935,7 @@ public class BasicSearchEngine {
 						IPackageDeclaration[] packageDeclarations = workingCopy.getPackageDeclarations();
 						char[] packageDeclaration = packageDeclarations.length == 0 ? CharOperation.NO_CHAR : packageDeclarations[0].getElementName().toCharArray();
 						IType[] allTypes = workingCopy.getAllTypes();
-						for (int j = 0, allTypesLength = allTypes.length; j < allTypesLength; j++) {
-							IType type = allTypes[j];
+						for (IType type : allTypes) {
 							IJavaElement parent = type.getParent();
 							char[][] enclosingTypeNames;
 							if (parent instanceof IType) {
@@ -2097,7 +2087,7 @@ public class BasicSearchEngine {
 			final MultiTypeDeclarationPattern pattern = new MultiTypeDeclarationPattern(qualifications, typeNames, typeSuffix, matchRule);
 
 			// Get working copy path(s). Store in a single string in case of only one to optimize comparison in requestor
-			final HashSet workingCopyPaths = new HashSet();
+			Set<String> workingCopyPaths = new HashSet<>();
 			String workingCopyPath = null;
 			ICompilationUnit[] copies = getWorkingCopies();
 			final int copiesLength = copies == null ? 0 : copies.length;
@@ -2181,15 +2171,13 @@ public class BasicSearchEngine {
 
 			// add type names from working copies
 			if (copies != null) {
-				for (int i = 0, length = copies.length; i < length; i++) {
-					ICompilationUnit workingCopy = copies[i];
+				for (ICompilationUnit workingCopy : copies) {
 					final String path = workingCopy.getPath().toString();
 					if (workingCopy.isConsistent()) {
 						IPackageDeclaration[] packageDeclarations = workingCopy.getPackageDeclarations();
 						char[] packageDeclaration = packageDeclarations.length == 0 ? CharOperation.NO_CHAR : packageDeclarations[0].getElementName().toCharArray();
 						IType[] allTypes = workingCopy.getAllTypes();
-						for (int j = 0, allTypesLength = allTypes.length; j < allTypesLength; j++) {
-							IType type = allTypes[j];
+						for (IType type : allTypes) {
 							IJavaElement parent = type.getParent();
 							char[][] enclosingTypeNames;
 							char[] qualification = packageDeclaration;

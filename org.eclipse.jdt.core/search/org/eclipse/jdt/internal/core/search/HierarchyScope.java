@@ -17,7 +17,7 @@ package org.eclipse.jdt.internal.core.search;
 import java.io.File;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
+import java.util.Map;
 import java.util.Set;
 
 import org.eclipse.core.resources.*;
@@ -31,7 +31,6 @@ import org.eclipse.jdt.internal.core.hierarchy.TypeHierarchy;
 /**
  * Scope limited to the subtype and supertype hierarchy of a given type.
  */
-@SuppressWarnings({"rawtypes", "unchecked"})
 public class HierarchyScope extends AbstractSearchScope implements SuffixConstants {
 
 	public IType focusType;
@@ -39,7 +38,7 @@ public class HierarchyScope extends AbstractSearchScope implements SuffixConstan
 	private WorkingCopyOwner owner;
 
 	private ITypeHierarchy hierarchy;
-	private HashSet resourcePaths;
+	private Set<String> resourcePaths;
 	private IPath[] enclosingProjectsAndJars;
 
 	protected Set<String> elements;
@@ -47,7 +46,7 @@ public class HierarchyScope extends AbstractSearchScope implements SuffixConstan
 
 	public boolean needsRefresh;
 
-	private HashSet subTypes = null; // null means: don't filter for subTypes
+	private Set<IType> subTypes = null; // null means: don't filter for subTypes
 	private IJavaProject javaProject = null; // null means: don't constrain the search to a project
 	private boolean allowMemberAndEnclosingTypes = true;
 	private boolean includeFocusType = true;
@@ -76,7 +75,7 @@ public class HierarchyScope extends AbstractSearchScope implements SuffixConstan
 		this(type, owner);
 		this.javaProject = project;
 		if (onlySubtypes) {
-			this.subTypes = new HashSet();
+			this.subTypes = new HashSet<>();
 		}
 		this.includeFocusType = includeFocusType;
 		this.allowMemberAndEnclosingTypes = !noMembersOrEnclosingTypes;
@@ -94,12 +93,11 @@ public class HierarchyScope extends AbstractSearchScope implements SuffixConstan
 		// resource path
 		IPackageFragmentRoot root = (IPackageFragmentRoot)type.getPackageFragment().getParent();
 		if (root.isArchive()) {
-			IPath jarPath = root.getPath();
-			Object target = JavaModel.getTarget(jarPath, true);
+			Object target = JavaModel.getTarget(root, true);
 			String zipFileName;
 			if (target instanceof IFile) {
 				// internal jar
-				zipFileName = jarPath.toString();
+				zipFileName = root.getPath().toString();
 			} else if (target instanceof File) {
 				// external jar
 				zipFileName = ((File)target).getPath();
@@ -133,7 +131,7 @@ public class HierarchyScope extends AbstractSearchScope implements SuffixConstan
 		//JavaModelManager.getJavaModelManager().rememberScope(this);
 	}
 	private void buildResourceVector() {
-		HashMap paths = new HashMap();
+		Map<IPath, IType> paths = new HashMap<>();
 		IType[] types = null;
 		if (this.subTypes != null) {
 			types = this.hierarchy.getAllSubtypes(this.focusType);
@@ -145,8 +143,7 @@ public class HierarchyScope extends AbstractSearchScope implements SuffixConstan
 		} else {
 			types = this.hierarchy.getAllTypes();
 		}
-		for (int i = 0; i < types.length; i++) {
-			IType type = types[i];
+		for (IType type : types) {
 			if (this.subTypes != null) {
 				// remember subtypes for later use in encloses()
 				this.subTypes.add(type);
@@ -161,7 +158,7 @@ public class HierarchyScope extends AbstractSearchScope implements SuffixConstan
 				// type in a jar
 				JarPackageFragmentRoot jar = (JarPackageFragmentRoot) root;
 				IPath jarPath = jar.getPath();
-				Object target = JavaModel.getTarget(jarPath, true);
+				Object target = JavaModel.getTarget(jar, true);
 				String zipFileName;
 				if (target instanceof IFile) {
 					// internal jar
@@ -199,8 +196,8 @@ public class HierarchyScope extends AbstractSearchScope implements SuffixConstan
 		}
 		this.enclosingProjectsAndJars = new IPath[paths.size()];
 		int i = 0;
-		for (Iterator iter = paths.keySet().iterator(); iter.hasNext();) {
-			this.enclosingProjectsAndJars[i++] = (IPath) iter.next();
+		for (IPath iPath : paths.keySet()) {
+			this.enclosingProjectsAndJars[i++] = iPath;
 		}
 	}
 	/*
@@ -208,7 +205,7 @@ public class HierarchyScope extends AbstractSearchScope implements SuffixConstan
 	 * This is a super set of the project and jar paths once the hierarchy is computed.
 	 */
 	private IPath[] computeProjectsAndJars(IType type) throws JavaModelException {
-		HashSet set = new HashSet();
+		Set<IPath> set = new HashSet<>();
 		IPackageFragmentRoot root = (IPackageFragmentRoot)type.getPackageFragment().getParent();
 		if (root.isArchive()) {
 			// add the root
@@ -217,16 +214,15 @@ public class HierarchyScope extends AbstractSearchScope implements SuffixConstan
 			IPath rootPath = root.getPath();
 			IJavaModel model = JavaModelManager.getJavaModelManager().getJavaModel();
 			IJavaProject[] projects = model.getJavaProjects();
-			HashSet visited = new HashSet();
-			for (int i = 0; i < projects.length; i++) {
-				JavaProject project = (JavaProject) projects[i];
+			Set<IJavaProject> visited = new HashSet<>();
+			for (IJavaProject p : projects) {
+				JavaProject project = (JavaProject) p;
 				IClasspathEntry entry = project.getClasspathEntryFor(rootPath);
 				if (entry != null) {
 					// add the project and its binary pkg fragment roots
 					IPackageFragmentRoot[] roots = project.getAllPackageFragmentRoots();
 					set.add(project.getPath());
-					for (int k = 0; k < roots.length; k++) {
-						IPackageFragmentRoot pkgFragmentRoot = roots[k];
+					for (IPackageFragmentRoot pkgFragmentRoot : roots) {
 						if (pkgFragmentRoot.getKind() == IPackageFragmentRoot.K_BINARY) {
 							set.add(pkgFragmentRoot.getPath());
 						}
@@ -239,8 +235,7 @@ public class HierarchyScope extends AbstractSearchScope implements SuffixConstan
 			// add all the project's pkg fragment roots
 			IJavaProject project = (IJavaProject)root.getParent();
 			IPackageFragmentRoot[] roots = project.getAllPackageFragmentRoots();
-			for (int i = 0; i < roots.length; i++) {
-				IPackageFragmentRoot pkgFragmentRoot = roots[i];
+			for (IPackageFragmentRoot pkgFragmentRoot : roots) {
 				if (pkgFragmentRoot.getKind() == IPackageFragmentRoot.K_BINARY) {
 					set.add(pkgFragmentRoot.getPath());
 				} else {
@@ -248,23 +243,22 @@ public class HierarchyScope extends AbstractSearchScope implements SuffixConstan
 				}
 			}
 			// add the dependent projects
-			computeDependents(project, set, new HashSet());
+			computeDependents(project, set, new HashSet<>());
 		}
 		IPath[] result = new IPath[set.size()];
 		set.toArray(result);
 		return result;
 	}
-	private void computeDependents(IJavaProject project, HashSet set, HashSet visited) {
+	private void computeDependents(IJavaProject project, Set<IPath> set, Set<IJavaProject> visited) {
 		if (visited.contains(project)) return;
 		visited.add(project);
 		IProject[] dependents = project.getProject().getReferencingProjects();
-		for (int i = 0; i < dependents.length; i++) {
+		for (IProject p : dependents) {
 			try {
-				IJavaProject dependent = JavaCore.create(dependents[i]);
+				IJavaProject dependent = JavaCore.create(p);
 				IPackageFragmentRoot[] roots = dependent.getPackageFragmentRoots();
 				set.add(dependent.getPath());
-				for (int j = 0; j < roots.length; j++) {
-					IPackageFragmentRoot pkgFragmentRoot = roots[j];
+				for (IPackageFragmentRoot pkgFragmentRoot : roots) {
 					if (pkgFragmentRoot.isArchive()) {
 						set.add(pkgFragmentRoot.getPath());
 					}
@@ -410,8 +404,8 @@ public class HierarchyScope extends AbstractSearchScope implements SuffixConstan
 			// queried type is enclosed in this scope if one of its members is:
 			try {
 				IType[] memberTypes = type.getTypes();
-				for (int i = 0; i < memberTypes.length; i++) {
-					if (enclosesType(memberTypes[i], recurse)) {
+				for (IType memberType : memberTypes) {
+					if (enclosesType(memberType, recurse)) {
 						return true;
 					}
 				}
@@ -440,7 +434,7 @@ public class HierarchyScope extends AbstractSearchScope implements SuffixConstan
 		initialize(null);
 	}
 	protected void initialize(IProgressMonitor progressMonitor) throws JavaModelException {
-		this.resourcePaths = new HashSet();
+		this.resourcePaths = new HashSet<>();
 		this.elements = new HashSet<>();
 		this.elementCount = 0;
 		this.needsRefresh = false;

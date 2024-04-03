@@ -14,6 +14,7 @@
 package org.eclipse.jdt.internal.core.search.matching;
 
 import java.util.ArrayList;
+import java.util.List;
 
 import org.eclipse.jdt.core.search.SearchMatch;
 import org.eclipse.jdt.core.search.SearchPattern;
@@ -26,7 +27,6 @@ import org.eclipse.jdt.internal.core.util.Util;
 /**
  * A set of matches and possible matches, which need to be resolved.
  */
-@SuppressWarnings({"rawtypes", "unchecked"})
 public class MatchingNodeSet {
 
 /**
@@ -119,14 +119,14 @@ void addTrustedMatch(ASTNode node, Integer level) {
 }
 protected boolean hasPossibleNodes(int start, int end) {
 	Object[] nodes = this.possibleMatchingNodesSet.values;
-	for (int i = 0, l = nodes.length; i < l; i++) {
-		ASTNode node = (ASTNode) nodes[i];
+	for (Object n : nodes) {
+		ASTNode node = (ASTNode) n;
 		if (node != null && start <= node.sourceStart && node.sourceEnd <= end)
 			return true;
 	}
 	nodes = this.matchingNodes.keyTable;
-	for (int i = 0, l = nodes.length; i < l; i++) {
-		ASTNode node = (ASTNode) nodes[i];
+	for (Object n : nodes) {
+		ASTNode node = (ASTNode) n;
 		if (node != null && start <= node.sourceStart && node.sourceEnd <= end)
 			return true;
 	}
@@ -136,19 +136,18 @@ protected boolean hasPossibleNodes(int start, int end) {
  * Returns the matching nodes that are in the given range in the source order.
  */
 protected ASTNode[] matchingNodes(int start, int end) {
-	ArrayList nodes = null;
+	List<ASTNode> nodes = null;
 	Object[] keyTable = this.matchingNodes.keyTable;
-	for (int i = 0, l = keyTable.length; i < l; i++) {
-		ASTNode node = (ASTNode) keyTable[i];
+	for (Object o : keyTable) {
+		ASTNode node = (ASTNode) o;
 		if (node != null && start <= node.sourceStart && node.sourceEnd <= end) {
-			if (nodes == null) nodes = new ArrayList();
+			if (nodes == null) nodes = new ArrayList<>();
 			nodes.add(node);
 		}
 	}
 	if (nodes == null) return null;
 
-	ASTNode[] result = new ASTNode[nodes.size()];
-	nodes.toArray(result);
+	ASTNode[] result = nodes.toArray(ASTNode[]::new);
 
 	// sort nodes by source starts
 	Util.Comparer comparer = new Util.Comparer() {
@@ -203,8 +202,8 @@ public String toString() {
 
 	result.append("\nPossible matches:"); //$NON-NLS-1$
 	Object[] nodes = this.possibleMatchingNodesSet.values;
-	for (int i = 0, l = nodes.length; i < l; i++) {
-		ASTNode node = (ASTNode) nodes[i];
+	for (Object n : nodes) {
+		ASTNode node = (ASTNode) n;
 		if (node == null) continue;
 		result.append("\nPOSSIBLE_MATCH: "); //$NON-NLS-1$
 		node.print(0, result);

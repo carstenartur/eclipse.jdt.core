@@ -19,6 +19,7 @@ import java.util.Map;
 
 import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.tests.util.Util;
+import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 
 import junit.framework.Test;
@@ -939,6 +940,161 @@ public class NullAnnotationTests21 extends AbstractNullAnnotationTest {
 
 			public abstract non-sealed class Blah<T, E extends Exception & @NonNull Marker> implements BlahSuper<T, E> {
 				public abstract static class InnerBlah extends Blah<OutputStream, @NonNull MyException> { }
+			}
+			"""
+		};
+		runner.classLibraries = this.LIBS;
+		runner.runConformTest();
+	}
+	public void testGH1009() {
+		Runner runner = new Runner();
+		Map<String, String> options = getCompilerOptions();
+		options.put(CompilerOptions.OPTION_ReportAnnotatedTypeArgumentToUnannotated, CompilerOptions.ERROR);
+		runner.customOptions = options;
+		runner.testFiles = new String[] {
+			"UnsafeNullTypeConversionFalsePositive.java",
+			"""
+			import java.util.ArrayList;
+			import java.util.List;
+			import java.util.stream.Collectors;
+
+			import org.eclipse.jdt.annotation.NonNull;
+
+			public class UnsafeNullTypeConversionFalsePositive {
+
+				public static void main(final String[] args) {
+					final List<@NonNull StringBuffer> someList = new ArrayList<>();
+					List<@NonNull String> results;
+					// was buggy:
+					results = someList.stream().map(String::new).collect(Collectors.toList());
+					// was OK:
+					results = someList.stream().map(buff -> new String(buff)).collect(Collectors.toList());
+					results = someList.stream().<@NonNull String>map(String::new).collect(Collectors.toList());
+				}
+			}
+			"""
+		};
+		runner.classLibraries = this.LIBS;
+		runner.runConformTest();
+	}
+
+	public void testGH1760() {
+		Runner runner = new Runner();
+		runner.testFiles = new String[] {
+			"X.java",
+			"""
+			import org.eclipse.jdt.annotation.*;
+			import java.util.*;
+			import java.util.stream.*;
+			public class X {
+				List<@NonNull String> filter(List<@Nullable String> input) {
+					return input.stream()
+								.filter(Objects::nonNull)
+								.collect(Collectors.toList());
+				}
+			}
+			"""
+		};
+		runner.classLibraries = this.LIBS;
+		runner.runConformTest();
+	}
+
+	public void testGH1964_since_22() {
+		if (this.complianceLevel < ClassFileConstants.JDK22)
+			return;
+		Runner runner = new Runner();
+		runner.customOptions = getCompilerOptions();
+		runner.customOptions.put(CompilerOptions.OPTION_EnablePreviews, CompilerOptions.ENABLED);
+		runner.customOptions.put(CompilerOptions.OPTION_ReportPreviewFeatures, CompilerOptions.IGNORE);
+		runner.customOptions.put(CompilerOptions.OPTION_Compliance, CompilerOptions.VERSION_22);
+		runner.customOptions.put(CompilerOptions.OPTION_Source, CompilerOptions.VERSION_22);
+		runner.customOptions.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_22);
+		runner.vmArguments = new String[] {"--enable-preview"};
+		runner.testFiles = new String[] {
+			"JDK21TestingMain.java",
+			"""
+			import static java.util.FormatProcessor.FMT;
+			import static java.lang.StringTemplate.RAW;
+
+			public final class JDK21TestingMain
+			{
+			  public static void main(final String[] args)
+			  {
+			    final int fourtyTwo = 42;
+			    final String str = FMT."\\{fourtyTwo}";
+
+			    final int x=1;
+			    final int y=2;
+			    final StringTemplate st = RAW."\\{x} + \\{y} = \\{x + y}";
+
+			    final var x1 = STR."Hello World";
+			    final var x2 = FMT."Hello World";
+			    final var x3 = RAW."Hello World";
+
+			    System.out.println(STR."Hello World");
+
+			    System.out.println();
+			  }
+			}
+			"""
+		};
+		runner.classLibraries = this.LIBS;
+		runner.runConformTest();
+	}
+	public void testGH1771() {
+		Runner runner = new Runner();
+		runner.customOptions = getCompilerOptions();
+		runner.customOptions.put(CompilerOptions.OPTION_ReportNullSpecViolation, CompilerOptions.ERROR);
+		runner.customOptions.put(CompilerOptions.OPTION_InheritNullAnnotations, CompilerOptions.ENABLED);
+		runner.testFiles = new String[] {
+			"p/Foo.java",
+			"""
+			package p;
+
+			public interface Foo
+			{
+				@org.eclipse.jdt.annotation.NonNullByDefault
+				record Bar(Object foo) implements
+				          Foo
+				{
+				}
+
+				@org.eclipse.jdt.annotation.Nullable
+				Object foo();
+			}
+			"""
+		};
+		runner.classLibraries = this.LIBS;
+		runner.expectedCompilerLog = """
+			----------
+			1. ERROR in p\\Foo.java (at line 6)
+				record Bar(Object foo) implements
+				           ^^^^^^
+			The default '@NonNull' conflicts with the inherited '@Nullable' annotation in the overridden method from Foo
+			----------
+			""";
+		runner.runNegativeTest();
+	}
+	public void testGH1771_corrected() {
+		Runner runner = new Runner();
+		runner.customOptions = getCompilerOptions();
+		runner.customOptions.put(CompilerOptions.OPTION_ReportNullSpecViolation, CompilerOptions.ERROR);
+		runner.customOptions.put(CompilerOptions.OPTION_InheritNullAnnotations, CompilerOptions.ENABLED);
+		runner.testFiles = new String[] {
+			"p/Foo.java",
+			"""
+			package p;
+
+			public interface Foo
+			{
+				@org.eclipse.jdt.annotation.NonNullByDefault
+				record Bar(@org.eclipse.jdt.annotation.Nullable Object foo) implements
+				          Foo
+				{
+				}
+
+				@org.eclipse.jdt.annotation.Nullable
+				Object foo();
 			}
 			"""
 		};

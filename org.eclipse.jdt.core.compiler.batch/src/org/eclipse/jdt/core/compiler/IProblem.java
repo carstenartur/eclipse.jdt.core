@@ -502,6 +502,10 @@ void setSourceStart(int sourceStart);
 	int ExceptionParameterIsNeverUsed = Internal + 85;
 	/** @since 3.17 */
 	int BytecodeExceeds64KLimitForSwitchTable = Internal + 86;
+	/** @since 3.38 */
+	int OperandStackExceeds64KLimit = Internal + 87;
+	/** @since 3.38 */
+	int OperandStackSizeInappropriate = Internal + 88;
 
 	// variable hiding
 	/** @since 3.0 */
@@ -2450,6 +2454,10 @@ void setSourceStart(int sourceStart);
 	 */
 	int PatternVariableRedeclared = Internal + 1784;
 
+	/** @since 3.38
+	 */
+	int DimensionsIllegalOnRecordPattern = Internal + 1785;
+
 	/** @since 3.28
 	 */
 	int DiscouragedValueBasedTypeSynchronization = Internal + 1820;
@@ -2576,9 +2584,42 @@ void setSourceStart(int sourceStart);
 	 */
 	int IllegalRecordPattern = TypeRelated + 1941;
 
+	/**
+	 * @since 3.38
+	 */
+	int NamedPatternVariablesDisallowedHere = Internal + 1942;
+
+	/**
+	 * @since 3.38
+	 */
+	int ImplicitClassMissingMainMethod = PreviewRelated + 1950;
 
 	/**
 	 * @since 3.35
 	 */
 	int SyntheticAccessorNotEnclosingMethod = MethodRelated + 1990;
+
+	/**
+	 * @since 3.38
+	 * @noreference preview feature
+	 */
+	int UnderscoreCannotBeUsedHere = PreviewRelated + 2000;
+	/**
+	 * @since 3.38
+	 * @noreference preview feature
+	 */
+	int UnnamedVariableMustHaveInitializer = PreviewRelated + 2001;
+
+	/**
+	 * @since 3.38
+	 * @noreference preview feature
+	 */
+	int ExpressionInPreConstructorContext = PreviewRelated + 2022;
+
+	/**
+	 * @since 3.38
+	 * @noreference preview feature
+	 */
+	int DisallowedStatementInPrologue = PreviewRelated + 2023;
+
 }

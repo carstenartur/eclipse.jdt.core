@@ -18,20 +18,68 @@
  *******************************************************************************/
 package org.eclipse.jdt.core.tests.dom;
 
+import static org.junit.Assert.assertArrayEquals;
+
 import java.io.File;
 import java.io.IOException;
 
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.Path;
-import org.eclipse.jdt.core.*;
+import org.eclipse.jdt.core.Flags;
+import org.eclipse.jdt.core.ICompilationUnit;
+import org.eclipse.jdt.core.IField;
+import org.eclipse.jdt.core.IJavaElement;
+import org.eclipse.jdt.core.IJavaProject;
+import org.eclipse.jdt.core.ILocalVariable;
+import org.eclipse.jdt.core.IMethod;
+import org.eclipse.jdt.core.IOrdinaryClassFile;
+import org.eclipse.jdt.core.IPackageFragment;
+import org.eclipse.jdt.core.IProblemRequestor;
+import org.eclipse.jdt.core.ISourceRange;
+import org.eclipse.jdt.core.IType;
+import org.eclipse.jdt.core.ITypeParameter;
+import org.eclipse.jdt.core.ITypeRoot;
+import org.eclipse.jdt.core.JavaCore;
+import org.eclipse.jdt.core.JavaModelException;
+import org.eclipse.jdt.core.WorkingCopyOwner;
 import org.eclipse.jdt.core.compiler.IProblem;
-import org.eclipse.jdt.core.dom.*;
+import org.eclipse.jdt.core.dom.AST;
+import org.eclipse.jdt.core.dom.ASTNode;
+import org.eclipse.jdt.core.dom.ASTParser;
+import org.eclipse.jdt.core.dom.ASTVisitor;
+import org.eclipse.jdt.core.dom.Annotation;
+import org.eclipse.jdt.core.dom.AnonymousClassDeclaration;
+import org.eclipse.jdt.core.dom.ArrayType;
+import org.eclipse.jdt.core.dom.ClassInstanceCreation;
+import org.eclipse.jdt.core.dom.CompilationUnit;
+import org.eclipse.jdt.core.dom.IAnnotationBinding;
+import org.eclipse.jdt.core.dom.IBinding;
+import org.eclipse.jdt.core.dom.IMethodBinding;
+import org.eclipse.jdt.core.dom.IPackageBinding;
+import org.eclipse.jdt.core.dom.ITypeBinding;
+import org.eclipse.jdt.core.dom.IVariableBinding;
+import org.eclipse.jdt.core.dom.MethodDeclaration;
+import org.eclipse.jdt.core.dom.MethodInvocation;
+import org.eclipse.jdt.core.dom.NodeFinder;
+import org.eclipse.jdt.core.dom.ParameterizedType;
+import org.eclipse.jdt.core.dom.QualifiedName;
+import org.eclipse.jdt.core.dom.SimpleName;
+import org.eclipse.jdt.core.dom.SingleVariableDeclaration;
+import org.eclipse.jdt.core.dom.SuperConstructorInvocation;
+import org.eclipse.jdt.core.dom.Type;
+import org.eclipse.jdt.core.dom.TypeDeclaration;
+import org.eclipse.jdt.core.dom.TypeDeclarationStatement;
+import org.eclipse.jdt.core.dom.TypeParameter;
+import org.eclipse.jdt.core.dom.VariableDeclaration;
+import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
+import org.eclipse.jdt.core.dom.WildcardType;
 import org.eclipse.jdt.core.search.IJavaSearchConstants;
 import org.eclipse.jdt.core.search.IJavaSearchScope;
 import org.eclipse.jdt.core.search.SearchEngine;
 import org.eclipse.jdt.core.tests.model.AbstractJavaSearchTests;
 import org.eclipse.jdt.core.tests.util.Util;
+import org.eclipse.jdt.internal.core.Member;
 
 import junit.framework.Test;
 
@@ -2730,7 +2778,7 @@ public class ASTModelBridgeTests extends AbstractASTTests {
 	}
 	/**
 	 * Ensures that we don't create internally inconsistent wildcard
-	 * bindings of the form '? extends <null>' or '? super <null>'
+	 * bindings of the form {@code '? extends <null>'} or {@code '? super <null>'}
 	 * @see "https://bugs.eclipse.org/bugs/show_bug.cgi?id=157847"
 	 */
 	public void test157847b() throws CoreException {
@@ -2760,7 +2808,7 @@ public class ASTModelBridgeTests extends AbstractASTTests {
 	}
 	/**
 	 * Ensures that we don't create internally inconsistent wildcard
-	 * bindings of the form '? extends <null>' or '? super <null>'
+	 * bindings of the form {@code '? extends <null>' or '? super <null>'}
 	 * @see "https://bugs.eclipse.org/bugs/show_bug.cgi?id=157847"
 	 */
 	public void test157847c() throws CoreException {
@@ -2865,4 +2913,27 @@ public class ASTModelBridgeTests extends AbstractASTTests {
 			deleteFolder("/P/src/p");
 		}
 	}
+
+	public void testCorrectMethodFoundWithEqualSimpleName() throws CoreException {
+		this.workingCopies = new ICompilationUnit[1];
+		this.workingCopies[0] = getWorkingCopy("/JavaSearchBugs/src/MyIF.java",
+			"""
+			interface MyIF {
+			    public void query(Foo.InnerKey fk, Bar.InnerKey bk, String s);
+			    public void query/*here*/(Bar.InnerKey fk, Bar.InnerKey bk, String s);
+			}
+			class Foo {
+			    static class InnerKey  { }
+			}
+			class Bar {
+			    static class InnerKey { }
+			}
+			""");
+		IType interfaceType = this.workingCopies[0].getType("MyIF");
+		IMethod secondMethod = interfaceType.getMethods()[1];
+		assertTrue("Wrong method selected", secondMethod.getParameterTypes()[0].contains("Bar"));
+		IMethod[] matchingMethods = Member.findMethods(secondMethod, interfaceType.getMethods());
+		assertArrayEquals(new IMethod[] { secondMethod }, matchingMethods);
+	}
+
 }

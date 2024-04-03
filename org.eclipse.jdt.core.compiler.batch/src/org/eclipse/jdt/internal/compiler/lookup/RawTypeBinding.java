@@ -27,8 +27,8 @@ import org.eclipse.jdt.core.compiler.CharOperation;
 
 /**
  * Denote a raw type, i.e. a generic type referenced without any type arguments.
- * e.g. X<T extends Exception> can be used a raw type 'X', in which case it
- * 	will behave as X<Exception>
+ * e.g. {@code X<T extends Exception>} can be used a raw type 'X', in which case it
+ * 	will behave as {@code X<Exception>}
  */
 public class RawTypeBinding extends ParameterizedTypeBinding {
 
@@ -145,9 +145,10 @@ public class RawTypeBinding extends ParameterizedTypeBinding {
 		buffer.append("#RAW"); //$NON-NLS-1$
 		return buffer.toString();
 	}
-	/**
+	/**<pre>{@code
 	 * Ltype<param1 ... paramN>;
 	 * LY<TT;>;
+	 * }</pre>
 	 */
 	@Override
 	public char[] genericTypeSignature() {
@@ -273,8 +274,7 @@ public class RawTypeBinding extends ParameterizedTypeBinding {
 		ReferenceBinding declaringType = (ReferenceBinding) scope.environment().convertToRawType(genericType, true);
 		declaringType = (ReferenceBinding) declaringType.findSuperTypeOriginatingFrom(theAbstractMethod.declaringClass);
 		MethodBinding [] choices = declaringType.getMethods(theAbstractMethod.selector);
-		for (int i = 0, length = choices.length; i < length; i++) {
-			MethodBinding method = choices[i];
+		for (MethodBinding method : choices) {
 			if (!method.isAbstract() || method.redeclaresPublicObjectMethod(scope)) continue; // (re)skip statics, defaults, public object methods ...
 			this.singleAbstractMethod[index] = method;
 			break;

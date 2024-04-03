@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2023 IBM Corporation and others.
+ * Copyright (c) 2000, 2024 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -677,9 +677,9 @@ public class ASTRewriteFlattener extends ASTVisitor {
 	public boolean visit(Javadoc node) {
 		this.result.append("/**"); //$NON-NLS-1$
 		List list= getChildList(node, Javadoc.TAGS_PROPERTY);
-		for (int i= 0; i < list.size(); i++) {
+		for (Object child : list) {
 			this.result.append("\n * "); //$NON-NLS-1$
-			((ASTNode) list.get(i)).accept(this);
+			((ASTNode) child).accept(this);
 		}
 		this.result.append("\n */"); //$NON-NLS-1$
 		return false;
@@ -1175,6 +1175,7 @@ public class ASTRewriteFlattener extends ASTVisitor {
 			StructuralPropertyDescriptor desc = level < JLS9_INTERNAL ? INTERNAL_TRY_STATEMENT_RESOURCES_PROPERTY : TryStatement.RESOURCES2_PROPERTY;
 			visitList(node, desc, String.valueOf(';'), String.valueOf('('), String.valueOf(')'));
 		}
+		this.result.append(' ');
 		getChildNode(node, TryStatement.BODY_PROPERTY).accept(this);
 		this.result.append(' ');
 		visitList(node, TryStatement.CATCH_CLAUSES_PROPERTY, null);
@@ -1657,12 +1658,7 @@ public class ASTRewriteFlattener extends ASTVisitor {
 		this.result.append((node.isMultiline() ? "\"\"\"\n" : "\"")); //$NON-NLS-1$ //$NON-NLS-2$
 		expression = node.getFirstFragment();
 		expression.accept(this);
-		List<StringTemplateComponent> components = node.components();
-		int size = components.size();
-		for(int i = 0; i < size; i++) {
-			Expression comp = components.get(i);
-			comp.accept(this);
-		}
+		visitList(node, StringTemplateExpression.STRING_TEMPLATE_COMPONENTS, Util.EMPTY_STRING, Util.EMPTY_STRING, Util.EMPTY_STRING);
 		this.result.append((node.isMultiline() ? "\"\"\"" : "\"")); //$NON-NLS-1$ //$NON-NLS-2$
 		return false;
 	}

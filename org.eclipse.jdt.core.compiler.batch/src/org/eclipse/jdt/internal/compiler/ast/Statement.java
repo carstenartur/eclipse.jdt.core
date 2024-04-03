@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2023 IBM Corporation and others.
+ * Copyright (c) 2000, 2024 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -41,8 +41,6 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-import java.util.function.BooleanSupplier;
-
 import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.ast.NullAnnotationMatching.CheckMode;
@@ -53,6 +51,8 @@ import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 import org.eclipse.jdt.internal.compiler.lookup.*;
 
 public abstract class Statement extends ASTNode {
+
+	public boolean inPreConstructorContext = false;
 
 	/**
 	 * Answers true if the if is identified as a known coding pattern which
@@ -124,9 +124,6 @@ public boolean continueCompletes() {
 	public static final int NOT_COMPLAINED = 0;
 	public static final int COMPLAINED_FAKE_REACHABLE = 1;
 	public static final int COMPLAINED_UNREACHABLE = 2;
-	LocalVariableBinding[] patternVarsWhenTrue;
-	LocalVariableBinding[] patternVarsWhenFalse;
-
 
 /** Analysing arguments of MessageSend, ExplicitConstructorCall, AllocationExpression. */
 protected void analyseArguments(BlockScope currentScope, FlowContext flowContext, FlowInfo flowInfo, MethodBinding methodBinding, Expression[] arguments)
@@ -227,7 +224,7 @@ void internalAnalyseOneArgument18(BlockScope currentScope, FlowContext flowConte
 		if (!expectedType.hasNullTypeAnnotations() && expectedNonNullness == Boolean.TRUE) {
 			// improve problem rendering when using a declaration annotation in a 1.8 setting
 			LookupEnvironment env = currentScope.environment();
-			expectedType = env.createAnnotatedType(expectedType, new AnnotationBinding[] {env.getNonNullAnnotation()});
+			expectedType = env.createNonNullAnnotatedType(expectedType);
 		}
 		flowContext.recordNullityMismatch(currentScope, argument, argument.resolvedType, expectedType, flowInfo, nullStatus, annotationStatus);
 	}
@@ -439,8 +436,8 @@ public void generateArguments(MethodBinding binding, Expression[] arguments, Blo
 			codeStream.newArray(codeGenVarArgsType); // create a mono-dimensional array
 		}
 	} else if (arguments != null) { // standard generation for method arguments
-		for (int i = 0, max = arguments.length; i < max; i++)
-			arguments[i].generateCode(currentScope, codeStream, true);
+		for (Expression argument : arguments)
+			argument.generateCode(currentScope, codeStream, true);
 	}
 }
 
@@ -485,69 +482,49 @@ public StringBuilder print(int indent, StringBuilder output) {
 public abstract StringBuilder printStatement(int indent, StringBuilder output);
 
 public abstract void resolve(BlockScope scope);
-public LocalVariableBinding[] getPatternVariablesWhenTrue() {
-	return this.patternVarsWhenTrue;
+public LocalVariableBinding[] bindingsWhenTrue() {
+	return NO_VARIABLES;
 }
-public LocalVariableBinding[] getPatternVariablesWhenFalse() {
-	return this.patternVarsWhenFalse;
+public LocalVariableBinding[] bindingsWhenFalse() {
+	return NO_VARIABLES;
 }
-public void addPatternVariablesWhenTrue(LocalVariableBinding[] vars) {
-	if (vars == null || vars.length == 0) return;
-	if (this.patternVarsWhenTrue == vars) return;
-	this.patternVarsWhenTrue = addPatternVariables(this.patternVarsWhenTrue, vars);
-}
-public void addPatternVariablesWhenFalse(LocalVariableBinding[] vars) {
-	if (vars == null || vars.length == 0) return;
-	if (this.patternVarsWhenFalse == vars) return;
-	this.patternVarsWhenFalse = addPatternVariables(this.patternVarsWhenFalse, vars);
+public LocalVariableBinding[] bindingsWhenComplete() {
+	return NO_VARIABLES;
 }
 
-private LocalVariableBinding[] addPatternVariables(LocalVariableBinding[] current, LocalVariableBinding[] additions) {
-	if (additions != null && additions.length > 0) {
-		if (current == null)
-			current = new LocalVariableBinding[0];
-		nextVariable: for (LocalVariableBinding addition : additions) {
-			for (LocalVariableBinding existing : current) {
-				if (existing == addition)
-					continue nextVariable;
-			}
-			int oldLength = current.length;
-			System.arraycopy(current, 0, (current = new LocalVariableBinding[oldLength + 1]), 0, oldLength);
-			current[oldLength] = addition;
-		}
-	}
-	return current;
-}
-public void promotePatternVariablesIfApplicable(LocalVariableBinding[] patternVariablesInScope, BooleanSupplier condition) {
-	if (patternVariablesInScope != null && condition.getAsBoolean()) {
-		for (LocalVariableBinding binding : patternVariablesInScope) {
-			binding.modifiers &= ~ExtraCompilerModifiers.AccPatternVariable;
-		}
-	}
-}
-public void resolveWithPatternVariablesInScope(LocalVariableBinding[] patternVariablesInScope, BlockScope scope) {
-	if (patternVariablesInScope != null) {
-		for (LocalVariableBinding binding : patternVariablesInScope) {
-			binding.modifiers &= ~ExtraCompilerModifiers.AccPatternVariable;
-		}
+public void resolveWithBindings(LocalVariableBinding[] bindings, BlockScope scope) {
+	scope.include(bindings);
+	try {
 		this.resolve(scope);
-		for (LocalVariableBinding binding : patternVariablesInScope) {
-			binding.modifiers |= ExtraCompilerModifiers.AccPatternVariable;
-		}
-	} else {
-		resolve(scope);
+	} finally {
+		scope.exclude(bindings);
 	}
 }
-/**
- * Returns the resolved expression if any associated to this statement - used
- * parameter statement has to be either a SwitchStatement or a SwitchExpression
- */
-public TypeBinding resolveExpressionType(BlockScope scope) {
-	return null;
-}
+
+
 public boolean containsPatternVariable() {
-	return false;
+	return containsPatternVariable(false);
 }
+
+public boolean containsPatternVariable(boolean includeUnnamedOnes) {
+	return new ASTVisitor() {
+
+		public boolean declaresVariable = false;
+
+		@Override
+		public boolean visit(TypePattern typePattern, BlockScope blockScope) {
+			 if (typePattern.local != null && (includeUnnamedOnes || (typePattern.local.name.length != 1 || typePattern.local.name[0] != '_')))
+				 this.declaresVariable = true;
+			 return !this.declaresVariable;
+		}
+
+		public boolean containsPatternVariable() {
+			Statement.this.traverse(this, null);
+			return this.declaresVariable;
+		}
+	}.containsPatternVariable();
+}
+
 /**
  * Implementation of {@link org.eclipse.jdt.internal.compiler.lookup.InvocationSite#invocationTargetType}
  * suitable at this level. Subclasses should override as necessary.

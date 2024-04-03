@@ -14,7 +14,6 @@
 package org.eclipse.jdt.internal.core;
 
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.Map;
 
 import org.eclipse.core.runtime.ISafeRunnable;
@@ -37,21 +36,20 @@ import org.eclipse.jdt.internal.core.util.Util;
  * <li>populates the model with the new working copy contents</li>
  * <li>fires a fine grained delta (flag F_FINE_GRAINED) describing the difference between the previous content
  *      and the new content (which method was added/removed, which field was changed, etc.)</li>
- * <li>computes problems and reports them to the IProblemRequestor (begingReporting(), n x acceptProblem(...), endReporting()) iff
+ * <li>computes problems and reports them to the IProblemRequestor {@code (begingReporting(), n x acceptProblem(...), endReporting()) iff
  *     	(working copy is not consistent with its buffer || forceProblemDetection is set)
- * 		&& problem requestor is active
+ * 		&& problem} requestor is active
  * </li>
  * <li>produces a DOM AST (either JLS_2, JLS_3 or NO_AST) that is resolved if flag is set</li>
  * <li>notifies compilation participants of the reconcile allowing them to participate in this operation and report problems</li>
  * </ul>
  */
-@SuppressWarnings({"rawtypes"})
 public class ReconcileWorkingCopyOperation extends JavaModelOperation {
 	public static boolean PERF = false;
 
 	public int astLevel;
 	public boolean resolveBindings;
-	public HashMap problems;
+	public Map<String, CategorizedProblem[]>  problems;
 	public int reconcileFlags;
 	WorkingCopyOwner workingCopyOwner;
 	public org.eclipse.jdt.core.dom.CompilationUnit ast;
@@ -129,11 +127,9 @@ public class ReconcileWorkingCopyOperation extends JavaModelOperation {
 	private void reportProblems(CompilationUnit workingCopy, IProblemRequestor problemRequestor) {
 		try {
 			problemRequestor.beginReporting();
-			for (Iterator iteraror = this.problems.values().iterator(); iteraror.hasNext();) {
-				CategorizedProblem[] categorizedProblems = (CategorizedProblem[]) iteraror.next();
+			for (CategorizedProblem[] categorizedProblems : this.problems.values()) {
 				if (categorizedProblems == null) continue;
-				for (int i = 0, length = categorizedProblems.length; i < length; i++) {
-					CategorizedProblem problem = categorizedProblems[i];
+				for (CategorizedProblem problem : categorizedProblems) {
 					if (JavaModelManager.VERBOSE){
 						JavaModelManager.trace("PROBLEM FOUND while reconciling : " + problem.getMessage());//$NON-NLS-1$
 					}
@@ -165,7 +161,7 @@ public class ReconcileWorkingCopyOperation extends JavaModelOperation {
 	public org.eclipse.jdt.core.dom.CompilationUnit makeConsistent(CompilationUnit workingCopy) throws JavaModelException {
 		if (!workingCopy.isConsistent()) {
 			// make working copy consistent
-			if (this.problems == null) this.problems = new HashMap();
+			if (this.problems == null) this.problems = new HashMap<>();
 			this.resolveBindings = this.requestorIsActive;
 			this.ast = workingCopy.makeConsistent(this.astLevel, this.resolveBindings, this.reconcileFlags, this.problems, this.progressMonitor);
 			this.deltaBuilder.buildDeltas();
@@ -185,7 +181,7 @@ public class ReconcileWorkingCopyOperation extends JavaModelOperation {
 					&& (this.reconcileFlags & ICompilationUnit.FORCE_PROBLEM_DETECTION) != 0) {
 				this.resolveBindings = this.requestorIsActive;
 				if (this.problems == null)
-					this.problems = new HashMap();
+					this.problems = new HashMap<>();
 				unit =
 					CompilationUnitProblemFinder.process(
 						source,
@@ -200,7 +196,7 @@ public class ReconcileWorkingCopyOperation extends JavaModelOperation {
 			// create AST if needed
 			if (this.astLevel != ICompilationUnit.NO_AST
 					&& unit !=null/*unit is null if working copy is consistent && (problem detection not forced || non-Java project) -> don't create AST as per API*/) {
-				Map options = workingCopy.getJavaProject().getOptions(true);
+				Map<String, String> options = workingCopy.getJavaProject().getOptions(true);
 				// convert AST
 				this.ast =
 					AST.convertCompilationUnit(
@@ -239,8 +235,7 @@ public class ReconcileWorkingCopyOperation extends JavaModelOperation {
 		if (participants == null) return;
 
 		final ReconcileContext context = new ReconcileContext(this, workingCopy);
-		for (int i = 0, length = participants.length; i < length; i++) {
-			final CompilationParticipant participant = participants[i];
+		for (final CompilationParticipant participant : participants) {
 			SafeRunner.run(new ISafeRunnable() {
 				@Override
 				public void handleException(Throwable exception) {

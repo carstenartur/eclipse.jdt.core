@@ -13,126 +13,113 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
-import java.util.function.Supplier;
-
-import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.codegen.BranchLabel;
 import org.eclipse.jdt.internal.compiler.codegen.CodeStream;
 import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
-import org.eclipse.jdt.internal.compiler.lookup.LocalVariableBinding;
 import org.eclipse.jdt.internal.compiler.lookup.MethodBinding;
+import org.eclipse.jdt.internal.compiler.lookup.Scope;
 import org.eclipse.jdt.internal.compiler.lookup.TypeBinding;
 
 public abstract class Pattern extends Expression {
 
-	/* package */ boolean isTotalTypeNode = false;
-	static final String SECRET_PATTERN_VARIABLE_NAME = " secretPatternVariable"; //$NON-NLS-1$
-
-	public LocalVariableBinding secretPatternVariable = null;
-
-	public Boolean containsTypeElidedPatternVar = null;
+	boolean isTotalTypeNode = false;
 
 	private Pattern enclosingPattern;
+
 	protected MethodBinding accessorMethod;
-	/* package */ BranchLabel elseTarget;
-	/* package */ BranchLabel thenTarget;
 
-	public int nestingLevel = 0;
+	public int index = -1; // index of this in enclosing record pattern, or -1 for top level patterns
 
-	@Override
-	public boolean containsPatternVariable() {
-		class PatternVariablesVisitor extends ASTVisitor {
-			public boolean hasPatternVar = false;
-			public boolean typeElidedVar =  false;
+	public boolean isUnguarded = true; // no guard or guard is compile time constant true.
 
-			@Override
-			public boolean visit(TypePattern typePattern, BlockScope blockScope) {
-				 this.hasPatternVar = typePattern.local != null;
-				 this.typeElidedVar |= typePattern.getType().isTypeNameVar(blockScope);
-				 return !(this.hasPatternVar && this.typeElidedVar);
-			}
- 		}
-
-		PatternVariablesVisitor pvv = new PatternVariablesVisitor();
-		this.traverse(pvv, (BlockScope) null);
-		this.containsTypeElidedPatternVar = pvv.typeElidedVar;
-		return pvv.hasPatternVar;
-	}
-
-	/**
-	 * @return the enclosingPattern
-	 */
 	public Pattern getEnclosingPattern() {
 		return this.enclosingPattern;
 	}
 
-	/**
-	 * @param enclosingPattern the enclosingPattern to set
-	 */
-	public void setEnclosingPattern(Pattern enclosingPattern) {
+	public void setEnclosingPattern(RecordPattern enclosingPattern) {
 		this.enclosingPattern = enclosingPattern;
-		this.nestingLevel = enclosingPattern.nestingLevel+1;
 	}
+
+	public boolean isUnnamed() {
+		return false;
+	}
+
 	/**
 	 * Implement the rules in the spec under 14.11.1.1 Exhaustive Switch Blocks
 	 *
 	 * @return whether pattern covers the given type or not
 	 */
 	public boolean coversType(TypeBinding type) {
+		if (!isUnguarded())
+			return false;
+		if (type == null || this.resolvedType == null)
+			return false;
+		return (type.isSubtypeOf(this.resolvedType, false));
+	}
+
+	// Given a non-null instance of same type, would the pattern always match ?
+	public boolean matchFailurePossible() {
 		return false;
 	}
-	public TypeBinding resolveAtType(BlockScope scope, TypeBinding type) {
-		return null;
+
+	public boolean isUnconditional(TypeBinding t) {
+		return isUnguarded() && coversType(t);
 	}
+
+	public abstract void generateCode(BlockScope currentScope, CodeStream codeStream, BranchLabel patternMatchLabel, BranchLabel matchFailLabel);
+
 	@Override
-	public TypeBinding resolveType(BlockScope scope) {
-		return resolveType(scope, true);
+	public boolean checkUnsafeCast(Scope scope, TypeBinding castType, TypeBinding expressionType, TypeBinding match, boolean isNarrowing) {
+		if (!castType.isReifiable())
+			return CastExpression.checkUnsafeCast(this, scope, castType, expressionType, match, isNarrowing);
+		else
+			return super.checkUnsafeCast(scope, castType, expressionType, match, isNarrowing);
 	}
-	public TypeBinding resolveType(BlockScope scope, boolean isPatternVariable) {
-		return null;
-	}
-	public boolean isAlwaysTrue() {
-		return true;
-	}
-	@Override
-	public void generateCode(BlockScope currentScope, CodeStream codeStream) {
-		setTargets(codeStream);
-		generateOptimizedBoolean(currentScope, codeStream, this.thenTarget, this.elseTarget);
-	}
-	/* package */ void setTargets(CodeStream codeStream) {
-		if (this.elseTarget == null)
-			this.elseTarget = new BranchLabel(codeStream);
-		if (this.thenTarget == null)
-			this.thenTarget = new BranchLabel(codeStream);
-	}
-	public void suspendVariables(CodeStream codeStream, BlockScope scope) {
-		// nothing by default
-	}
-	public void resumeVariables(CodeStream codeStream, BlockScope scope) {
-		// nothing by default
-	}
-	public abstract void generateOptimizedBoolean(BlockScope currentScope, CodeStream codeStream, BranchLabel trueLabel, BranchLabel falseLabel);
-	protected abstract void generatePatternVariable(BlockScope currentScope, CodeStream codeStream, BranchLabel trueLabel, BranchLabel falseLabel);
-	protected abstract void wrapupGeneration(CodeStream codeStream);
 
 	public TypeReference getType() {
 		return null;
 	}
-	public abstract void resolveWithExpression(BlockScope scope, Expression expression);
 
-	public void setTargetSupplier(Supplier<BranchLabel> targetSupplier) {
-		// default implementation does nothing
+	// 14.30.3 Properties of Patterns: A pattern p is said to be applicable at a type T if ...
+	protected boolean isApplicable(TypeBinding other, BlockScope scope) {
+		TypeBinding patternType = this.resolvedType;
+		if (patternType == null) // ill resolved pattern
+			return false;
+		// 14.30.3 Properties of Patterns doesn't allow boxing nor unboxing, primitive widening/narrowing.
+		if (patternType.isBaseType() != other.isBaseType()) {
+			scope.problemReporter().incompatiblePatternType(this, other, patternType);
+			return false;
+		}
+		if (patternType.isBaseType()) {
+			if (!TypeBinding.equalsEquals(other, patternType)) {
+				scope.problemReporter().incompatiblePatternType(this, other, patternType);
+				return false;
+			}
+		} else if (!checkCastTypesCompatibility(scope, other, patternType, null, true)) {
+			scope.problemReporter().incompatiblePatternType(this, other, patternType);
+			return false;
+		}
+		return true;
 	}
-	protected abstract boolean isPatternTypeCompatible(TypeBinding other, BlockScope scope);
 
 	public abstract boolean dominates(Pattern p);
-
-	public Pattern primary() {
-		return this;
-	}
 
 	@Override
 	public StringBuilder print(int indent, StringBuilder output) {
 		return this.printExpression(indent, output);
+	}
+
+	public Pattern[] getAlternatives() {
+		return new Pattern [] { this };
+	}
+
+	public abstract void setIsEitherOrPattern(); // if set, is one of multiple (case label) patterns and so pattern variables can't be named.
+
+	public boolean isUnguarded() {
+		return this.isUnguarded;
+	}
+
+	public void setIsGuarded() {
+		this.isUnguarded = false;
 	}
 }

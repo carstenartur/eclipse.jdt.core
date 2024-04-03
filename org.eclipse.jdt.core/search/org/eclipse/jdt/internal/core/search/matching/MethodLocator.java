@@ -20,6 +20,7 @@ import static org.eclipse.jdt.internal.core.JavaModelManager.trace;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Map;
 
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.runtime.*;
@@ -33,7 +34,6 @@ import org.eclipse.jdt.internal.compiler.util.SimpleSet;
 import org.eclipse.jdt.internal.core.BinaryMethod;
 import org.eclipse.jdt.internal.core.search.BasicSearchEngine;
 
-@SuppressWarnings({ "rawtypes", "unchecked" })
 public class MethodLocator extends PatternLocator {
 
 protected MethodPattern pattern;
@@ -51,7 +51,7 @@ private char[][][] samePkgSuperDeclaringTypeNames;
 
 private MatchLocator matchLocator;
 //method declarations which parameters verification fail
-private HashMap methodDeclarationsWithInvalidParam = new HashMap();
+private Map<ASTNode, Boolean> methodDeclarationsWithInvalidParam = new HashMap<>();
 
 
 public MethodLocator(MethodPattern pattern) {
@@ -65,7 +65,7 @@ public MethodLocator(MethodPattern pattern) {
  */
 @Override
 protected void clear() {
-	this.methodDeclarationsWithInvalidParam = new HashMap();
+	this.methodDeclarationsWithInvalidParam = new HashMap<>();
 }
 @Override
 protected int fineGrain() {
@@ -85,10 +85,10 @@ private ReferenceBinding getMatchingSuper(ReferenceBinding binding) {
 	// matches interfaces
 	ReferenceBinding[] interfaces = binding.superInterfaces();
 	if (interfaces == null) return null;
-	for (int i = 0; i < interfaces.length; i++) {
-		level = resolveLevelForType(this.pattern.declaringSimpleName, this.pattern.declaringQualification, interfaces[i]);
-		if (level != IMPOSSIBLE_MATCH) return interfaces[i];
-		superBinding = getMatchingSuper(interfaces[i]);
+	for (ReferenceBinding ref : interfaces) {
+		level = resolveLevelForType(this.pattern.declaringSimpleName, this.pattern.declaringQualification, ref);
+		if (level != IMPOSSIBLE_MATCH) return ref;
+		superBinding = getMatchingSuper(ref);
 		if (superBinding != null) return superBinding;
 	}
 	return null;
@@ -96,12 +96,10 @@ private ReferenceBinding getMatchingSuper(ReferenceBinding binding) {
 
 private MethodBinding getMethodBinding(ReferenceBinding type, char[] methodName, TypeBinding[] argumentTypes) {
 	MethodBinding[] methods = type.getMethods(methodName);
-	MethodBinding method = null;
-	methodsLoop: for (int i=0, length=methods.length; i<length; i++) {
-		method = methods[i];
+	methodsLoop: for (MethodBinding method : methods) {
 		TypeBinding[] parameters = method.parameters;
 		if (argumentTypes.length == parameters.length) {
-			for (int j=0,l=parameters.length; j<l; j++) {
+			for (int j = 0, l = parameters.length; j < l; j++) {
 				if (TypeBinding.notEquals(parameters[j].erasure(), argumentTypes[j].erasure())) {
 					continue methodsLoop;
 				}
@@ -624,7 +622,7 @@ public SearchMatch newDeclarationMatch(ASTNode reference, IJavaElement element, 
 		// If method parameters verification was not valid, then try to see if method arguments can match a method in hierarchy
 		if (this.methodDeclarationsWithInvalidParam.containsKey(reference)) {
 			// First see if this reference has already been resolved => report match if validated
-			Boolean report = (Boolean) this.methodDeclarationsWithInvalidParam.get(reference);
+			Boolean report = this.methodDeclarationsWithInvalidParam.get(reference);
 			if (report != null) {
 				if (report.booleanValue()) {
 					return super.newDeclarationMatch(reference, element, elementBinding, accuracy, length, locator);
@@ -907,8 +905,8 @@ protected int resolveLevelAsSubtype(char[] simplePattern, char[] qualifiedPatter
 	// matches interfaces
 	ReferenceBinding[] interfaces = type.superInterfaces();
 	if (interfaces == null) return INACCURATE_MATCH;
-	for (int i = 0; i < interfaces.length; i++) {
-		level = resolveLevelAsSubtype(simplePattern, qualifiedPattern, interfaces[i], methodName, null, packageName, isDefault);
+	for (ReferenceBinding ref : interfaces) {
+		level = resolveLevelAsSubtype(simplePattern, qualifiedPattern, ref, methodName, null, packageName, isDefault);
 		if (level != IMPOSSIBLE_MATCH) {
 			if (!type.isAbstract() && !type.isInterface()) { // if concrete class, then method is overridden
 				level |= OVERRIDDEN_METHOD_FLAVOR;
@@ -925,13 +923,12 @@ protected int resolveLevelAsSubtype(char[] simplePattern, char[] qualifiedPatter
  */
 private boolean resolveLevelAsSuperInvocation(ReferenceBinding type, TypeBinding[] argumentTypes, char[][][] superTypeNames, boolean methodAlreadyVerified) {
 	char[][] compoundName = type.compoundName;
-	for (int i = 0, max = superTypeNames.length; i < max; i++) {
-		if (CharOperation.equals(superTypeNames[i], compoundName)) {
+	for (char[][] superTypeName : superTypeNames) {
+		if (CharOperation.equals(superTypeName, compoundName)) {
 			// need to verify if the type implements the pattern method
 			if (methodAlreadyVerified) return true; // already verified before enter into this method (see resolveLevel(MessageSend))
 			MethodBinding[] methods = type.getMethods(this.pattern.selector);
-			for (int j=0, length=methods.length; j<length; j++) {
-				MethodBinding method = methods[j];
+			for (MethodBinding method : methods) {
 				TypeBinding[] parameters = method.parameters;
 				if (argumentTypes.length == parameters.length) {
 					boolean found = true;
@@ -957,8 +954,8 @@ private boolean resolveLevelAsSuperInvocation(ReferenceBinding type, TypeBinding
 	if (type.isInterface()) {
 		ReferenceBinding[] interfaces = type.superInterfaces();
 		if (interfaces == null) return false;
-		for (int i = 0; i < interfaces.length; i++) {
-			if (resolveLevelAsSuperInvocation(interfaces[i], argumentTypes, superTypeNames, false)) {
+		for (ReferenceBinding ref : interfaces) {
+			if (resolveLevelAsSuperInvocation(ref, argumentTypes, superTypeNames, false)) {
 				return true;
 			}
 		}

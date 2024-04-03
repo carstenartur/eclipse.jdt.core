@@ -44,6 +44,7 @@ package org.eclipse.jdt.internal.compiler.lookup;
 
 import java.util.Arrays;
 import java.util.Set;
+import java.util.function.Consumer;
 
 import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.internal.compiler.ast.ASTNode;
@@ -76,6 +77,12 @@ public class TypeVariableBinding extends ReferenceBinding {
 	public ReferenceBinding[] superInterfaces; // MUST NOT be modified directly, use setter !
 	public char[] genericTypeSignature;
 	LookupEnvironment environment;
+
+	/*
+	 * In one particular situation a TVB will be cloned and the clone will be used as the 'naked' type
+	 * within TypeSystem. This may require some updating inside TypeSystem's hash structure.
+	 */
+	Consumer<TypeVariableBinding> updateWhenSettingTypeAnnotations;
 
 	public TypeVariableBinding(char[] sourceName, Binding declaringElement, int rank, LookupEnvironment environment) {
 		this.sourceName = sourceName;
@@ -202,8 +209,8 @@ public class TypeVariableBinding extends ReferenceBinding {
 						}
 					}
 					boolean mustImplement = isArrayBound || ((ReferenceBinding)wildcardBound).isFinal();
-					for (int i = 0, length = this.superInterfaces.length; i < length; i++) {
-						TypeBinding substitutedSuperType = hasSubstitution ? Scope.substitute(substitution, this.superInterfaces[i]) : this.superInterfaces[i];
+					for (ReferenceBinding superInterface : this.superInterfaces) {
+						TypeBinding substitutedSuperType = hasSubstitution ? Scope.substitute(substitution, superInterface) : superInterface;
 						if (!checkedAsOK) {
 							if (isArrayBound) {
 								if (!wildcardBound.isCompatibleWith(substitutedSuperType, scope))
@@ -277,8 +284,8 @@ public class TypeVariableBinding extends ReferenceBinding {
 				nullStatus = nullBoundCheck(scope, argumentType, substitutedSuperType, substitution, location, nullStatus);
 			}
 		}
-	    for (int i = 0, length = this.superInterfaces.length; i < length; i++) {
-			TypeBinding substitutedSuperType = hasSubstitution ? Scope.substitute(substitution, this.superInterfaces[i]) : this.superInterfaces[i];
+	    for (ReferenceBinding superInterface : this.superInterfaces) {
+			TypeBinding substitutedSuperType = hasSubstitution ? Scope.substitute(substitution, superInterface) : superInterface;
 	    	if (TypeBinding.notEquals(substitutedSuperType, argumentType)) {
 				if (!argumentType.isCompatibleWith(substitutedSuperType, scope)) {
 				    return BoundCheckStatus.MISMATCH;
@@ -339,11 +346,13 @@ public class TypeVariableBinding extends ReferenceBinding {
 	}
 	/**
 	 * Collect the substitutes into a map for certain type variables inside the receiver type
-	 * e.g.   Collection<T>.collectSubstitutes(Collection<List<X>>, Map), will populate Map with: T --> List<X>
+	 * e.g. {@code Collection<T>.collectSubstitutes(Collection<List<X>>, Map)} will populate Map with: {@code T --> List<X>}
+	 * <pre>{@code
 	 * Constraints:
 	 *   A << F   corresponds to:   F.collectSubstitutes(..., A, ..., CONSTRAINT_EXTENDS (1))
-	 *   A = F   corresponds to:      F.collectSubstitutes(..., A, ..., CONSTRAINT_EQUAL (0))
+	 *   A = F    corresponds to:   F.collectSubstitutes(..., A, ..., CONSTRAINT_EQUAL (0))
 	 *   A >> F   corresponds to:   F.collectSubstitutes(..., A, ..., CONSTRAINT_SUPER (2))
+	 * }</pre>
 	 */
 	@Override
 	public void collectSubstitutes(Scope scope, TypeBinding actualType, InferenceContext inferenceContext, int constraint) {
@@ -469,9 +478,10 @@ public class TypeVariableBinding extends ReferenceBinding {
 	    }
 	    return this.superclass; // java/lang/Object
 	}
-	/**
+	/**<pre>{@code
 	 * T::Ljava/util/Map;:Ljava/io/Serializable;
 	 * T:LY<TT;>
+	 * }</pre>
 	 */
 	public char[] genericSignature() {
 	    StringBuilder sig = new StringBuilder(10);
@@ -489,9 +499,10 @@ public class TypeVariableBinding extends ReferenceBinding {
 		sig.getChars(0, sigLength, genericSignature, 0);
 		return genericSignature;
 	}
-	/**
+	/**<pre>{@code
 	 * T::Ljava/util/Map;:Ljava/io/Serializable;
 	 * T:LY<TT;>
+	 * }</pre>
 	 */
 	@Override
 	public char[] genericTypeSignature() {
@@ -510,8 +521,8 @@ public class TypeVariableBinding extends ReferenceBinding {
         int idx = 0;
         if (!this.firstBound.isInterface())
         	bounds[idx++] = TypeBound.createBoundOrDependency(theta, this.firstBound, variable);
-        for (int i = 0; i < this.superInterfaces.length; i++)
-			bounds[idx++] = TypeBound.createBoundOrDependency(theta, this.superInterfaces[i], variable);
+        for (ReferenceBinding superInterface : this.superInterfaces)
+			bounds[idx++] = TypeBound.createBoundOrDependency(theta, superInterface, variable);
         return bounds;
 	}
 
@@ -521,8 +532,8 @@ public class TypeVariableBinding extends ReferenceBinding {
 				return false;
 
 		if (this.superInterfaces != null)
-			for (int i = 0, l = this.superInterfaces.length; i < l; i++)
-		   		if (!this.superInterfaces[i].isRawType())
+			for (ReferenceBinding superInterface : this.superInterfaces)
+				if (!superInterface.isRawType())
 		   			return false;
 
 		return true;
@@ -536,9 +547,9 @@ public class TypeVariableBinding extends ReferenceBinding {
 			if (this.superclass != null && this.superclass.hasTypeBit(~TypeIds.BitUninitialized))
 				this.typeBits |= (this.superclass.typeBits & TypeIds.InheritableBits);
 			if (this.superInterfaces != null)
-				for (int i = 0, l = this.superInterfaces.length; i < l; i++)
-					if (this.superInterfaces[i].hasTypeBit(~TypeIds.BitUninitialized))
-						this.typeBits |= (this.superInterfaces[i].typeBits & TypeIds.InheritableBits);
+				for (ReferenceBinding superInterface : this.superInterfaces)
+					if (superInterface.hasTypeBit(~TypeIds.BitUninitialized))
+						this.typeBits |= (superInterface.typeBits & TypeIds.InheritableBits);
 		}
 		return (this.typeBits & bit) != 0;
 	}
@@ -549,8 +560,8 @@ public class TypeVariableBinding extends ReferenceBinding {
 	public boolean isErasureBoundTo(TypeBinding type) {
 		if (TypeBinding.equalsEquals(this.superclass.erasure(), type))
 			return true;
-		for (int i = 0, length = this.superInterfaces.length; i < length; i++) {
-			if (TypeBinding.equalsEquals(this.superInterfaces[i].erasure(), type))
+		for (ReferenceBinding superInterface : this.superInterfaces) {
+			if (TypeBinding.equalsEquals(superInterface.erasure(), type))
 				return true;
 		}
 		return false;
@@ -562,9 +573,8 @@ public class TypeVariableBinding extends ReferenceBinding {
 	}
 
 	/**
-	 * Returns true if the 2 variables are playing exact same role: they have
-	 * the same bounds, providing one is substituted with the other: <T1 extends
-	 * List<T1>> is interchangeable with <T2 extends List<T2>>.
+	 * Returns true if the 2 variables are playing exact same role: they have the same bounds, providing one is
+	 * substituted with the other: {@code <T1 extends List<T1>>} is interchangeable with {@code <T2 extends List<T2>>}.
 	 */
 	public boolean isInterchangeableWith(TypeVariableBinding otherVariable, Substitution substitute) {
 		if (TypeBinding.equalsEquals(this, otherVariable))
@@ -595,8 +605,8 @@ public class TypeVariableBinding extends ReferenceBinding {
 		if (this.superclass != null && this.superclass.isSubtypeOf(other, simulatingBugJDK8026527))
 			return true;
 		if (this.superInterfaces != null)
-			for (int i = 0, l = this.superInterfaces.length; i < l; i++)
-		   		if (this.superInterfaces[i].isSubtypeOf(other, false))
+			for (ReferenceBinding superInterface : this.superInterfaces)
+				if (superInterface.isSubtypeOf(other, false))
 					return true;
 		return other.id == TypeIds.T_JavaLangObject;
 	}
@@ -641,8 +651,8 @@ public class TypeVariableBinding extends ReferenceBinding {
 				return false;
 			}
 			if (this.superInterfaces != null)
-				for (int i = 0, l = this.superInterfaces.length; i < l; i++)
-			   		if (!this.superInterfaces[i].isProperType(admitCapture18)) {
+				for (ReferenceBinding superInterface : this.superInterfaces)
+					if (!superInterface.isProperType(admitCapture18)) {
 						return false;
 					}
 			return true;
@@ -738,8 +748,8 @@ public class TypeVariableBinding extends ReferenceBinding {
 			if (this.superclass != null && this.superclass.mentionsAny(parameters, idx))
 				return true;
 			if (this.superInterfaces != null)
-				for (int j = 0; j < this.superInterfaces.length; j++) {
-					if (this.superInterfaces[j].mentionsAny(parameters, idx))
+				for (ReferenceBinding superInterface : this.superInterfaces) {
+					if (superInterface.mentionsAny(parameters, idx))
 						return true;
 			}
 			return false;
@@ -757,8 +767,8 @@ public class TypeVariableBinding extends ReferenceBinding {
 			if (this.superclass != null)
 				this.superclass.collectInferenceVariables(variables);
 			if (this.superInterfaces != null)
-				for (int j = 0; j < this.superInterfaces.length; j++) {
-					this.superInterfaces[j].collectInferenceVariables(variables);
+				for (ReferenceBinding superInterface : this.superInterfaces) {
+					superInterface.collectInferenceVariables(variables);
 			}
 		} finally {
 			this.inRecursiveFunction = false;
@@ -1044,9 +1054,9 @@ public class TypeVariableBinding extends ReferenceBinding {
 			return parameter.type;
 		TypeReference[] bounds = parameter.bounds;
 		if (bounds != null) {
-			for (int i = 0; i < bounds.length; i++) {
-				if (TypeBinding.equalsEquals(bounds[i].resolvedType, bound))
-					return bounds[i];
+			for (TypeReference ref : bounds) {
+				if (TypeBinding.equalsEquals(ref.resolvedType, bound))
+					return ref;
 			}
 		}
 		return null;

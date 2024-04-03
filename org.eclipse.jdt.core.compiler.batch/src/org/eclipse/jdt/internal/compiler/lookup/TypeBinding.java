@@ -38,6 +38,7 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -243,11 +244,14 @@ public List<TypeBinding> collectMissingTypes(List<TypeBinding> missingTypes) {
 
 /**
  * Collect the substitutes into a map for certain type variables inside the receiver type
- * e.g.   Collection<T>.findSubstitute(T, Collection<List<X>>):   T --> List<X>
+ * e.g.<pre>{@code
+ * Collection<T>.findSubstitute(T, Collection<List<X>>):   T --> List<X>
+ *
  * Constraints:
  *   A << F   corresponds to:   F.collectSubstitutes(..., A, ..., CONSTRAINT_EXTENDS (1))
- *   A = F   corresponds to:      F.collectSubstitutes(..., A, ..., CONSTRAINT_EQUAL (0))
+ *   A = F    corresponds to:   F.collectSubstitutes(..., A, ..., CONSTRAINT_EQUAL (0))
  *   A >> F   corresponds to:   F.collectSubstitutes(..., A, ..., CONSTRAINT_SUPER (2))
+ * }</pre>
  */
 public void collectSubstitutes(Scope scope, TypeBinding actualType, InferenceContext inferenceContext, int constraint) {
 	// no substitute by default
@@ -495,14 +499,28 @@ public TypeBinding findSuperTypeOriginatingFrom(TypeBinding otherType) {
 		case Binding.INTERSECTION_TYPE18:
 			IntersectionTypeBinding18 itb18 = (IntersectionTypeBinding18) this;
 			ReferenceBinding[] intersectingTypes = itb18.getIntersectingTypes();
-			for (int i = 0, length = intersectingTypes.length; i < length; i++) {
-				TypeBinding superType = intersectingTypes[i].findSuperTypeOriginatingFrom(otherType);
+			for (ReferenceBinding intersectingType : intersectingTypes) {
+				TypeBinding superType = intersectingType.findSuperTypeOriginatingFrom(otherType);
 				if (superType != null)
 					return superType;
 			}
 			break;
 	}
 	return null;
+}
+
+public TypeVariableBinding[] syntheticTypeVariablesMentioned() {
+	final Set<TypeVariableBinding> mentioned = new HashSet<>();
+	TypeBindingVisitor.visit(new TypeBindingVisitor() {
+		@Override
+		public boolean visit(TypeVariableBinding typeVariable) {
+			if (typeVariable.isCapture())
+				mentioned.add(typeVariable);
+			return super.visit(typeVariable);
+		}
+	}, this);
+	if (mentioned.isEmpty()) return NO_TYPE_VARIABLES;
+	return mentioned.toArray(new TypeVariableBinding[mentioned.size()]);
 }
 
 /**
@@ -520,7 +538,7 @@ public TypeBinding genericCast(TypeBinding targetType) {
 
 /**
  * Answer the receiver classfile signature.
- * Arrays & base types do not distinguish between signature() & constantPoolName().
+ * Arrays and base types do not distinguish between signature() and constantPoolName().
  * NOTE: This method should only be used during/after code gen.
  */
 public char[] genericTypeSignature() {
@@ -545,8 +563,7 @@ public TypeBinding getErasureCompatibleType(TypeBinding declaringClass) {
 			if (variable.superclass != null && variable.superclass.findSuperTypeOriginatingFrom(declaringClass) != null) {
 				return variable.superclass.getErasureCompatibleType(declaringClass);
 			}
-			for (int i = 0, otherLength = variable.superInterfaces.length; i < otherLength; i++) {
-				ReferenceBinding superInterface = variable.superInterfaces[i];
+			for (ReferenceBinding superInterface : variable.superInterfaces) {
 				if (superInterface.findSuperTypeOriginatingFrom(declaringClass) != null) {
 					return superInterface.getErasureCompatibleType(declaringClass);
 				}
@@ -560,8 +577,7 @@ public TypeBinding getErasureCompatibleType(TypeBinding declaringClass) {
 			if (intersection.superclass != null && intersection.superclass.findSuperTypeOriginatingFrom(declaringClass) != null) {
 				return intersection.superclass.getErasureCompatibleType(declaringClass);
 			}
-			for (int i = 0, otherLength = intersection.superInterfaces.length; i < otherLength; i++) {
-				ReferenceBinding superInterface = intersection.superInterfaces[i];
+			for (ReferenceBinding superInterface : intersection.superInterfaces) {
 				if (superInterface.findSuperTypeOriginatingFrom(declaringClass) != null) {
 					return superInterface.getErasureCompatibleType(declaringClass);
 				}
@@ -653,7 +669,7 @@ public boolean isBoxedPrimitiveType() {
 }
 
 /**
- *  Returns true if parameterized type AND not of the form List<?>
+ *  Returns true if parameterized type AND not of the form {@code List<?>}
  */
 public boolean isBoundParameterizedType() {
 	return false;
@@ -747,7 +763,7 @@ public boolean isFunctionalInterface(Scope scope) {
 }
 
 /**
- * Returns true if the current type denotes an intersection type: Number & Comparable<?>
+ * Returns true if the current type denotes an intersection type: Number and {@code Comparable<?>}
  */
 public boolean isIntersectionType() {
 	return false;
@@ -781,7 +797,7 @@ public final boolean isNumericType() {
 }
 
 /**
- * Returns true if the type is parameterized, e.g. List<String>.
+ * Returns true if the type is parameterized, e.g. {@code List<String>}.
  * Note that some instances of ParameterizedTypeBinding have no arguments, like for non-generic members
  * of a parameterized type. Use {@link #isParameterizedTypeWithActualArguments()} instead to find out.
  */
@@ -809,7 +825,7 @@ public boolean isIntersectionType18() {
 }
 
 /**
- * Returns true if the type is parameterized, e.g. List<String>
+ * Returns true if the type is parameterized, e.g. {@code List<String>}.
  * Note that some instances of ParameterizedTypeBinding do answer false to {@link #isParameterizedType()}
  * in case they have no arguments, like for non-generic members of a parameterized type.
  * i.e. {@link #isParameterizedType()} is not equivalent to testing <code>type.kind() == Binding.PARAMETERIZED_TYPE</code>
@@ -1189,7 +1205,7 @@ public final boolean isRawType() {
 }
 /**
  * JLS(3) 4.7.
- * Note: Foo<?>.Bar is also reifiable
+ * Note: {@code Foo<?>.Bar} is also reifiable
  */
 public boolean isReifiable() {
 	TypeBinding leafType = leafComponentType();
@@ -1331,8 +1347,8 @@ public boolean isTypeArgumentContainedBy(TypeBinding otherType) {
 				case Wildcard.EXTENDS:
 					if (otherBound instanceof IntersectionTypeBinding18) {
 						TypeBinding [] intersectingTypes = ((IntersectionTypeBinding18) otherBound).intersectingTypes;
-						for (int i = 0, length = intersectingTypes.length; i < length; i++)
-							if (TypeBinding.equalsEquals(intersectingTypes[i], this))
+						for (TypeBinding intersectingType : intersectingTypes)
+							if (TypeBinding.equalsEquals(intersectingType, this))
 								return true;
 					}
 					if (TypeBinding.equalsEquals(otherBound, this))
@@ -1349,8 +1365,8 @@ public boolean isTypeArgumentContainedBy(TypeBinding otherType) {
 				case Wildcard.SUPER:
 					if (otherBound instanceof IntersectionTypeBinding18) {
 						TypeBinding [] intersectingTypes = ((IntersectionTypeBinding18) otherBound).intersectingTypes;
-						for (int i = 0, length = intersectingTypes.length; i < length; i++)
-							if (TypeBinding.equalsEquals(intersectingTypes[i], this))
+						for (TypeBinding intersectingType : intersectingTypes)
+							if (TypeBinding.equalsEquals(intersectingType, this))
 								return true;
 					}
 					if (TypeBinding.equalsEquals(otherBound, this))
@@ -1581,7 +1597,7 @@ public char[] qualifiedPackageName() {
 /**
  * Answer the source name for the type.
  * In the case of member types, as the qualified name from its top level type.
- * For example, for a member type N defined inside M & A: "A.M.N".
+ * For example, for a member type N defined inside {@code M & A: "A.M.N"}.
  */
 
 public abstract char[] qualifiedSourceName();
@@ -1599,8 +1615,7 @@ public void setTypeAnnotations(AnnotationBinding[] annotations, boolean evalNull
 		return;
 	this.typeAnnotations = annotations;
 	if (evalNullAnnotations) {
-		for (int i = 0, length = annotations.length; i < length; i++) {
-			AnnotationBinding annotation = annotations[i];
+		for (AnnotationBinding annotation : annotations) {
 			if (annotation != null) {
 				if (annotation.type.hasNullBit(TypeIds.BitNullableAnnotation))
 					this.tagBits |= TagBits.AnnotationNullable | TagBits.HasNullTypeAnnotation;
@@ -1619,7 +1634,7 @@ public char [] signableName() {
 
 /**
  * Answer the receiver classfile signature.
- * Arrays & base types do not distinguish between signature() & constantPoolName().
+ * Arrays and base types do not distinguish between signature() and constantPoolName().
  * NOTE: This method should only be used during/after code gen.
  */
 public char[] signature() {

@@ -31,30 +31,31 @@ import org.eclipse.jdt.internal.compiler.lookup.Scope;
 import org.eclipse.jdt.internal.compiler.lookup.Substitution;
 import org.eclipse.jdt.internal.compiler.lookup.TypeBinding;
 import org.eclipse.jdt.internal.compiler.lookup.TypeVariableBinding;
+import org.eclipse.jdt.internal.core.util.DeduplicationUtil;
 import org.eclipse.jdt.internal.core.util.MementoTokenizer;
 import org.eclipse.jdt.internal.core.util.Util;
 
 public class LambdaExpression extends SourceType {
 
-	SourceTypeElementInfo elementInfo;
-	LambdaMethod lambdaMethod;
+	private final SourceTypeElementInfo elementInfo;
+	protected LambdaMethod lambdaMethod;
 
 	// These fields could be materialized from elementInfo, but for ease of use stashed here
-	protected int sourceStart;
-	protected int sourceEnd;
-	protected int arrowPosition;
-	protected String interphase;
+	protected final int sourceStart;
+	protected final int sourceEnd;
+	protected final int arrowPosition;
+	protected final String interphase;
 
 
 	// Construction from AST node
 	LambdaExpression(JavaElement parent, org.eclipse.jdt.internal.compiler.ast.LambdaExpression lambdaExpression) {
-		super(parent, new String(CharOperation.NO_CHAR));
+		super(parent, org.eclipse.jdt.internal.compiler.util.Util.EMPTY_STRING);
 		this.sourceStart = lambdaExpression.sourceStart;
 		this.sourceEnd = lambdaExpression.sourceEnd;
 		this.arrowPosition = lambdaExpression.arrowPosition;
 
 		TypeBinding supertype = findLambdaSuperType(lambdaExpression);
-		this.interphase = new String(CharOperation.replaceOnCopy(supertype.genericTypeSignature(), '/', '.'));
+		this.interphase = DeduplicationUtil.toString(CharOperation.replaceOnCopy(supertype.genericTypeSignature(), '/', '.'));
 		this.elementInfo = makeTypeElementInfo(this, this.interphase, this.sourceStart, this.sourceEnd, this.arrowPosition);
 		this.lambdaMethod = LambdaFactory.createLambdaMethod(this, lambdaExpression);
 		this.elementInfo.children = new IJavaElement[] { this.lambdaMethod };
@@ -99,23 +100,23 @@ public class LambdaExpression extends SourceType {
 
 	// Construction from memento
 	LambdaExpression(JavaElement parent, String interphase, int sourceStart, int sourceEnd, int arrowPosition) {
-		super(parent, new String(CharOperation.NO_CHAR));
+		super(parent, org.eclipse.jdt.internal.compiler.util.Util.EMPTY_STRING);
 		this.sourceStart = sourceStart;
 		this.sourceEnd = sourceEnd;
 		this.arrowPosition = arrowPosition;
 		this.interphase = interphase;
-		this.elementInfo = makeTypeElementInfo(this, interphase, this.sourceStart = sourceStart, sourceEnd, arrowPosition);
+		this.elementInfo = makeTypeElementInfo(this, interphase, sourceStart, sourceEnd, arrowPosition);
 		// Method is in the process of being fabricated, will be attached shortly.
 	}
 
 	// Construction from subtypes.
 	LambdaExpression(JavaElement parent, String interphase, int sourceStart, int sourceEnd, int arrowPosition, LambdaMethod lambdaMethod) {
-		super(parent, new String(CharOperation.NO_CHAR));
+		super(parent, org.eclipse.jdt.internal.compiler.util.Util.EMPTY_STRING);
 		this.sourceStart = sourceStart;
 		this.sourceEnd = sourceEnd;
 		this.arrowPosition = arrowPosition;
 		this.interphase = interphase;
-		this.elementInfo = makeTypeElementInfo(this, interphase, this.sourceStart = sourceStart, sourceEnd, arrowPosition);
+		this.elementInfo = makeTypeElementInfo(this, interphase, sourceStart, sourceEnd, arrowPosition);
 		this.elementInfo.children = new IJavaElement[] { this.lambdaMethod = lambdaMethod };
 	}
 
@@ -134,8 +135,7 @@ public class LambdaExpression extends SourceType {
 		elementInfo.setSuperclassName(null);
 		elementInfo.addCategories(handle, null);
 
-		JavaModelManager manager = JavaModelManager.getJavaModelManager();
-		char[][] superinterfaces = new char [][] { manager.intern(Signature.toString(interphase).toCharArray()) }; // drops marker interfaces - to fix.
+		char[][] superinterfaces = new char [][] { DeduplicationUtil.intern(Signature.toString(interphase).toCharArray()) }; // drops marker interfaces - to fix.
 		elementInfo.setSuperInterfaceNames(superinterfaces);
 		return elementInfo;
 	}
@@ -153,8 +153,7 @@ public class LambdaExpression extends SourceType {
 		   This results in spurious failures. See JavaSearchBugs8Tests.testBug400905_0021()
 		   For now exclude the working copy owner and compare
 		*/
-		if (o instanceof LambdaExpression) {
-			LambdaExpression that = (LambdaExpression) o;
+		if (o instanceof LambdaExpression that) {
 			if (this.sourceStart != that.sourceStart)
 				return false;
 			ITypeRoot thisTR = this.getTypeRoot();
@@ -165,12 +164,12 @@ public class LambdaExpression extends SourceType {
 	}
 
 	@Override
-	public int hashCode() {
-		return Util.combineHashCodes(super.hashCode(), this.sourceStart);
+	protected int calculateHashCode() {
+		return Util.combineHashCodes(super.calculateHashCode(), this.sourceStart);
 	}
 
 	@Override
-	public Object getElementInfo(IProgressMonitor monitor) throws JavaModelException {
+	public SourceTypeElementInfo getElementInfo(IProgressMonitor monitor) throws JavaModelException {
 		return this.elementInfo;
 	}
 
@@ -257,9 +256,8 @@ public class LambdaExpression extends SourceType {
 	}
 
 	@Override
-	public JavaElement resolved(Binding binding) {
-		ResolvedLambdaExpression resolvedHandle = new ResolvedLambdaExpression(this.getParent(), this, new String(binding.computeUniqueKey()));
-		return resolvedHandle;
+	public ResolvedLambdaExpression resolved(Binding binding) {
+		return new ResolvedLambdaExpression(this.getParent(), this, DeduplicationUtil.toString(binding.computeUniqueKey()));
 	}
 
 	public IMethod getMethod() {
@@ -280,7 +278,7 @@ public class LambdaExpression extends SourceType {
 	public void toStringName(StringBuilder buffer) {
 		super.toStringName(buffer);
 		buffer.append("<lambda #"); //$NON-NLS-1$
-		buffer.append(this.occurrenceCount);
+		buffer.append(this.getOccurrenceCount());
 		buffer.append(">"); //$NON-NLS-1$
 	}
 

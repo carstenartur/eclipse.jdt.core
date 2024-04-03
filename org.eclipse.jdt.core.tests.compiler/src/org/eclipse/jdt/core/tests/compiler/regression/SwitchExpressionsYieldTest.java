@@ -6757,4 +6757,109 @@ public class SwitchExpressionsYieldTest extends AbstractRegressionTest {
 				+ "BLAH\n"
 				+ "Done");
 	}
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/377
+	// [switch-expression] Invalid compiler error with switch expression
+	public void testGH377() {
+		if (this.complianceLevel < ClassFileConstants.JDK16)
+			return;
+		this.runConformTest(
+				new String[] {
+				"X.java",
+				"""
+				public class X {
+
+				  enum TestEnum {
+				    A, B;
+				  }
+
+				  @SuppressWarnings("unused")
+				  private int switcher(final TestEnum e) throws Exception {
+				    return switch (e) {
+				      case A -> 0;
+				      case B -> {
+				        try {
+				          yield 1;
+				        } finally {
+				          throwingFn();
+				        }
+				      }
+				    };
+				  }
+
+				  private void throwingFn() throws Exception {}
+
+				  public static void main(String [] args) throws Exception {
+					  System.out.println("Switcher :" + new X().switcher(TestEnum.A));
+					  System.out.println("Switcher :" + new X().switcher(TestEnum.B));
+				  }
+			    }
+				"""
+				},
+				"Switcher :0\n"
+				+ "Switcher :1");
+	}
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/2231
+	// [Switch-Expression] Assertion failure compiling array access + switch expressions with try blocks
+	public void testIssue2231() {
+		if (this.complianceLevel < ClassFileConstants.JDK21)
+			return;
+		this.runConformTest(
+				new String[] {
+				"X.java",
+				"""
+				public class X {
+					public static void foo(String... ss) {
+						System.out.println("Entry = " + switch(ss) {
+															case null -> "None";
+															case String [] s when s.length == 0 -> "none";
+															default ->  {
+																try {
+																	yield ss[0];
+																} finally {
+
+																}
+															}
+						});
+					}
+
+					public static void main(String[] args) {
+						foo("Hello");
+					}
+				}
+				"""
+				},
+				"Entry = Hello");
+	}
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/2231
+	// [Switch-Expression] Assertion failure compiling array access + switch expressions with try blocks
+	public void testIssue2231_2() {
+		if (this.complianceLevel < ClassFileConstants.JDK21)
+			return;
+		this.runConformTest(
+				new String[] {
+				"X.java",
+				"""
+				public class X {
+					public static void foo(String [] ss) {
+						System.out.println("Entry = " + switch(ss) {
+															case null -> "None";
+															case String [] s when s.length == 0 -> "none";
+															default ->  {
+																try {
+																	yield ss[0];
+																} finally {
+
+																}
+															}
+						});
+					}
+
+					public static void main(String[] args) {
+						foo(new String [] { "Hello" });
+					}
+				}
+				"""
+				},
+				"Entry = Hello");
+	}
 }

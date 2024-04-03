@@ -260,7 +260,7 @@ public class InternalCompletionProposal extends CompletionProposal {
 							// map source and try to find parameter names
 							if(paramNames == null) {
 								if (!packageFragmentRoot.isArchive()) this.completionEngine.openedBinaryTypes++;
-								IBinaryType info = (IBinaryType) ((BinaryType) type).getElementInfo();
+								IBinaryType info = ((BinaryType) type).getElementInfo();
 								char[] source = mapper.findSource(type, info);
 								if (source != null){
 									mapper.mapSource((NamedMember) type, source, info);
@@ -593,7 +593,7 @@ public class InternalCompletionProposal extends CompletionProposal {
 	@Override
 	public void setRelevance(int rating) {
 		if (rating <= 0) {
-			throw new IllegalArgumentException();
+			throw new IllegalArgumentException("rating <=0: " + rating); //$NON-NLS-1$
 		}
 		this.relevance = rating;
 	}
@@ -655,7 +655,6 @@ public class InternalCompletionProposal extends CompletionProposal {
 	 * of the method or constructor being proposed</li>
 	 * </ul>
 	 * For other kinds of completion proposals, this method returns <code>null</code>.
-	 * </p>
 	 *
 	 * @return the binding corresponding to this proposal (if available), or <code>null</code> if none
 	 */

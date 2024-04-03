@@ -124,9 +124,10 @@ public final class Messages {
 	public static String sealed_types;
 	public static String pattern_matching_switch;
 	public static String record_patterns;
-	public static String unnammed_patterns_and_vars;
-	public static String unnamed_classes_and_instance_main_methods;
+	public static String unnamed_patterns_and_vars;
+	public static String implicit_classes_and_instance_main_methods;
 	public static String string_templates;
+	public static String statements_before_super;
 
 	static {
 		initializeMessages(BUNDLE_NAME, Messages.class);
@@ -236,8 +237,7 @@ public final class Messages {
 		final String[] variants = buildVariants(bundleName);
 		// search the dirs in reverse order so the cascading defaults is set correctly
 		for (int i = variants.length; --i >= 0;) {
-			try (InputStream input = (loader == null) ? ClassLoader.getSystemResourceAsStream(variants[i])
-					: loader.getResourceAsStream(variants[i])) {
+			try (InputStream input = createInputStream(loader, variants[i])) {
 				if (input == null) {
 					continue;
 				}
@@ -247,5 +247,10 @@ public final class Messages {
 				// ignore
 			}
 		}
+	}
+
+	private static InputStream createInputStream(final ClassLoader loader, String variant) {
+		return (loader == null) ? ClassLoader.getSystemResourceAsStream(variant)
+				: loader.getResourceAsStream(variant);
 	}
 }

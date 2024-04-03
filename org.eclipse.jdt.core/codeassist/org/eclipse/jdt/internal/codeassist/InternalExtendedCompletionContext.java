@@ -43,6 +43,7 @@ import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
 import org.eclipse.jdt.internal.compiler.ast.TypeParameter;
 import org.eclipse.jdt.internal.compiler.ast.TypeReference;
 import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
+import org.eclipse.jdt.internal.compiler.env.IElementInfo;
 import org.eclipse.jdt.internal.compiler.env.ITypeAnnotationWalker;
 import org.eclipse.jdt.internal.compiler.impl.ReferenceContext;
 import org.eclipse.jdt.internal.compiler.lookup.BinaryTypeBinding;
@@ -68,9 +69,9 @@ import org.eclipse.jdt.internal.compiler.util.ObjectVector;
 import org.eclipse.jdt.internal.core.CompilationUnitElementInfo;
 import org.eclipse.jdt.internal.core.JavaElement;
 import org.eclipse.jdt.internal.core.LocalVariable;
+import org.eclipse.jdt.internal.core.util.DeduplicationUtil;
 import org.eclipse.jdt.internal.core.util.Util;
 
-@SuppressWarnings({"rawtypes"})
 public class InternalExtendedCompletionContext {
 	private static Util.BindingsToNodesMap EmptyNodeMap = new Util.BindingsToNodesMap() {
 		@Override
@@ -135,9 +136,9 @@ public class InternalExtendedCompletionContext {
 			HashMap<JavaElement, Binding> handleToBinding = new HashMap<>();
 			HashMap<Binding, JavaElement> bindingToHandle = new HashMap<>();
 			HashMap<ASTNode, JavaElement> nodeWithProblemToHandle = new HashMap<>();
-			HashMap<ICompilationUnit, CompilationUnitElementInfo> handleToInfo = new HashMap<>();
+			Map<IJavaElement, IElementInfo> handleToInfo = new HashMap<>();
 
-			org.eclipse.jdt.core.ICompilationUnit handle = new AssistCompilationUnit(original, this.owner, handleToBinding, handleToInfo);
+			AssistCompilationUnit handle = new AssistCompilationUnit(original, this.owner, handleToBinding, handleToInfo);
 			CompilationUnitElementInfo info = new CompilationUnitElementInfo();
 
 			handleToInfo.put(handle, info);
@@ -165,7 +166,7 @@ public class InternalExtendedCompletionContext {
 					this.compilationUnitDeclaration.sourceEnd,
 					false,
 					this.parser.sourceEnds,
-					new HashMap());
+					new HashMap<>());
 
 			this.bindingsToHandles = bindingToHandle;
 			this.nodesWithProblemsToHandles = nodeWithProblemToHandle;
@@ -282,7 +283,7 @@ public class InternalExtendedCompletionContext {
 
 		return new LocalVariable(
 				parent,
-				new String(local.name),
+				DeduplicationUtil.toString(local.name),
 				local.declarationSourceStart,
 				local.declarationSourceEnd,
 				local.sourceStart,
@@ -849,10 +850,9 @@ public class InternalExtendedCompletionContext {
 
 		// search in static import
 		ImportBinding[] importBindings = scope.compilationUnitScope().imports;
-		for (int i = 0; i < importBindings.length; i++) {
-			ImportBinding importBinding = importBindings[i];
+		for (ImportBinding importBinding : importBindings) {
 			if(importBinding.isValidBinding() && importBinding.isStatic()) {
-				Binding binding = importBinding.resolvedImport;
+				Binding binding = importBinding.getResolvedImport();
 				if(binding != null && binding.isValidBinding()) {
 					if(importBinding.onDemand) {
 						if((binding.kind() & Binding.TYPE) != 0) {
@@ -934,9 +934,9 @@ public class InternalExtendedCompletionContext {
 			// the erasure must be used because guessedType can be a RawTypeBinding
 			guessedType = guessedType.erasure();
 			TypeVariableBinding[] typeVars = guessedType.typeVariables();
-			for (int i = 0; i < parameterTypes.length; i++) {
-				for (int j = 0; j < typeVars.length; j++) {
-					if (CharOperation.equals(parameterTypes[i].toCharArray(), typeVars[j].sourceName))
+			for (String parameterType : parameterTypes) {
+				for (TypeVariableBinding typeVar : typeVars) {
+					if (CharOperation.equals(parameterType.toCharArray(), typeVar.sourceName))
 						return false;
 				}
 			}
@@ -956,9 +956,9 @@ public class InternalExtendedCompletionContext {
 		// Next, find out whether any of the constructor parameters are the same as one of the
 		// class type variables. If yes, diamond cannot be used.
 		if (typeVariables != null) {
-			for (int i = 0; i < parameterTypes.length; i++) {
-				for (int j = 0; j < typeVariables.length; j++) {
-					if (CharOperation.equals(parameterTypes[i].toCharArray(), typeVariables[j]))
+			for (String parameterType : parameterTypes) {
+				for (char[] typeVariable : typeVariables) {
+					if (CharOperation.equals(parameterType.toCharArray(), typeVariable))
 						return false;
 				}
 			}

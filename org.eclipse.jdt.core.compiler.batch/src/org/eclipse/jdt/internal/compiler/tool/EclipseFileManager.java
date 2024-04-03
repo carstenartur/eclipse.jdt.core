@@ -163,7 +163,7 @@ public class EclipseFileManager implements StandardJavaFileManager {
 				}
 			}
 		} else if (isArchive(file)) {
-			// @SuppressWarnings("resource") // cached archive is closed in EclipseFileManager.close()
+			@SuppressWarnings("resource") // cached archive is closed in EclipseFileManager.close()
 			Archive archive = this.getArchive(file);
 			if (archive != Archive.UNKNOWN_ARCHIVE) {
 				String key = normalizedPackageName;
@@ -231,11 +231,11 @@ public class EclipseFileManager implements StandardJavaFileManager {
 	private Iterable<? extends File> concatFiles(Iterable<? extends File> iterable, Iterable<? extends File> iterable2) {
 		ArrayList<File> list = new ArrayList<>();
 		if (iterable2 == null) return iterable;
-		for (Iterator<? extends File> iterator = iterable.iterator(); iterator.hasNext(); ) {
-			list.add(iterator.next());
+		for (File file : iterable) {
+			list.add(file);
 		}
-		for (Iterator<? extends File> iterator = iterable2.iterator(); iterator.hasNext(); ) {
-			list.add(iterator.next());
+		for (File file : iterable2) {
+			list.add(file);
 		}
 		return list;
 	}
@@ -256,6 +256,7 @@ public class EclipseFileManager implements StandardJavaFileManager {
 		return (JrtFileSystem) getArchive(f);
 	}
 
+	@SuppressWarnings("resource") // Archive is returned to caller
 	private Archive getArchive(File f) {
 		// check the archive (jar/zip) cache
 		Archive existing = this.archivesCache.get(f);
@@ -442,7 +443,7 @@ public class EclipseFileManager implements StandardJavaFileManager {
 		return null;
 	}
 
-	// @SuppressWarnings("resource") // cached archive is closed in EclipseFileManager.close()
+	@SuppressWarnings("resource") // cached archive is closed in EclipseFileManager.close()
 	private ArchiveFileObject getFileObject(File archiveFile, String normalizedFileName) {
 		Archive archive = getArchive(archiveFile);
 		if (archive == Archive.UNKNOWN_ARCHIVE) {
@@ -454,7 +455,7 @@ public class EclipseFileManager implements StandardJavaFileManager {
 		return null;
 	}
 
-	// @SuppressWarnings("resource") // cached archive is closed in EclipseFileManager.close()
+	@SuppressWarnings("resource") // cached archive is closed in EclipseFileManager.close()
 	private Boolean containsFileObject(File archiveFile, String normalizedFileName) {
 		Archive archive = getArchive(archiveFile);
 		if (archive == Archive.UNKNOWN_ARCHIVE) {
@@ -1017,12 +1018,12 @@ public class EclipseFileManager implements StandardJavaFileManager {
 			Iterable<? extends File> iterable2) {
 		if (iterable2 == null) return iterable;
 		ArrayList<File> list = new ArrayList<>();
-		for (Iterator<? extends File> iterator = iterable2.iterator(); iterator.hasNext(); ) {
-			list.add(iterator.next());
+		for (File file : iterable2) {
+			list.add(file);
 		}
 		if (iterable != null) {
-			for (Iterator<? extends File> iterator = iterable.iterator(); iterator.hasNext(); ) {
-				list.add(iterator.next());
+			for (File file : iterable) {
+				list.add(file);
 			}
 		}
 		return list;
@@ -1038,8 +1039,7 @@ public class EclipseFileManager implements StandardJavaFileManager {
 		if (location.isOutputLocation() && files != null) {
 			// output location
 			int count = 0;
-			for (Iterator<? extends File> iterator = files.iterator(); iterator.hasNext(); ) {
-				iterator.next();
+			for (@SuppressWarnings("unused") File file : files) {
 				count++;
 			}
 			if (count != 1) {

@@ -74,8 +74,7 @@ public class Clinit extends AbstractMethodDeclaration {
 			// check missing blank final field initializations
 			flowInfo = flowInfo.mergedWith(staticInitializerFlowContext.initsOnReturn);
 			FieldBinding[] fields = this.scope.enclosingSourceType().fields();
-			for (int i = 0, count = fields.length; i < count; i++) {
-				FieldBinding field = fields[i];
+			for (FieldBinding field : fields) {
 				if (field.isStatic()) {
 					if (!flowInfo.isDefinitelyAssigned(field)) {
 						if (field.isFinal()) {
@@ -102,7 +101,7 @@ public class Clinit extends AbstractMethodDeclaration {
 	}
 
 	/**
-	 * Bytecode generation for a <clinit> method
+	 * Bytecode generation for a {@code <clinit>} method
 	 *
 	 * @param classScope org.eclipse.jdt.internal.compiler.lookup.ClassScope
 	 * @param classFile org.eclipse.jdt.internal.compiler.codegen.ClassFile
@@ -191,6 +190,7 @@ public class Clinit extends AbstractMethodDeclaration {
 
 		codeStream.reset(this, classFile);
 		TypeDeclaration declaringType = classScope.referenceContext;
+		codeStream.pushPatternAccessTrapScope(this.scope);
 
 		// initialize local positions - including initializer scope.
 		MethodScope staticInitializerScope = declaringType.staticInitializerScope;
@@ -209,7 +209,6 @@ public class Clinit extends AbstractMethodDeclaration {
 			codeStream.ifne(falseLabel);
 			codeStream.iconst_1();
 			BranchLabel jumpLabel = new BranchLabel(codeStream);
-			codeStream.decrStackSize(1);
 			codeStream.goto_(jumpLabel);
 			falseLabel.place();
 			codeStream.iconst_0();
@@ -255,8 +254,7 @@ public class Clinit extends AbstractMethodDeclaration {
 					}
 				}
 			} else if (fieldDeclarations != null) {
-				for (int i = 0, max = fieldDeclarations.length; i < max; i++) {
-					FieldDeclaration fieldDecl = fieldDeclarations[i];
+				for (FieldDeclaration fieldDecl : fieldDeclarations) {
 					if (fieldDecl.isStatic()) {
 						if (fieldDecl.getKind() == AbstractVariableDeclaration.ENUM_CONSTANT) {
 							fieldDecl.generateCode(staticInitializerScope, codeStream);
@@ -272,8 +270,7 @@ public class Clinit extends AbstractMethodDeclaration {
 			codeStream.anewarray(declaringType.binding);
 			if (enumCount > 0) {
 				if (fieldDeclarations != null) {
-					for (int i = 0, max = fieldDeclarations.length; i < max; i++) {
-						FieldDeclaration fieldDecl = fieldDeclarations[i];
+					for (FieldDeclaration fieldDecl : fieldDeclarations) {
 						// $VALUES[i] = <enum-constant-i>
 						if (fieldDecl.getKind() == AbstractVariableDeclaration.ENUM_CONSTANT) {
 							codeStream.dup();
@@ -313,8 +310,7 @@ public class Clinit extends AbstractMethodDeclaration {
 			}
 		} else {
 			if (fieldDeclarations != null) {
-				for (int i = 0, max = fieldDeclarations.length; i < max; i++) {
-					FieldDeclaration fieldDecl = fieldDeclarations[i];
+				for (FieldDeclaration fieldDecl : fieldDeclarations) {
 					switch (fieldDecl.getKind()) {
 						case AbstractVariableDeclaration.INITIALIZER :
 							if (!fieldDecl.isStatic())
@@ -353,6 +349,8 @@ public class Clinit extends AbstractMethodDeclaration {
 					codeStream.recordPositionsFrom(before, sourcePosition);
 				}
 			}
+			// See https://github.com/eclipse-jdt/eclipse.jdt.core/issues/1796#issuecomment-1933458054
+			codeStream.handleRecordAccessorExceptions(this.scope);
 			// Record the end of the clinit: point to the declaration of the class
 			codeStream.recordPositionsFrom(0, declaringType.sourceStart);
 			classFile.completeCodeAttributeForClinit(codeAttributeOffset, classScope);

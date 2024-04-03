@@ -38,10 +38,14 @@ public abstract class NamedMember extends Member {
 	 * This element's name, or an empty <code>String</code> if this
 	 * element does not have a name.
 	 */
-	protected String name;
+	final protected String name;
 
 	public NamedMember(JavaElement parent, String name) {
 		super(parent);
+		this.name = name;
+	}
+	public NamedMember(JavaElement parent, String name, int occurrenceCount) {
+		super(parent, occurrenceCount);
 		this.name = name;
 	}
 
@@ -127,8 +131,8 @@ public abstract class NamedMember extends Member {
 		// parameters
 		key.append('(');
 		String[] parameters = method.getParameterTypes();
-		for (int i = 0, length = parameters.length; i < length; i++)
-			key.append(parameters[i].replace('.', '/'));
+		for (String parameter : parameters)
+			key.append(parameter.replace('.', '/'));
 		key.append(')');
 
 		// return type
@@ -257,7 +261,7 @@ public abstract class NamedMember extends Member {
 	 * @return the occurrence count for this element in the form of String
 	 */
 	protected String getOccurrenceCountSignature() {
-		return Integer.toString(this.occurrenceCount);
+		return Integer.toString(this.getOccurrenceCount());
 	}
 	protected ITypeParameter[] getTypeParameters() throws JavaModelException {
 		return null;

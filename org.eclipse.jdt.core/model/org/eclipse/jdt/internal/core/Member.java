@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2021 IBM Corporation and others.
+ * Copyright (c) 2000, 2024 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -16,6 +16,7 @@ package org.eclipse.jdt.internal.core;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 import org.eclipse.jdt.core.*;
 import org.eclipse.jdt.core.compiler.CharOperation;
@@ -37,6 +38,9 @@ public abstract class Member extends SourceRefElement implements IMember {
 protected Member(JavaElement parent) {
 	super(parent);
 }
+protected Member(JavaElement parent, int occurrenceCount) {
+	super(parent, occurrenceCount);
+}
 protected static boolean areSimilarMethods(
 	String name1, String[] params1,
 	String name2, String[] params2,
@@ -46,13 +50,26 @@ protected static boolean areSimilarMethods(
 		int params1Length = params1.length;
 		if (params1Length == params2.length) {
 			for (int i = 0; i < params1Length; i++) {
-				String simpleName1 =
-					simpleNames1 == null ?
-						Signature.getSimpleName(Signature.toString(Signature.getTypeErasure(params1[i]))) :
-						simpleNames1[i];
-				String simpleName2 = Signature.getSimpleName(Signature.toString(Signature.getTypeErasure(params2[i])));
-				if (!simpleName1.equals(simpleName2)) {
-					return false;
+				String typeErasureParam1Signature = Signature.getTypeErasure(params1[i]);
+				String typeErasureParam2Signature = Signature.getTypeErasure(params2[i]);
+				String param1Qualifier = Signature.getSignatureQualifier(typeErasureParam1Signature);
+				String param2Qualifier = Signature.getSignatureQualifier(typeErasureParam2Signature);
+				if (!param1Qualifier.isEmpty() && !param2Qualifier.isEmpty()) {
+					// both qualified -> compare qualified type
+					String qualifiedType1 = Signature.toString(typeErasureParam1Signature);
+					String qualifiedType2 = Signature.toString(typeErasureParam2Signature);
+					if (!Objects.equals(qualifiedType1, qualifiedType2)) {
+						return false;
+					}
+				} else { // at least 1 unqualified name -> only compare simple names
+					String simpleName1 =
+						simpleNames1 == null ?
+							Signature.getSimpleName(Signature.toString(typeErasureParam1Signature)) :
+							simpleNames1[i];
+					String simpleName2 = Signature.getSimpleName(Signature.toString(typeErasureParam2Signature));
+					if (!simpleName1.equals(simpleName2)) {
+						return false;
+					}
 				}
 			}
 			return true;
@@ -106,8 +123,7 @@ public static IMethod[] findMethods(IMethod method, IMethod[] methods) {
 		simpleNames[i] = Signature.getSimpleName(Signature.toString(erasure));
 	}
 	ArrayList list = new ArrayList();
-	for (int i = 0, length = methods.length; i < length; i++) {
-		IMethod existingMethod = methods[i];
+	for (IMethod existingMethod : methods) {
 		if (areSimilarMethods(
 				elementName,
 				parameters,
@@ -215,7 +231,7 @@ public IJavaElement getHandleFromMemento(String token, MementoTokenizer memento,
 				typeName = ""; //$NON-NLS-1$
 				token = null;
 			}
-			JavaElement type = (JavaElement)getType(typeName, 1);
+			JavaElement type = getType(typeName, 1);
 			if (token == null) {
 				return type.getHandleFromMemento(memento, workingCopyOwner);
 			} else {
@@ -367,13 +383,11 @@ public ISourceRange getNameRange() throws JavaModelException {
  * @see IMember
  */
 @Override
-public IType getType(String typeName, int count) {
+public SourceType getType(String typeName, int count) {
 	if (isBinary()) {
 		throw new IllegalArgumentException("Not a source member " + toStringWithAncestors()); //$NON-NLS-1$
 	} else {
-		SourceType type = new SourceType(this, typeName);
-		type.occurrenceCount = count;
-		return type;
+		return new SourceType(this, typeName, count);
 	}
 }
 /**
@@ -412,7 +426,7 @@ protected boolean isMainMethod(IMethod method) throws JavaModelException {
 
 protected boolean isMainMethodCandidate(IMethod method) throws JavaModelException {
 	Map<String, String> options = method.getJavaProject().getOptions(true);
-	if (JavaFeature.UNNAMMED_CLASSES_AND_INSTANCE_MAIN_METHODS.isSupported(
+	if (JavaFeature.IMPLICIT_CLASSES_AND_INSTANCE_MAIN_METHODS.isSupported(
 				options.get(JavaCore.COMPILER_CODEGEN_TARGET_PLATFORM),
 				JavaCore.ENABLED.equals(options.get(JavaCore.COMPILER_PB_ENABLE_PREVIEW_FEATURES)))) {
 		if ("main".equals(method.getElementName()) && Signature.SIG_VOID.equals(method.getReturnType())) { //$NON-NLS-1$

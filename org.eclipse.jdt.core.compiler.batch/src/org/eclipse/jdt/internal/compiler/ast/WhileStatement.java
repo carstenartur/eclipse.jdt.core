@@ -192,9 +192,6 @@ public class WhileStatement extends Statement {
 		if ((this.bits & IsReachable) == 0) {
 			return;
 		}
-		if (containsPatternVariable()) {
-			this.condition.addPatternVariables(currentScope, codeStream);
-		}
 		int pc = codeStream.position;
 		Constant cst = this.condition.optimizedBooleanConstant();
 		boolean isConditionOptimizedFalse = cst != Constant.NotAConstant && cst.booleanValue() == false;
@@ -210,9 +207,13 @@ public class WhileStatement extends Statement {
 		}
 
 		this.breakLabel.initialize(codeStream);
-
+		boolean conditionInjectsBindings = this.condition.bindingsWhenTrue().length > 0;
 		// generate condition
-		if (this.continueLabel == null) {
+		if (this.continueLabel == null || conditionInjectsBindings) {
+			if (this.continueLabel != null) {
+				this.continueLabel.initialize(codeStream);
+				this.continueLabel.place();
+			}
 			// no need to reverse condition
 			if (this.condition.constant == Constant.NotAConstant) {
 				this.condition.generateOptimizedBoolean(
@@ -243,6 +244,9 @@ public class WhileStatement extends Statement {
 				codeStream.addDefinitelyAssignedVariables(
 					currentScope,
 					this.condIfTrueInitStateIndex);
+				codeStream.removeNotDefinitelyAssignedVariables(
+						currentScope,
+						this.condIfTrueInitStateIndex);
 			}
 			actionLabel.place();
 			this.action.generateCode(currentScope, codeStream);
@@ -254,14 +258,19 @@ public class WhileStatement extends Statement {
 			actionLabel.place();
 		}
 		// output condition and branch back to the beginning of the repeated action
-		if (this.continueLabel != null) {
-			this.continueLabel.place();
-			this.condition.generateOptimizedBoolean(
-				currentScope,
-				codeStream,
-				actionLabel,
-				null,
-				true);
+		if (this.continueLabel != null || conditionInjectsBindings) {
+			if (conditionInjectsBindings) {
+				if (this.continueLabel != null)
+					codeStream.goto_(this.continueLabel);
+			} else {
+				this.continueLabel.place();
+				this.condition.generateOptimizedBoolean(
+					currentScope,
+					codeStream,
+					actionLabel,
+					null,
+					true);
+			}
 		}
 
 		// May loose some local variable initializations : affecting the local variable attributes
@@ -275,30 +284,12 @@ public class WhileStatement extends Statement {
 
 	@Override
 	public void resolve(BlockScope scope) {
-		if (containsPatternVariable()) {
-			this.condition.collectPatternVariablesToScope(null, scope);
-			LocalVariableBinding[] patternVariablesInTrueScope = this.condition.getPatternVariablesWhenTrue();
-			LocalVariableBinding[] patternVariablesInFalseScope = this.condition.getPatternVariablesWhenFalse();
 
-			TypeBinding type = this.condition.resolveTypeExpecting(scope, TypeBinding.BOOLEAN);
-			this.condition.computeConversion(scope, type, type);
-			if (this.action != null) {
-				this.action.resolveWithPatternVariablesInScope(patternVariablesInTrueScope, scope);
-				this.action.promotePatternVariablesIfApplicable(patternVariablesInFalseScope,
-						() -> !this.action.breaksOut(null));
-			}
-		} else {
-			TypeBinding type = this.condition.resolveTypeExpecting(scope, TypeBinding.BOOLEAN);
-			this.condition.computeConversion(scope, type, type);
-			if (this.action != null)
-				this.action.resolve(scope);
+		TypeBinding type = this.condition.resolveTypeExpecting(scope, TypeBinding.BOOLEAN);
+		this.condition.computeConversion(scope, type, type);
+		if (this.action != null) {
+			this.action.resolveWithBindings(this.condition.bindingsWhenTrue(), scope);
 		}
-
-	}
-
-	@Override
-	public boolean containsPatternVariable() {
-		return this.condition != null && this.condition.containsPatternVariable();
 	}
 
 	@Override
@@ -324,6 +315,11 @@ public class WhileStatement extends Statement {
 				this.action.traverse(visitor, blockScope);
 		}
 		visitor.endVisit(this, blockScope);
+	}
+
+	@Override
+	public LocalVariableBinding[] bindingsWhenComplete() {
+		return this.action != null && !this.action.breaksOut(null) ? this.condition.bindingsWhenFalse() : NO_VARIABLES;
 	}
 
 	@Override

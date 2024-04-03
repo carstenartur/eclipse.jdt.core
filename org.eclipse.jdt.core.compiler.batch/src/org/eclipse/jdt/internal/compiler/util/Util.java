@@ -22,7 +22,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
-import java.io.Writer;
+import java.io.StringWriter;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.Charset;
@@ -559,27 +559,10 @@ public class Util implements SuffixConstants {
 	}
 
 	public static CharSequence getStackTrace(Throwable exception) {
-		StringBuilder builder = new StringBuilder();
-		exception.printStackTrace(new PrintWriter(new Writer() {
-			@Override
-			public void write(char[] cbuf, int off, int len) throws IOException {
-				builder.append(cbuf, off, len);
-			}
-
-			@Override
-			public void write(String str, int off, int len) throws IOException {
-				builder.append(str, off, len);
-			}
-
-			@Override
-			public void flush() throws IOException { // nothing to do
-			}
-
-			@Override
-			public void close() throws IOException { // nothing to do
-			}
-		}));
-		return builder;
+		StringWriter out = new StringWriter();
+		PrintWriter s = new PrintWriter(out);
+		exception.printStackTrace(s);
+		return out.toString();
 	}
 
 	public static int getLineNumber(int position, int[] lineEnds, int g, int d) {
@@ -621,8 +604,8 @@ public class Util implements SuffixConstants {
 			return 0;
 		}
 		int result = 1;
-		for (int index = 0; index < array.length; index++) {
-			result = prime * result + (array[index] == null ? 0 : array[index].hashCode());
+		for (Object o : array) {
+			result = prime * result + (o == null ? 0 : o.hashCode());
 		}
 		return result;
 	}
@@ -770,8 +753,8 @@ public class Util implements SuffixConstants {
 			path = CharOperation.concat(path, new char[] {'*'}, '/');
 		}
 		if (exclusionPatterns != null) {
-			for (int i = 0, length = exclusionPatterns.length; i < length; i++) {
-				if (CharOperation.pathMatch(exclusionPatterns[i], path, true, '/')) {
+			for (char[] exclusionPattern : exclusionPatterns) {
+				if (CharOperation.pathMatch(exclusionPattern, path, true, '/')) {
 					return true;
 				}
 			}
@@ -990,8 +973,7 @@ public class Util implements SuffixConstants {
 			}
 			TypeBinding[] arguments = parameterizedTypeBinding.arguments;
 			if (arguments != null) {
-				for (int j = 0, max2 = arguments.length; j < max2; j++) {
-					TypeBinding argument = arguments[j];
+				for (TypeBinding argument : arguments) {
 					if (argument.isWildcard()) {
 						WildcardBinding wildcardBinding = (WildcardBinding) argument;
 						TypeBinding bound = wildcardBinding.bound;
@@ -1006,8 +988,7 @@ public class Util implements SuffixConstants {
 						}
 						ReferenceBinding[] superInterfaces = wildcardBinding.superInterfaces();
 						if (superInterfaces != null) {
-							for (int k = 0, max3 =  superInterfaces.length; k < max3; k++) {
-								ReferenceBinding superInterface = superInterfaces[k];
+							for (ReferenceBinding superInterface : superInterfaces) {
 								if ((superInterface.tagBits & TagBits.ContainsNestedTypeReferences) != 0) {
 									recordNestedType(classFile, superInterface);
 								}
@@ -1027,8 +1008,7 @@ public class Util implements SuffixConstants {
 			}
 			TypeBinding[] upperBounds = typeVariableBinding.otherUpperBounds();
 			if (upperBounds != null) {
-				for (int k = 0, max3 =  upperBounds.length; k < max3; k++) {
-					TypeBinding otherUpperBound = upperBounds[k];
+				for (TypeBinding otherUpperBound : upperBounds) {
 					if ((otherUpperBound.tagBits & TagBits.ContainsNestedTypeReferences) != 0) {
 						recordNestedType(classFile, otherUpperBound);
 					}
@@ -1134,11 +1114,10 @@ public class Util implements SuffixConstants {
 				}
 				File[][] systemLibrariesJars = Main.getLibrariesFiles(directoriesToCheck);
 				if (systemLibrariesJars != null) {
-					for (int i = 0, max = systemLibrariesJars.length; i < max; i++) {
-						File[] current = systemLibrariesJars[i];
+					for (File[] current : systemLibrariesJars) {
 						if (current != null) {
-							for (int j = 0, max2 = current.length; j < max2; j++) {
-								filePaths.add(current[j].getAbsolutePath());
+							for (File file : current) {
+								filePaths.add(file.getAbsolutePath());
 							}
 						}
 					}
@@ -1435,7 +1414,7 @@ public class Util implements SuffixConstants {
 	 * <pre>
 	 * TypeBoundSignature:
 	 *     <b>[-+]</b> TypeSignature <b>;</b>
-	 *     <b>*</b></b>
+	 *     <b>*</b>
 	 * </pre>
 	 *
 	 * @param string the signature string

@@ -94,10 +94,13 @@ import org.eclipse.jdt.internal.compiler.lookup.ImplicitNullAnnotationVerifier;
 import org.eclipse.jdt.internal.compiler.lookup.InferenceContext18;
 import org.eclipse.jdt.internal.compiler.lookup.InferenceVariable;
 import org.eclipse.jdt.internal.compiler.lookup.LocalVariableBinding;
+import org.eclipse.jdt.internal.compiler.lookup.LookupEnvironment;
 import org.eclipse.jdt.internal.compiler.lookup.MethodBinding;
+import org.eclipse.jdt.internal.compiler.lookup.MethodScope;
 import org.eclipse.jdt.internal.compiler.lookup.MissingTypeBinding;
 import org.eclipse.jdt.internal.compiler.lookup.ParameterizedGenericMethodBinding;
 import org.eclipse.jdt.internal.compiler.lookup.ParameterizedMethodBinding;
+import org.eclipse.jdt.internal.compiler.lookup.ParameterizedTypeBinding;
 import org.eclipse.jdt.internal.compiler.lookup.PolyParameterizedGenericMethodBinding;
 import org.eclipse.jdt.internal.compiler.lookup.PolyTypeBinding;
 import org.eclipse.jdt.internal.compiler.lookup.PolymorphicMethodBinding;
@@ -165,8 +168,7 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
 			}
 		} else if (this.arguments != null && this.arguments.length > 0 && FakedTrackingVariable.isAnyCloseable(this.arguments[0].resolvedType)) {
 			// Helper.closeMethod(closeable, ..)
-			for (int i=0; i<TypeConstants.closeMethods.length; i++) {
-				CloseMethodRecord record = TypeConstants.closeMethods[i];
+			for (CloseMethodRecord record : TypeConstants.closeMethods) {
 				if (CharOperation.equals(record.selector, this.selector)
 						&& CharOperation.equals(record.typeName, this.binding.declaringClass.compoundName))
 				{
@@ -836,8 +838,8 @@ public TypeBinding resolveType(BlockScope scope) {
 			}
 			if (this.argumentsHaveErrors) {
 				if (this.arguments != null) { // still attempt to resolve arguments
-					for (int i = 0, max = this.arguments.length; i < max; i++) {
-						this.arguments[i].resolveType(scope);
+					for (Expression argument : this.arguments) {
+						argument.resolveType(scope);
 					}
 				}
 				return null;
@@ -1015,6 +1017,15 @@ public TypeBinding resolveType(BlockScope scope) {
 				this.bits |= NeedReceiverGenericCast;
 			}
 		}
+		if (this.inPreConstructorContext && this.actualReceiverType != null &&
+				(this.receiver instanceof ThisReference thisReference && thisReference.isImplicitThis() ||
+				!(this.receiver instanceof ThisReference))) {
+			MethodScope ms = scope.methodScope();
+			MethodBinding method = ms != null ? ms.referenceMethodBinding() : null;
+			if (method != null && TypeBinding.equalsEquals(method.declaringClass, this.actualReceiverType)) {
+				scope.problemReporter().errorExpressionInPreConstructorContext(this);
+			}
+		}
 	} else {
 		// static message invoked through receiver? legal but unoptimal (optional warning).
 		if (this.binding.declaringClass.isInterface() && !((isTypeAccess() || this.receiver.isImplicitThis()) && TypeBinding.equalsEquals(this.binding.declaringClass, this.actualReceiverType))) {
@@ -1053,6 +1064,9 @@ public TypeBinding resolveType(BlockScope scope) {
 			returnType = returnType.capture(scope, this.sourceStart, this.sourceEnd);
 		}
 	}
+	if (scope.environment().usesNullTypeAnnotations()) {
+		returnType = handleNullnessCodePatterns(scope, returnType);
+	}
 	this.resolvedType = returnType;
 	if (this.receiver.isSuper() && compilerOptions.getSeverity(CompilerOptions.OverridingMethodWithoutSuperInvocation) != ProblemSeverities.Ignore) {
 		final ReferenceContext referenceContext = scope.methodScope().referenceContext;
@@ -1076,6 +1090,33 @@ public TypeBinding resolveType(BlockScope scope) {
 	return (this.resolvedType.tagBits & TagBits.HasMissingType) == 0
 				? this.resolvedType
 				: null;
+}
+
+protected TypeBinding handleNullnessCodePatterns(BlockScope scope, TypeBinding returnType) {
+	// j.u.s.Stream.filter() may modify nullness of stream elements:
+	if (this.binding.isWellknownMethod(TypeConstants.JAVA_UTIL_STREAM__STREAM, TypeConstants.FILTER)
+			&& returnType instanceof ParameterizedTypeBinding)
+	{
+		ParameterizedTypeBinding parameterizedType = (ParameterizedTypeBinding) returnType;
+		// filtering on Objects::nonNull?
+		if (this.arguments != null && this.arguments.length == 1) {
+			if (this.arguments[0] instanceof ReferenceExpression) {
+				MethodBinding argumentBinding = ((ReferenceExpression) this.arguments[0]).binding;
+				if (argumentBinding.isWellknownMethod(TypeIds.T_JavaUtilObjects, TypeConstants.NON_NULL))
+				{
+					// code pattern detected, now update the return type:
+					if (parameterizedType.arguments.length == 1) {
+						LookupEnvironment environment = scope.environment();
+						TypeBinding updatedTypeArgument = parameterizedType.arguments[0].withoutToplevelNullAnnotation();
+						updatedTypeArgument = environment.createNonNullAnnotatedType(updatedTypeArgument);
+						return environment.createParameterizedType(
+								parameterizedType.genericType(), new TypeBinding[] { updatedTypeArgument }, parameterizedType.enclosingType());
+					}
+				}
+			}
+		}
+	}
+	return returnType;
 }
 
 protected TypeBinding findMethodBinding(BlockScope scope) {
@@ -1236,8 +1277,8 @@ public void traverse(ASTVisitor visitor, BlockScope blockScope) {
 	if (visitor.visit(this, blockScope)) {
 		this.receiver.traverse(visitor, blockScope);
 		if (this.typeArguments != null) {
-			for (int i = 0, typeArgumentsLength = this.typeArguments.length; i < typeArgumentsLength; i++) {
-				this.typeArguments[i].traverse(visitor, blockScope);
+			for (TypeReference typeArgument : this.typeArguments) {
+				typeArgument.traverse(visitor, blockScope);
 			}
 		}
 		if (this.arguments != null) {

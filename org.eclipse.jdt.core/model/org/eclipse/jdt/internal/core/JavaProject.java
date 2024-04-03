@@ -34,6 +34,7 @@ import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
@@ -42,13 +43,10 @@ import java.util.stream.Collectors;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.ParserConfigurationException;
-import org.eclipse.core.resources.ICommand;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IFolder;
 import org.eclipse.core.resources.IMarker;
 import org.eclipse.core.resources.IProject;
-import org.eclipse.core.resources.IProjectDescription;
-import org.eclipse.core.resources.IProjectNature;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.resources.IWorkspace;
 import org.eclipse.core.resources.IWorkspaceRoot;
@@ -135,7 +133,7 @@ import org.xml.sax.SAXException;
 @SuppressWarnings({ "rawtypes", "unchecked" })
 public class JavaProject
 	extends Openable
-	implements IJavaProject, IProjectNature, SuffixConstants {
+	implements IJavaProject, SuffixConstants {
 
 	/**
 	 * Name of file containing project classpath
@@ -197,22 +195,13 @@ public class JavaProject
 	/**
 	 * The platform project this <code>IJavaProject</code> is based on
 	 */
-	protected IProject project;
+	protected final IProject project;
 
 	/**
 	 * Preferences listeners
 	 */
 	private IEclipsePreferences.INodeChangeListener preferencesNodeListener;
 	private IEclipsePreferences.IPreferenceChangeListener preferencesChangeListener;
-
-	/**
-	 * Constructor needed for <code>IProject.getNature()</code> and <code>IProject.addNature()</code>.
-	 *
-	 * @see #setProject(IProject)
-	 */
-	public JavaProject() {
-		super(null);
-	}
 
 	public JavaProject(IProject project, JavaModel parent) {
 		super(parent);
@@ -249,8 +238,8 @@ public class JavaProject
 		ClasspathResolutionBreakpointListener[] listeners = getBPListeners();
 		if (listeners == null)
 			return;
-		for (int j = 0, length = listeners.length; j < length; j++) {
-			listeners[j].breakpoint(bp);
+		for (ClasspathResolutionBreakpointListener listener : listeners) {
+			listener.breakpoint(bp);
 		}
 	}
 
@@ -410,11 +399,14 @@ public class JavaProject
 	 * @return boolean
 	 */
 	public static boolean hasJavaNature(IProject project) {
+		if (ExternalJavaProject.EXTERNAL_PROJECT_NAME.equals(project.getName())){
+			return true;
+		}
 		try {
-			return project.hasNature(JavaCore.NATURE_ID);
+			if (project.isOpen()) {
+				return project.hasNature(JavaCore.NATURE_ID);
+			}
 		} catch (CoreException e) {
-			if (ExternalJavaProject.EXTERNAL_PROJECT_NAME.equals(project.getName()))
-				return true;
 			// project does not exist or is not open
 		}
 		return false;
@@ -509,22 +501,7 @@ public class JavaProject
 		return markerMessage;
 	}
 
-	/**
-	 * Adds a builder to the build spec for the given project.
-	 */
-	protected void addToBuildSpec(String builderID) throws CoreException {
 
-		IProjectDescription description = this.project.getDescription();
-		int javaCommandIndex = getJavaCommandIndex(description.getBuildSpec());
-
-		if (javaCommandIndex == -1) {
-
-			// Add a Java command to the build spec
-			ICommand command = description.newCommand();
-			command.setBuilderName(builderID);
-			setJavaCommand(description, command);
-		}
-	}
 	/**
 	 * @see Openable
 	 */
@@ -589,8 +566,8 @@ public class JavaProject
 
 		IWorkspaceRoot workspaceRoot = ResourcesPlugin.getWorkspace().getRoot();
 		boolean isInitialProject = referringEntry == null;
-		for (int i = 0, length = resolvedClasspath.length; i < length; i++){
-			ClasspathEntry entry = (ClasspathEntry) resolvedClasspath[i];
+		for (IClasspathEntry cpe : resolvedClasspath) {
+			ClasspathEntry entry = (ClasspathEntry) cpe;
 			if (excludeTestCode && entry.isTest()) {
 				continue;
 			}
@@ -747,7 +724,7 @@ public class JavaProject
 			case IClasspathEntry.CPE_SOURCE :
 
 				if (projectPath.isPrefixOf(entryPath)){
-					Object target = JavaModel.getTarget(entryPath, true/*check existency*/);
+					Object target = JavaModel.getTarget(resolvedEntry, true/*check existency*/);
 					if (target == null) return;
 
 					if (target instanceof IFolder || target instanceof IProject){
@@ -760,17 +737,17 @@ public class JavaProject
 			case IClasspathEntry.CPE_LIBRARY :
 				if (referringEntry != null  && !resolvedEntry.isExported())
 					return;
-				Object target = JavaModel.getTarget(entryPath, true/*check existency*/);
+				Object target = JavaModel.getTarget(resolvedEntry, true/*check existency*/);
 				if (target == null)
 					return;
 
 				if (target instanceof IResource){
 					// internal target
 					root = getPackageFragmentRoot((IResource) target, entryPath, resolvedEntry.getExtraAttributes());
-				} else if (target instanceof File) {
+				} else if (target instanceof File tf) {
 					// external target
-					if (JavaModel.isFile(target)) {
-						if (JavaModel.isJimage((File) target)) {
+					if (JavaModel.isFile(tf)) {
+						if (JavaModel.isJimage(tf)) {
 							PerProjectInfo info = getPerProjectInfo();
 							ObjectVector imageRoots;
 							if (info.jrtRoots == null || !info.jrtRoots.containsKey(entryPath)) {
@@ -794,13 +771,13 @@ public class JavaProject
 								}
 							}
 							accumulatedRoots.addAll(imageRoots);
-						} else if (JavaModel.isJmod((File) target)) {
+						} else if (JavaModel.isJmod(tf)) {
 							root = new JModPackageFragmentRoot(entryPath, this, resolvedEntry.getExtraAttributes());
 						}
 						else {
 							root = new JarPackageFragmentRoot(null, entryPath, this, resolvedEntry.getExtraAttributes());
 						}
-					} else if (((File) target).isDirectory()) {
+					} else if ((tf).isDirectory()) {
 						root = new ExternalPackageFragmentRoot(entryPath, this);
 					}
 				}
@@ -1093,9 +1070,9 @@ public class JavaProject
 		if (referringEntry == null){
 			rootIDs.add(rootID());
 		}
-		for (int i = 0, length = resolvedClasspath.length; i < length; i++){
+		for (IClasspathEntry cpe : resolvedClasspath) {
 			computePackageFragmentRoots(
-				resolvedClasspath[i],
+				cpe,
 				accumulatedRoots,
 				rootIDs,
 				referringEntry,
@@ -1113,16 +1090,6 @@ public class JavaProject
 	public String computeSharedPropertyFileName(QualifiedName qName) {
 
 		return '.' + qName.getLocalName();
-	}
-
-	/**
-	 * Configure the project with Java nature.
-	 */
-	@Override
-	public void configure() throws CoreException {
-
-		// register Java builder
-		addToBuildSpec(JavaCore.BUILDER_ID);
 	}
 
 	/*
@@ -1145,9 +1112,7 @@ public class JavaProject
 		IPath innerMostOutput = output.isPrefixOf(fullPath) ? output : null;
 		IClasspathEntry innerMostEntry = null;
 		ExternalFoldersManager foldersManager = JavaModelManager.getExternalManager();
-		for (int j = 0, cpLength = classpath.length; j < cpLength; j++) {
-			IClasspathEntry entry = classpath[j];
-
+		for (IClasspathEntry entry : classpath) {
 			IPath entryPath = entry.getPath();
 			if (entry.getEntryKind() == IClasspathEntry.CPE_LIBRARY) {
 				IResource linkedFolder = foldersManager.getFolder(entryPath);
@@ -1158,7 +1123,7 @@ public class JavaProject
 					&& entryPath.isPrefixOf(fullPath)) {
 				innerMostEntry = entry;
 			}
-			IPath entryOutput = classpath[j].getOutputLocation();
+			IPath entryOutput = entry.getOutputLocation();
 			if (entryOutput != null && entryOutput.isPrefixOf(fullPath)) {
 				innerMostOutput = entryOutput;
 			}
@@ -1294,7 +1259,7 @@ public class JavaProject
 	 * Returns a new element info for this element.
 	 */
 	@Override
-	protected Object createElementInfo() {
+	protected JavaProjectElementInfo createElementInfo() {
 		return new JavaProjectElementInfo();
 	}
 
@@ -1388,20 +1353,6 @@ public class JavaProject
 	}
 
 	/**
-	/**
-	 * Removes the Java nature from the project.
-	 */
-	@Override
-	public void deconfigure() throws CoreException {
-
-		// deregister Java builder
-		removeFromBuildSpec(JavaCore.BUILDER_ID);
-
-		// remove .classpath file
-//		getProject().getFile(ClasspathHelper.CLASSPATH_FILENAME).delete(false, null);
-	}
-
-	/**
 	 * Returns a default class path.
 	 * This is the root of the project
 	 */
@@ -1427,8 +1378,8 @@ public class JavaProject
 		XMLWriter xmlWriter = new XMLWriter(writer, this, true/*print XML version*/);
 
 		xmlWriter.startTag(ClasspathEntry.TAG_CLASSPATH, indent);
-		for (int i = 0; i < classpath.length; ++i) {
-			((ClasspathEntry)classpath[i]).elementEncode(xmlWriter, this.project.getFullPath(), indent, true, unknownElements, false);
+		for (IClasspathEntry cpe : classpath) {
+			((ClasspathEntry)cpe).elementEncode(xmlWriter, this.project.getFullPath(), indent, true, unknownElements, false);
 		}
 
 		if (outputLocation != null) {
@@ -1441,8 +1392,8 @@ public class JavaProject
 		}
 
 		if (referencedEntries != null) {
-			for (int i = 0; i < referencedEntries.length; ++i) {
-				((ClasspathEntry) referencedEntries[i]).elementEncode(xmlWriter, this.project.getFullPath(), indent, true, unknownElements, true);
+			for (IClasspathEntry referencedEntry : referencedEntries) {
+				((ClasspathEntry) referencedEntry).elementEncode(xmlWriter, this.project.getFullPath(), indent, true, unknownElements, true);
 			}
 		}
 
@@ -1468,16 +1419,20 @@ public class JavaProject
 	 */
 	@Override
 	public boolean equals(Object o) {
-
 		if (this == o)
 			return true;
 
-		if (!(o instanceof JavaProject))
+		if (!(o instanceof JavaProject other))
 			return false;
 
-		JavaProject other = (JavaProject) o;
 		return this.project.equals(other.getProject());
 	}
+
+	@Override
+	protected int calculateHashCode() {
+		return this.project.hashCode();
+	}
+
 
 	/**
 	 * @see IJavaProject#findElement(IPath)
@@ -1555,9 +1510,8 @@ public class JavaProject
 
 		} else {
 			// try to return one that is a child of this project
-			for (int i = 0, length = pkgFragments.length; i < length; i++) {
+			for (IPackageFragment pkgFragment : pkgFragments) {
 
-				IPackageFragment pkgFragment = pkgFragments[i];
 				if (equals(pkgFragment.getParent().getParent())) {
 					return pkgFragment;
 				}
@@ -1614,8 +1568,7 @@ public class JavaProject
 		if (!path.isAbsolute()) {
 			throw new IllegalArgumentException(Messages.path_mustBeAbsolute);
 		}
-		for (int i= 0; i < allRoots.length; i++) {
-			IPackageFragmentRoot classpathRoot= allRoots[i];
+		for (IPackageFragmentRoot classpathRoot : allRoots) {
 			if (classpathRoot.getPath() != null && classpathRoot.getPath().equals(path)) {
 				return classpathRoot;
 			}
@@ -1629,8 +1582,8 @@ public class JavaProject
 	public IPackageFragmentRoot[] findPackageFragmentRoots(IClasspathEntry entry) {
 		try {
 			IClasspathEntry[] classpath = getRawClasspath();
-			for (int i = 0, length = classpath.length; i < length; i++) {
-				if (classpath[i].equals(entry)) { // entry may need to be resolved
+			for (IClasspathEntry cpe : classpath) {
+				if (cpe.equals(entry)) { // entry may need to be resolved
 					return
 						computePackageFragmentRoots(
 							resolveClasspath(new IClasspathEntry[] {entry}),
@@ -1784,8 +1737,7 @@ public class JavaProject
 		try {
 			if (this.project.isAccessible()) {
 				IMarker[] markers = this.project.findMarkers(IJavaModelMarker.BUILDPATH_PROBLEM_MARKER, false, IResource.DEPTH_ZERO);
-				for (int i = 0, length = markers.length; i < length; i++) {
-					IMarker marker = markers[i];
+				for (IMarker marker : markers) {
 					if (flushCycleMarkers && flushClasspathFormatMarkers && flushOverlappingOutputMarkers) {
 						marker.delete();
 					} else {
@@ -1869,8 +1821,7 @@ public class JavaProject
 		try {
 			if (this.project.isAccessible()) {
 				IMarker[] markers = this.project.findMarkers(IJavaModelMarker.BUILDPATH_PROBLEM_MARKER, false, IResource.DEPTH_ZERO);
-				for (int i = 0, length = markers.length; i < length; i++) {
-					IMarker marker = markers[i];
+				for (IMarker marker : markers) {
 					String cycleAttr = (String)marker.getAttribute(IJavaModelMarker.CYCLE_DETECTED);
 					if (cycleAttr != null && cycleAttr.equals("true")){ //$NON-NLS-1$
 						return marker;
@@ -2103,19 +2054,6 @@ public class JavaProject
 		return JEM_JAVAPROJECT;
 	}
 
-	/**
-	 * Find the specific Java command amongst the given build spec
-	 * and return its index or -1 if not found.
-	 */
-	private int getJavaCommandIndex(ICommand[] buildSpec) {
-
-		for (int i = 0; i < buildSpec.length; ++i) {
-			if (buildSpec[i].getBuilderName().equals(JavaCore.BUILDER_ID)) {
-				return i;
-			}
-		}
-		return -1;
-	}
 
 	/**
 	 * Convenience method that returns the specific type of info for a Java project.
@@ -2177,8 +2115,7 @@ public class JavaProject
 				// create project options
 				String[] propertyNames = projectPreferences.keys();
 				projectOptions = new Hashtable(propertyNames.length);
-				for (int i = 0; i < propertyNames.length; i++){
-					String propertyName = propertyNames[i];
+				for (String propertyName : propertyNames) {
 					String value = projectPreferences.get(propertyName, null);
 					if (value != null) {
 						value = value.trim();
@@ -2189,8 +2126,7 @@ public class JavaProject
 							// try to migrate deprecated options
 							String[] compatibleOptions = javaModelManager.deprecatedOptions.get(propertyName);
 							if (compatibleOptions != null) {
-								for (int co=0, length=compatibleOptions.length; co < length; co++) {
-									String compatibleOption = compatibleOptions[co];
+								for (String compatibleOption : compatibleOptions) {
 									if (!projectOptions.containsKey(compatibleOption))
 										projectOptions.put(compatibleOption, value);
 								}
@@ -2335,7 +2271,7 @@ public class JavaProject
 			return this.new JImageModuleFragmentBridge(externalLibraryPath, extraAttributes);
 		}
 		Object target = JavaModel.getTarget(externalLibraryPath, true/*check existency*/);
-		if (target instanceof File && JavaModel.isFile(target)) {
+		if (target instanceof File tf && JavaModel.isFile(tf)) {
 			if (JavaModel.isJmod((File) target)) {
 				return new JModPackageFragmentRoot(externalLibraryPath, this, extraAttributes);
 			}
@@ -2392,8 +2328,7 @@ public class JavaProject
 	public IPackageFragment[] getPackageFragmentsInRoots(IPackageFragmentRoot[] roots) {
 
 		ArrayList frags = new ArrayList();
-		for (int i = 0; i < roots.length; i++) {
-			IPackageFragmentRoot root = roots[i];
+		for (IPackageFragmentRoot root : roots) {
 			try {
 				IJavaElement[] rootFragments = root.getChildren();
 				Collections.addAll(frags, rootFragments);
@@ -2651,11 +2586,6 @@ public class JavaProject
 		return getCycleMarker() != null;
 	}
 
-	@Override
-	public int hashCode() {
-		return this.project.hashCode();
-	}
-
 	private boolean hasUTF8BOM(byte[] bytes) {
 		if (bytes.length > IContentDescription.BOM_UTF_8.length) {
 			for (int i = 0, length = IContentDescription.BOM_UTF_8.length; i < length; i++) {
@@ -2681,8 +2611,8 @@ public class JavaProject
 		} catch (JavaModelException e) {
 			return true; // unsure
 		}
-		for (int i = 0, max = entries.length; i < max; i++) {
-			if (entries[i].getEntryKind() == IClasspathEntry.CPE_SOURCE) {
+		for (IClasspathEntry entry : entries) {
+			if (entry.getEntryKind() == IClasspathEntry.CPE_SOURCE) {
 				return true;
 			}
 		}
@@ -2754,8 +2684,8 @@ public class JavaProject
 			return false; // Perhaps, not a Java project
 		}
 
-		for (int index = 0; index < resolvedClasspath.length; index++) {
-			if (isOnClasspathEntry(elementPath, isFolderPath, isPackageFragmentRoot, resolvedClasspath[index]))
+		for (IClasspathEntry cpe : resolvedClasspath) {
+			if (isOnClasspathEntry(elementPath, isFolderPath, isPackageFragmentRoot, cpe))
 				return true;
 		}
 
@@ -2788,8 +2718,7 @@ public class JavaProject
 			return null; // not a Java project
 		}
 		final IPath path = resource.getFullPath();
-		for (int i = 0; i < classpath.length; i++) {
-			IClasspathEntry entry = classpath[i];
+		for (IClasspathEntry entry : classpath) {
 			IPath entryPath = entry.getPath();
 			if (entryPath.equals(path)) { // package fragment roots must match exactly entry pathes (no exclusion there)
 				return entry;
@@ -2989,8 +2918,7 @@ public class JavaProject
 		throws JavaModelException {
 
 		ArrayList prerequisites = new ArrayList();
-		for (int i = 0, length = resolvedClasspath.length; i < length; i++) {
-			IClasspathEntry entry = resolvedClasspath[i];
+		for (IClasspathEntry entry : resolvedClasspath) {
 			if (entry.getEntryKind() == IClasspathEntry.CPE_PROJECT) {
 				prerequisites.add(entry.getPath().lastSegment());
 			}
@@ -3109,25 +3037,6 @@ public class JavaProject
 		return classpath[0];
 	}
 
-	/**
-	 * Removes the given builder from the build spec for the given project.
-	 */
-	protected void removeFromBuildSpec(String builderID) throws CoreException {
-
-		IProjectDescription description = this.project.getDescription();
-		ICommand[] commands = description.getBuildSpec();
-		for (int i = 0; i < commands.length; ++i) {
-			if (commands[i].getBuilderName().equals(builderID)) {
-				ICommand[] newCommands = new ICommand[commands.length - 1];
-				System.arraycopy(commands, 0, newCommands, 0, i);
-				System.arraycopy(commands, i + 1, newCommands, i, commands.length - i - 1);
-				description.setBuildSpec(newCommands);
-				this.project.setDescription(description, null);
-				return;
-			}
-		}
-	}
-
 	/*
 	 * Resets this project's caches
 	 */
@@ -3177,8 +3086,7 @@ public class JavaProject
 		LinkedHashSet resolvedEntries = new LinkedHashSet();
 
 		if(resolveChainedLibraries) {
-			for (int index = 0; index < rawClasspath.length; index++) {
-				IClasspathEntry currentEntry = rawClasspath[index];
+			for (IClasspathEntry currentEntry : rawClasspath) {
 				if (currentEntry.getEntryKind() == IClasspathEntry.CPE_LIBRARY) {
 					rawLibrariesPath.add(ClasspathEntry.resolveDotDot(getProject().getLocation(), currentEntry.getPath()));
 				}
@@ -3187,11 +3095,11 @@ public class JavaProject
 				// The Set is required to keep the order intact while the referencedEntriesMap (Map)
 				// is used to map the referenced entries with path
 				LinkedHashSet referencedEntriesSet = new LinkedHashSet();
-				for (int index = 0; index < referencedEntries.length; index++) {
-					IPath path = referencedEntries[index].getPath();
+				for (IClasspathEntry referencedEntry : referencedEntries) {
+					IPath path = referencedEntry.getPath();
 					if (!rawLibrariesPath.contains(path) && referencedEntriesMap.get(path) == null) {
-						referencedEntriesMap.put(path, referencedEntries[index]);
-						referencedEntriesSet.add(referencedEntries[index]);
+						referencedEntriesMap.put(path, referencedEntry);
+						referencedEntriesSet.add(referencedEntry);
 					}
 				}
 				if (referencedEntriesSet.size() > 0) {
@@ -3227,11 +3135,11 @@ public class JavaProject
 													&& result.rawReverseMap.get(resolvedEntry.getPath()) == null) {
 							// resolve Class-Path: in manifest
 							ClasspathEntry[] extraEntries = ((ClasspathEntry) resolvedEntry).resolvedChainedLibraries();
-							for (int j = 0, length2 = extraEntries.length; j < length2; j++) {
-								if (!rawLibrariesPath.contains(extraEntries[j].getPath())) {
+							for (ClasspathEntry extraEntry : extraEntries) {
+								if (!rawLibrariesPath.contains(extraEntry.getPath())) {
 									// https://bugs.eclipse.org/bugs/show_bug.cgi?id=305037
 									// referenced entries for variable entries could also be persisted with extra attributes, so addAsChainedEntry = true
-									addToResult(rawEntry, extraEntries[j], result, resolvedEntries, externalFoldersManager, referencedEntriesMap, true, knownDrives);
+									addToResult(rawEntry, extraEntry, result, resolvedEntries, externalFoldersManager, referencedEntriesMap, true, knownDrives);
 								}
 							}
 						}
@@ -3255,8 +3163,8 @@ public class JavaProject
 					}
 
 					// container was bound
-					for (int j = 0, containerLength = containerEntries.length; j < containerLength; j++){
-						ClasspathEntry cEntry = (ClasspathEntry) containerEntries[j];
+					for (IClasspathEntry containerEntry : containerEntries) {
+						ClasspathEntry cEntry = (ClasspathEntry) containerEntry;
 						if (cEntry == null) {
 							if (JavaModelManager.CP_RESOLVE_VERBOSE || JavaModelManager.CP_RESOLVE_VERBOSE_FAILURE) {
 								JavaModelManager.getJavaModelManager().verbose_missbehaving_container(this, rawEntry.getPath(), containerEntries);
@@ -3276,9 +3184,9 @@ public class JavaProject
 									&& result.rawReverseMap.get(cEntry.getPath()) == null) {
 								// resolve Class-Path: in manifest
 								ClasspathEntry[] extraEntries = cEntry.resolvedChainedLibraries();
-								for (int k = 0, length2 = extraEntries.length; k < length2; k++) {
-									if (!rawLibrariesPath.contains(extraEntries[k].getPath())) {
-										addToResult(rawEntry, extraEntries[k], result, resolvedEntries, externalFoldersManager, referencedEntriesMap, false, knownDrives);
+								for (ClasspathEntry extraEntry : extraEntries) {
+									if (!rawLibrariesPath.contains(extraEntry.getPath())) {
+										addToResult(rawEntry, extraEntry, result, resolvedEntries, externalFoldersManager, referencedEntriesMap, false, knownDrives);
 									}
 								}
 							}
@@ -3294,9 +3202,9 @@ public class JavaProject
 					if (resolveChainedLibraries && result.rawReverseMap.get(resolvedEntry.getPath()) == null) {
 						// resolve Class-Path: in manifest
 						ClasspathEntry[] extraEntries = ((ClasspathEntry) resolvedEntry).resolvedChainedLibraries();
-						for (int k = 0, length2 = extraEntries.length; k < length2; k++) {
-							if (!rawLibrariesPath.contains(extraEntries[k].getPath())) {
-								addToResult(rawEntry, extraEntries[k], result, resolvedEntries, externalFoldersManager, referencedEntriesMap, true, knownDrives);
+						for (ClasspathEntry extraEntry : extraEntries) {
+							if (!rawLibrariesPath.contains(extraEntry.getPath())) {
+								addToResult(rawEntry, extraEntry, result, resolvedEntries, externalFoldersManager, referencedEntriesMap, true, knownDrives);
 							}
 						}
 					}
@@ -3463,34 +3371,6 @@ public class JavaProject
 	}
 
 	/**
-	 * Update the Java command in the build spec (replace existing one if present,
-	 * add one first if none).
-	 */
-	private void setJavaCommand(
-		IProjectDescription description,
-		ICommand newCommand)
-		throws CoreException {
-
-		ICommand[] oldBuildSpec = description.getBuildSpec();
-		int oldJavaCommandIndex = getJavaCommandIndex(oldBuildSpec);
-		ICommand[] newCommands;
-
-		if (oldJavaCommandIndex == -1) {
-			// Add a Java build spec before other builders (1FWJK7I)
-			newCommands = new ICommand[oldBuildSpec.length + 1];
-			System.arraycopy(oldBuildSpec, 0, newCommands, 1, oldBuildSpec.length);
-			newCommands[0] = newCommand;
-		} else {
-		    oldBuildSpec[oldJavaCommandIndex] = newCommand;
-			newCommands = oldBuildSpec;
-		}
-
-		// Commit the spec change into the project
-		description.setBuildSpec(newCommands);
-		this.project.setDescription(description, null);
-	}
-
-	/**
 	 * @see org.eclipse.jdt.core.IJavaProject#setOption(java.lang.String, java.lang.String)
 	 */
 	@Override
@@ -3521,10 +3401,8 @@ public class JavaProject
 			if (newOptions == null){
 				projectPreferences.clear();
 			} else {
-				Iterator<Map.Entry<String, String>> entries = newOptions.entrySet().iterator();
 				JavaModelManager javaModelManager = JavaModelManager.getJavaModelManager();
-				while (entries.hasNext()){
-					Map.Entry<String, String> entry = entries.next();
+				for (Entry<String, String> entry : newOptions.entrySet()) {
 					String key = entry.getKey();
 					String value = entry.getValue();
 					javaModelManager.storePreference(key, value, projectPreferences, newOptions);
@@ -3568,21 +3446,6 @@ public class JavaProject
 			return;
 		}
 		setRawClasspath(getRawClasspath(), path, monitor);
-	}
-
-	/**
-	 * Sets the underlying kernel project of this Java project,
-	 * and fills in its parent and name.
-	 * Called by IProject.getNature().
-	 *
-	 * @see IProjectNature#setProject(IProject)
-	 */
-	@Override
-	public void setProject(IProject project) {
-
-		this.project = project;
-		setParent(JavaModelManager.getJavaModelManager().getJavaModel());
-
 	}
 
 	/**
@@ -3778,9 +3641,7 @@ public class JavaProject
 			IClasspathEntry[] classpath = null;
 			if (preferredClasspaths != null) classpath = (IClasspathEntry[])preferredClasspaths.get(this);
 			if (classpath == null) classpath = getResolvedClasspath();
-			for (int i = 0, length = classpath.length; i < length; i++) {
-				IClasspathEntry entry = classpath[i];
-
+			for (IClasspathEntry entry : classpath) {
 				if (entry.getEntryKind() == IClasspathEntry.CPE_PROJECT){
 					IPath prereqProjectPath = entry.getPath();
 					int prereqIndex = prereqChain.indexOf(prereqProjectPath);
@@ -3855,9 +3716,8 @@ public class JavaProject
 	 	if (oldPreferences != null) {
 			try {
 		 		String[] propertyNames = oldPreferences.childrenNames();
-				for (int i = 0; i < propertyNames.length; i++){
-					String propertyName = propertyNames[i];
-				    String propertyValue = oldPreferences.get(propertyName, ""); //$NON-NLS-1$
+				for (String propertyName : propertyNames) {
+					String propertyValue = oldPreferences.get(propertyName, ""); //$NON-NLS-1$
 				    if (!"".equals(propertyValue)) { //$NON-NLS-1$
 					    preferences.put(propertyName, propertyValue);
 				    }

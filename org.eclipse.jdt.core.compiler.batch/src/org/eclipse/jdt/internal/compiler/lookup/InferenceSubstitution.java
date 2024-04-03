@@ -32,7 +32,7 @@ public class InferenceSubstitution extends Scope.Substitutor implements Substitu
 		this(context.environment, context.inferenceVariables, context.currentInvocation);
 	}
 
-	/** Answer a substitution that is able to substitute into inference variables of several inference contexts (outer & inner) */
+	/** Answer a substitution that is able to substitute into inference variables of several inference contexts (outer and inner) */
 	public InferenceSubstitution addContext(InferenceContext18 otherContext) {
 		InferenceSubstitution subst = new InferenceSubstitution(this.environment, null, null) {
 
@@ -92,8 +92,8 @@ public class InferenceSubstitution extends Scope.Substitutor implements Substitu
 	}
 
 	private boolean isInSites(InvocationSite otherSite) {
-		for (int i = 0; i < this.sites.length; i++)
-			if (InferenceContext18.isSameSite(this.sites[i], otherSite))
+		for (InvocationSite site : this.sites)
+			if (InferenceContext18.isSameSite(site, otherSite))
 				return true;
 		return false;
 	}

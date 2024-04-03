@@ -2567,8 +2567,7 @@ public final boolean jumpOverUnicodeWhiteSpace() throws InvalidInputException {
 }
 
 public boolean isInModuleDeclaration() {
-	return this.fakeInModule || this.insideModuleInfo ||
-			(this.activeParser != null ? this.activeParser.isParsingModuleDeclaration() : false);
+	return this.fakeInModule || this.insideModuleInfo;
 }
 protected boolean areRestrictedModuleKeywordsActive() {
 	return this.scanContext != null && this.scanContext != ScanContext.INACTIVE;
@@ -2887,7 +2886,7 @@ private ScanContext getScanContext(int begin) {
 	CompilerOptions options = new CompilerOptions();
 	options.complianceLevel = this.complianceLevel;
 	options.sourceLevel = this.sourceLevel;
-	ScanContextDetector parser = new ScanContextDetector(options);
+	ModuleScanContextDetector parser = new ModuleScanContextDetector(options);
 	return parser.getScanContext(this.source, begin - 1);
 }
 protected final void scanEscapeCharacter() throws InvalidInputException {
@@ -3082,13 +3081,22 @@ public int scanIdentifierOrKeyword() {
 		//have a length which is <= 12...but there are lots of identifier with
 		//only one char....
 		if ((length = this.currentPosition - this.startPosition) == 1) {
+			if (this.source[this.startPosition] == '_') {
+				return JavaFeature.UNNAMMED_PATTERNS_AND_VARS.isSupported(this.sourceLevel, this.previewEnabled) ?
+											TokenNameUNDERSCORE : TokenNameIdentifier;
+			}
 			return TokenNameIdentifier;
 		}
 		data = this.source;
 		index = this.startPosition;
 	} else {
-		if ((length = this.withoutUnicodePtr) == 1)
+		if ((length = this.withoutUnicodePtr) == 1) {
+			if (this.withoutUnicodeBuffer[0] == '_') {
+				return JavaFeature.UNNAMMED_PATTERNS_AND_VARS.isSupported(this.sourceLevel, this.previewEnabled) ?
+						TokenNameUNDERSCORE : TokenNameIdentifier;
+			}
 			return TokenNameIdentifier;
+		}
 		data = this.withoutUnicodeBuffer;
 		index = 1;
 	}
@@ -4612,7 +4620,6 @@ private static class Goal {
 	static int[] RestrictedIdentifierSealedRule;
 	static int[] RestrictedIdentifierPermitsRule;
 	static int[] PatternRules;
-	static int RecordPatternRule = 0;
 
 	static Goal LambdaParameterListGoal;
 	static Goal IntersectionCastGoal;
@@ -4624,13 +4631,11 @@ private static class Goal {
 	static Goal RestrictedIdentifierSealedGoal;
 	static Goal RestrictedIdentifierPermitsGoal;
 	static Goal PatternGoal;
-	static Goal RecordPatternGoal;
 
 	static int[] RestrictedIdentifierSealedFollow =  { TokenNameclass, TokenNameinterface,
 			TokenNameenum, TokenNameRestrictedIdentifierrecord };// Note: enum/record allowed as error flagging rules.
 	static int[] RestrictedIdentifierPermitsFollow =  { TokenNameLBRACE };
 	static int[] PatternCaseLabelFollow = {TokenNameCOLON, TokenNameARROW, TokenNameCOMMA, TokenNameBeginCaseExpr, TokenNameRestrictedIdentifierWhen};
-	static int[] RecordPatternFollow = {TokenNameCOLON}; // disambiguate only for enh for
 
 	static {
 
@@ -4675,10 +4680,8 @@ private static class Goal {
 			if ("ParenthesizedPattern".equals(Parser.name[Parser.non_terminal_index[Parser.lhs[i]]])) //$NON-NLS-1$
 				patternStates.add(i);
 			else
-			if ("RecordPattern".equals(Parser.name[Parser.non_terminal_index[Parser.lhs[i]]])) {//$NON-NLS-1$
+			if ("RecordPattern".equals(Parser.name[Parser.non_terminal_index[Parser.lhs[i]]])) //$NON-NLS-1$
 				patternStates.add(i);
-				RecordPatternRule = i;
-			}
 		}
 		RestrictedIdentifierSealedRule = ridSealed.stream().mapToInt(Integer :: intValue).toArray(); // overkill but future-proof
 		RestrictedIdentifierPermitsRule = ridPermits.stream().mapToInt(Integer :: intValue).toArray();
@@ -4694,7 +4697,6 @@ private static class Goal {
 		RestrictedIdentifierSealedGoal = new Goal(TokenNameRestrictedIdentifiersealed, RestrictedIdentifierSealedFollow, RestrictedIdentifierSealedRule);
 		RestrictedIdentifierPermitsGoal = new Goal(TokenNameRestrictedIdentifierpermits, RestrictedIdentifierPermitsFollow, RestrictedIdentifierPermitsRule);
 		PatternGoal = new Goal(TokenNameBeginCaseElement, PatternCaseLabelFollow, PatternRules);
-		RecordPatternGoal =  new Goal(TokenNameQUESTION, RecordPatternFollow, RecordPatternRule);
 	}
 
 
@@ -4824,8 +4826,8 @@ private static class VanguardParser extends Parser {
 	}
 }
 
-private class ScanContextDetector extends VanguardParser {
-	ScanContextDetector(CompilerOptions options) {
+private class ModuleScanContextDetector extends VanguardParser {
+	ModuleScanContextDetector(CompilerOptions options) {
 		super(new ProblemReporter(
 					DefaultErrorHandlingPolicies.ignoreAllProblems(),
 					options,
@@ -4861,12 +4863,12 @@ private class ScanContextDetector extends VanguardParser {
 
 	@Override
 	public boolean isParsingModuleDeclaration() {
-		return true;
+		return true; // for Modules only
 	}
 
 	public ScanContext getScanContext(char[] src, int begin) {
 		this.scanner.setSource(src);
-		this.scanner.resetTo(0, begin);
+		this.scanner.resetTo(0, begin, true);
 		goForCompilationUnit();
 		Goal goal = new Goal(TokenNamePLUS_PLUS, null, 0) {
 			@Override
@@ -4902,9 +4904,7 @@ private VanguardScanner getNewVanguardScanner() {
 	return vs;
 }
 protected final boolean mayBeAtCasePattern(int token) {
-	return ((token == TokenNamecase || this.multiCaseLabelComma)
-			&& JavaFeature.PATTERN_MATCHING_IN_SWITCH.isSupported(this.complianceLevel, this.previewEnabled))
-			&& !isInModuleDeclaration();
+	return (token == TokenNamecase || this.multiCaseLabelComma) && !isInModuleDeclaration();
 }
 protected final boolean maybeAtLambdaOrCast() { // Could the '(' we saw just now herald a lambda parameter list or a cast expression ? (the possible locations for both are identical.)
 
@@ -4928,9 +4928,6 @@ protected final boolean maybeAtLambdaOrCast() { // Could the '(' we saw just now
 	}
 }
 
-protected final boolean maybeAtEnhForRecordPattern() {
-	return this.lookBack[1] == TokenNamefor && !isInModuleDeclaration();
-}
 protected final boolean maybeAtReferenceExpression() { // Did the '<' we saw just now herald a reference expression's type arguments and trunk ?
 	if (isInModuleDeclaration())
 		return false;
@@ -5212,9 +5209,6 @@ int disambiguatedRestrictedIdentifierWhen(int restrictedIdentifierToken) {
 	// and here's the kludge
 	if (restrictedIdentifierToken != TokenNameRestrictedIdentifierWhen)
 		return restrictedIdentifierToken;
-	if (!JavaFeature.PATTERN_MATCHING_IN_SWITCH.isSupported(this.complianceLevel, this.previewEnabled))
-		return TokenNameIdentifier;
-
 	return this.activeParser == null || !this.activeParser.automatonWillShift(TokenNameRestrictedIdentifierWhen) ?
 					TokenNameIdentifier : TokenNameRestrictedIdentifierWhen;
 }
@@ -5307,11 +5301,6 @@ int disambiguatedToken(int token, Scanner scanner) {
 			scanner.nextToken = TokenNameLPAREN;
 			return TokenNameBeginIntersectionCast;
 		}
-	} else	if (token == TokenNameLPAREN  && maybeAtEnhForRecordPattern()) {
-		if (parser.parse(Goal.RecordPatternGoal) == VanguardParser.SUCCESS) {
-			scanner.nextToken = TokenNameBeginRecordPattern;
-			return TokenNameLPAREN;
-		}
 	} else if (token == TokenNameLESS && maybeAtReferenceExpression()) {
 		if (parser.parse(Goal.ReferenceExpressionGoal) == VanguardParser.SUCCESS) {
 			scanner.nextToken = TokenNameLESS;
@@ -5363,9 +5352,7 @@ protected boolean mayBeAtCaseLabelExpr() {
 	if (isInModuleDeclaration() || this.caseStartPosition <= 0)
 		return false;
 	if (this.lookBack[1] == TokenNamedefault) {
-		return JavaFeature.PATTERN_MATCHING_IN_SWITCH.isSupported(this.complianceLevel, this.previewEnabled) ?
-				(this.lookBack[0] == TerminalTokens.TokenNamecase || this.lookBack[0] == TerminalTokens.TokenNameCOMMA)
-				: false;
+		return this.lookBack[0] == TerminalTokens.TokenNamecase || this.lookBack[0] == TerminalTokens.TokenNameCOMMA;
 	}
 	return true;
 }

@@ -80,6 +80,8 @@ public class ExplicitConstructorCall extends Statement implements Invocation {
 	// TODO Remove once DOMParser is activated
 	public int typeArgumentsSourceStart;
 
+	public boolean firstStatement = true; // Allow Statements before super
+
 	public ExplicitConstructorCall(int accessMode) {
 		this.accessMode = accessMode;
 	}
@@ -314,20 +316,22 @@ public class ExplicitConstructorCall extends Statement implements Invocation {
 			if (methodDeclaration == null
 					|| !methodDeclaration.isConstructor()
 					|| ((ConstructorDeclaration) methodDeclaration).constructorCall != this) {
-				if (!(methodDeclaration instanceof CompactConstructorDeclaration)) // already flagged for CCD
+				if (!(methodDeclaration instanceof CompactConstructorDeclaration)) {// already flagged for CCD
+					if (!this.inPreConstructorContext)
 						scope.problemReporter().invalidExplicitConstructorCall(this);
+				}
 				// fault-tolerance
 				if (this.qualification != null) {
 					this.qualification.resolveType(scope);
 				}
 				if (this.typeArguments != null) {
-					for (int i = 0, max = this.typeArguments.length; i < max; i++) {
-						this.typeArguments[i].resolveType(scope, true /* check bounds*/);
+					for (TypeReference typeArgument : this.typeArguments) {
+						typeArgument.resolveType(scope, true /* check bounds*/);
 					}
 				}
 				if (this.arguments != null) {
-					for (int i = 0, max = this.arguments.length; i < max; i++) {
-						this.arguments[i].resolveType(scope);
+					for (Expression argument : this.arguments) {
+						argument.resolveType(scope);
 					}
 				}
 				return;
@@ -383,8 +387,8 @@ public class ExplicitConstructorCall extends Statement implements Invocation {
 				}
 				if (argHasError) {
 					if (this.arguments != null) { // still attempt to resolve arguments
-						for (int i = 0, max = this.arguments.length; i < max; i++) {
-							this.arguments[i].resolveType(scope);
+						for (Expression argument : this.arguments) {
+							argument.resolveType(scope);
 						}
 					}
 					return;
@@ -514,13 +518,13 @@ public class ExplicitConstructorCall extends Statement implements Invocation {
 				this.qualification.traverse(visitor, scope);
 			}
 			if (this.typeArguments != null) {
-				for (int i = 0, typeArgumentsLength = this.typeArguments.length; i < typeArgumentsLength; i++) {
-					this.typeArguments[i].traverse(visitor, scope);
+				for (TypeReference typeArgument : this.typeArguments) {
+					typeArgument.traverse(visitor, scope);
 				}
 			}
 			if (this.arguments != null) {
-				for (int i = 0, argumentLength = this.arguments.length; i < argumentLength; i++)
-					this.arguments[i].traverse(visitor, scope);
+				for (Expression argument : this.arguments)
+					argument.traverse(visitor, scope);
 			}
 		}
 		visitor.endVisit(this, scope);

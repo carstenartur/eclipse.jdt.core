@@ -157,8 +157,6 @@ public class ReferenceExpression extends FunctionalExpression implements IPolyEx
 		copy.sourceStart = this.sourceStart;
 		copy.sourceEnd = this.sourceEnd;
 		copy.text = this.text;
-		copy.lhs.addPatternVariablesWhenTrue(this.lhs.getPatternVariablesWhenTrue());
-		copy.lhs.addPatternVariablesWhenFalse(this.lhs.getPatternVariablesWhenFalse());
 		return copy;
 	}
 
@@ -212,7 +210,7 @@ public class ReferenceExpression extends FunctionalExpression implements IPolyEx
 			argv[i] = new SingleNameReference(name, 0);
 		}
 		boolean generateSecretReceiverVariable = shouldGenerateSecretReceiverVariable();
-		LocalVariableBinding[] patternVariablesInScope = null;
+		LocalVariableBinding[] patternVariablesInScope = NO_VARIABLES;
 		if (isMethodReference()) {
 			if (generateSecretReceiverVariable) {
 				this.lhs.generateCode(currentScope, codeStream, true);
@@ -225,7 +223,7 @@ public class ReferenceExpression extends FunctionalExpression implements IPolyEx
 			if (this.lhs instanceof NameReference nr
 					&& nr.binding instanceof LocalVariableBinding receiverLocal
 					&& receiverLocal.isValidBinding()
-					&& (receiverLocal.modifiers & ExtraCompilerModifiers.AccPatternVariable) != 0) {
+					&& (receiverLocal.modifiers & ExtraCompilerModifiers.AccOutOfFlowScope) != 0) {
 				// what was in scope during initial resolve must be in scope during resolve of synthetic AST, too:
 				patternVariablesInScope = new LocalVariableBinding[] { receiverLocal };
 			}
@@ -269,7 +267,7 @@ public class ReferenceExpression extends FunctionalExpression implements IPolyEx
 		BlockScope lambdaScope = this.receiverVariable != null ? this.receiverVariable.declaringScope : currentScope;
 		IErrorHandlingPolicy oldPolicy = lambdaScope.problemReporter().switchErrorHandlingPolicy(silentErrorHandlingPolicy);
 		try {
-			implicitLambda.resolveWithPatternVariablesInScope(patternVariablesInScope, lambdaScope, true);
+			implicitLambda.resolveTypeWithBindings(patternVariablesInScope, lambdaScope, true);
 			implicitLambda.analyseCode(lambdaScope,
 					new FieldInitsFakingFlowContext(null, this, Binding.NO_EXCEPTIONS, null, lambdaScope, FlowInfo.DEAD_END),
 					UnconditionalFlowInfo.fakeInitializedFlowInfo(implicitLambda.firstLocalLocal, lambdaScope.referenceType().maxFieldCount));
@@ -850,15 +848,15 @@ public class ReferenceExpression extends FunctionalExpression implements IPolyEx
         // OK, we have a compile time declaration, see if it passes muster.
         TypeBinding [] methodExceptions = this.binding.thrownExceptions;
         TypeBinding [] kosherExceptions = this.descriptor.thrownExceptions;
-        next: for (int i = 0, iMax = methodExceptions.length; i < iMax; i++) {
-        	if (methodExceptions[i].isUncheckedException(false)) {
+        next: for (TypeBinding methodException : methodExceptions) {
+        	if (methodException.isUncheckedException(false)) {
         		continue next;
     		}
-        	for (int j = 0, jMax = kosherExceptions.length; j < jMax; j++) {
-        		if (methodExceptions[i].isCompatibleWith(kosherExceptions[j], scope))
+        	for (TypeBinding kosherException : kosherExceptions) {
+        		if (methodException.isCompatibleWith(kosherException, scope))
         			continue next;
         	}
-        	scope.problemReporter().unhandledException(methodExceptions[i], this);
+        	scope.problemReporter().unhandledException(methodException, this);
         }
         checkNullAnnotations(scope);
         this.freeParameters = null; // not used after method lookup
@@ -910,8 +908,7 @@ public class ReferenceExpression extends FunctionalExpression implements IPolyEx
 
 	        		TypeBinding descriptorParameter = this.descriptor.parameters[0];
 	    			if((descriptorParameter.tagBits & TagBits.AnnotationNullable) != 0) { // Note: normal dereferencing of 'unchecked' values is not reported, either
-		    			final TypeBinding receiver = scope.environment().createAnnotatedType(this.binding.declaringClass,
-								new AnnotationBinding[] { scope.environment().getNonNullAnnotation() });
+		    			final TypeBinding receiver = scope.environment().createNonNullAnnotatedType(this.binding.declaringClass);
     					scope.problemReporter().referenceExpressionArgumentNullityMismatch(this, receiver, descriptorParameter, this.descriptor, -1, NullAnnotationMatching.NULL_ANNOTATIONS_MISMATCH);
 	    			}
 	        	}
@@ -1227,8 +1224,8 @@ public class ReferenceExpression extends FunctionalExpression implements IPolyEx
                    – The method reference expression has some other form and at least one potentially applicable method is not static.
         	*/
 
-        	for (int i = 0, length = this.potentialMethods.length; i < length; i++) {
-        		if (this.potentialMethods[i].isStatic() || this.potentialMethods[i].isConstructor()) {
+        	for (MethodBinding potentialMethod : this.potentialMethods) {
+        		if (potentialMethod.isStatic() || potentialMethod.isConstructor()) {
         			if (!this.haveReceiver) // form ReferenceType ::[TypeArguments] Identifier
         				return true;
         		} else {
@@ -1252,8 +1249,8 @@ public class ReferenceExpression extends FunctionalExpression implements IPolyEx
               	   OR there is no potentially compatible compile time declaration ...
         		*/
         	}
-        	for (int i = 0, length = this.potentialMethods.length; i < length; i++) {
-			if (!this.potentialMethods[i].isStatic() && !this.potentialMethods[i].isConstructor()) {
+        	for (MethodBinding potentialMethod : this.potentialMethods) {
+			if (!potentialMethod.isStatic() && !potentialMethod.isConstructor()) {
         			return true;
         		}
         	}

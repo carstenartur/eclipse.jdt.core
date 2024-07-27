@@ -35,6 +35,7 @@ import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.internal.compiler.Compiler;
@@ -124,6 +125,7 @@ public class CompilerOptions {
 	public static final String OPTION_TaskTags = "org.eclipse.jdt.core.compiler.taskTags"; //$NON-NLS-1$
 	public static final String OPTION_TaskPriorities = "org.eclipse.jdt.core.compiler.taskPriorities"; //$NON-NLS-1$
 	public static final String OPTION_TaskCaseSensitive = "org.eclipse.jdt.core.compiler.taskCaseSensitive"; //$NON-NLS-1$
+	@Deprecated(forRemoval = true)
 	public static final String OPTION_InlineJsr = "org.eclipse.jdt.core.compiler.codegen.inlineJsrBytecode"; //$NON-NLS-1$
 	public static final String OPTION_ShareCommonFinallyBlocks = "org.eclipse.jdt.core.compiler.codegen.shareCommonFinallyBlocks"; //$NON-NLS-1$
 	public static final String OPTION_ReportNullReference = "org.eclipse.jdt.core.compiler.problem.nullReference"; //$NON-NLS-1$
@@ -222,7 +224,7 @@ public class CompilerOptions {
 
 	public static final String OPTION_UseStringConcatFactory = "org.eclipse.jdt.core.compiler.codegen.useStringConcatFactory"; //$NON-NLS-1$
 
-	public static final String OPTION_SimulateOperandStack = "org.eclipse.jdt.core.compiler.codegen.simulateOperandStack"; //$NON-NLS-1$
+	public static final String OPTION_validateOperandStack = "org.eclipse.jdt.core.compiler.codegen.validateOperandStack"; //$NON-NLS-1$
 	/**
 	 * Possible values for configurable options
 	 */
@@ -258,6 +260,25 @@ public class CompilerOptions {
 	 * Note: Whenever a new version is added, make sure getLatestVersion()
 	 * is updated with it.
 	 */
+
+	/**
+	 * Unsupported JLS versions
+	 */
+	/*
+	 * Note: Whenever a new version is obsoleted, make sure getFirstVersion() is updated.
+	 */
+	public static Set<String> UNSUPPORTED_VERSIONS = Set.of(
+			VERSION_1_1,
+			VERSION_1_2,
+			VERSION_1_3,
+			VERSION_1_4,
+			VERSION_JSR14,
+			VERSION_CLDC1_1,
+			VERSION_1_5,
+			VERSION_1_6,
+			VERSION_1_7
+			);
+
 	public static final String ERROR = "error"; //$NON-NLS-1$
 	public static final String WARNING = "warning"; //$NON-NLS-1$
 	public static final String INFO = "info"; //$NON-NLS-1$
@@ -484,6 +505,7 @@ public class CompilerOptions {
 	public int reportMissingJavadocCommentsVisibility;
 	/** Specify if need to flag missing javadoc comment for overriding method */
 	public boolean reportMissingJavadocCommentsOverriding;
+	@Deprecated
 	/** Indicate whether the JSR bytecode should be inlined to avoid its presence in classfile */
 	public boolean inlineJsrBytecode;
 	/** Indicate whether common escaping finally blocks should be shared */
@@ -586,8 +608,8 @@ public class CompilerOptions {
 	/** Should the compiler use the StringConcatFactory for String concatenation expressions in the produced binary */
 	public boolean useStringConcatFactory;
 
-	/** Should the compiler simulate VM's operand stack during code generation? */
-	public boolean simulateOperandStack;
+	/** Should the compiler validate VM's (simulated) operand stack during code generation? */
+	public boolean validateOperandStack;
 
 	// keep in sync with warningTokenToIrritant and warningTokenFromIrritant
 	public final static String[] warningTokens = {
@@ -647,6 +669,18 @@ public class CompilerOptions {
 		this.parseLiteralExpressionsAsConstants = parseLiteralExpressionsAsConstants;
 	}
 
+	/**
+	 * Return the first (oldest) Java language version supported by the Eclipse compiler
+	 */
+	public static String getFirstSupportedJavaVersion() {
+		return VERSION_1_8;
+	}
+	/**
+	 * Return the first (oldest) Java language level supported by the Eclipse compiler
+	 */
+	public static long getFirstSupportedJdkLevel() {
+		return ClassFileConstants.JDK1_8;
+	}
 	/**
 	 * Return the latest Java language version supported by the Eclipse compiler
 	 */
@@ -1396,7 +1430,6 @@ public class CompilerOptions {
 		optionsMap.put(OPTION_ReportUnusedParameterIncludeDocCommentReference, this.reportUnusedParameterIncludeDocCommentReference ? ENABLED : DISABLED);
 		optionsMap.put(OPTION_ReportSpecialParameterHidingField, this.reportSpecialParameterHidingField ? ENABLED : DISABLED);
 		optionsMap.put(OPTION_MaxProblemPerUnit, String.valueOf(this.maxProblemsPerUnit));
-		optionsMap.put(OPTION_InlineJsr, this.inlineJsrBytecode ? ENABLED : DISABLED);
 		optionsMap.put(OPTION_ShareCommonFinallyBlocks, this.shareCommonFinallyBlocks ? ENABLED : DISABLED);
 		optionsMap.put(OPTION_ReportNullReference, getSeverityString(NullReference));
 		optionsMap.put(OPTION_ReportPotentialNullReference, getSeverityString(PotentialNullReference));
@@ -1466,7 +1499,7 @@ public class CompilerOptions {
 		optionsMap.put(OPTION_ReportSuppressWarningNotFullyAnalysed, getSeverityString(SuppressWarningsNotAnalysed));
 		optionsMap.put(OPTION_IgnoreUnnamedModuleForSplitPackage, this.ignoreUnnamedModuleForSplitPackage ? ENABLED : DISABLED);
 		optionsMap.put(OPTION_UseStringConcatFactory, this.useStringConcatFactory ? ENABLED : DISABLED);
-		optionsMap.put(OPTION_SimulateOperandStack, this.simulateOperandStack ? ENABLED : DISABLED);
+		optionsMap.put(OPTION_validateOperandStack, this.validateOperandStack ? ENABLED : DISABLED);
 		return optionsMap;
 	}
 
@@ -1545,9 +1578,12 @@ public class CompilerOptions {
 
 		// by default only lines and source attributes are generated.
 		this.produceDebugAttributes = ClassFileConstants.ATTR_SOURCE | ClassFileConstants.ATTR_LINES;
-		this.complianceLevel = this.originalComplianceLevel = ClassFileConstants.JDK1_4; // by default be compliant with 1.4
-		this.sourceLevel = this.originalSourceLevel = ClassFileConstants.JDK1_3; //1.3 source behavior by default
-		this.targetJDK = ClassFileConstants.JDK1_2; // default generates for JVM1.2
+
+		// by default be compliant with first supported version
+		final long firstSupportedJdkLevel = getFirstSupportedJdkLevel();
+		this.complianceLevel = this.originalComplianceLevel = firstSupportedJdkLevel;
+		this.sourceLevel = this.originalSourceLevel = firstSupportedJdkLevel;
+		this.targetJDK = firstSupportedJdkLevel;
 
 		this.defaultEncoding = null; // will use the platform default encoding
 
@@ -1608,7 +1644,7 @@ public class CompilerOptions {
 		this.reportMissingJavadocCommentsOverriding = false;
 
 		// JSR bytecode inlining and sharing
-		this.inlineJsrBytecode = false;
+		this.inlineJsrBytecode = true;
 		this.shareCommonFinallyBlocks = false;
 
 		// javadoc comment support
@@ -1673,7 +1709,7 @@ public class CompilerOptions {
 		this.enableJdtDebugCompileMode = false;
 		this.ignoreUnnamedModuleForSplitPackage = false;
 		this.useStringConcatFactory = true;
-		this.simulateOperandStack = true;
+		this.validateOperandStack = true;
 	}
 
 	public void set(Map<String, String> optionsMap) {
@@ -1757,7 +1793,7 @@ public class CompilerOptions {
 				}
 				this.targetJDK = level;
 			}
-			if (this.targetJDK >= ClassFileConstants.JDK1_5) this.inlineJsrBytecode = true; // forced from 1.5 mode on
+			this.inlineJsrBytecode = true; // forced from 1.5 mode on
 		}
 		if ((optionValue = optionsMap.get(OPTION_Encoding)) != null) {
 			this.defaultEncoding = null;
@@ -1843,15 +1879,6 @@ public class CompilerOptions {
 				this.isTaskCaseSensitive = true;
 			} else if (DISABLED.equals(optionValue)) {
 				this.isTaskCaseSensitive = false;
-			}
-		}
-		if ((optionValue = optionsMap.get(OPTION_InlineJsr)) != null) {
-			if (this.targetJDK < ClassFileConstants.JDK1_5) { // only optional if target < 1.5 (inlining on from 1.5 on)
-				if (ENABLED.equals(optionValue)) {
-					this.inlineJsrBytecode = true;
-				} else if (DISABLED.equals(optionValue)) {
-					this.inlineJsrBytecode = false;
-				}
 			}
 		}
 		if ((optionValue = optionsMap.get(OPTION_ShareCommonFinallyBlocks)) != null) {
@@ -2238,11 +2265,11 @@ public class CompilerOptions {
 			}
 		}
 
-		if ((optionValue = optionsMap.get(OPTION_SimulateOperandStack)) != null) {
+		if ((optionValue = optionsMap.get(OPTION_validateOperandStack)) != null) {
 			if (ENABLED.equals(optionValue)) {
-				this.simulateOperandStack = true;
+				this.validateOperandStack = true;
 			} else if (DISABLED.equals(optionValue)) {
-				this.simulateOperandStack = false;
+				this.validateOperandStack = false;
 			}
 		}
 	}
@@ -2329,7 +2356,6 @@ public class CompilerOptions {
 		buf.append("\n\t- report unused parameter when overriding concrete method : ").append(this.reportUnusedParameterWhenOverridingConcrete ? ENABLED : DISABLED); //$NON-NLS-1$
 		buf.append("\n\t- report unused parameter include doc comment reference : ").append(this.reportUnusedParameterIncludeDocCommentReference ? ENABLED : DISABLED); //$NON-NLS-1$
 		buf.append("\n\t- report constructor/setter parameter hiding existing field : ").append(this.reportSpecialParameterHidingField ? ENABLED : DISABLED); //$NON-NLS-1$
-		buf.append("\n\t- inline JSR bytecode : ").append(this.inlineJsrBytecode ? ENABLED : DISABLED); //$NON-NLS-1$
 		buf.append("\n\t- share common finally blocks : ").append(this.shareCommonFinallyBlocks ? ENABLED : DISABLED); //$NON-NLS-1$
 		buf.append("\n\t- report unavoidable generic type problems : ").append(this.reportUnavoidableGenericTypeProblems ? ENABLED : DISABLED); //$NON-NLS-1$
 		buf.append("\n\t- unsafe type operation: ").append(getSeverityString(UncheckedTypeOperation)); //$NON-NLS-1$
@@ -2387,7 +2413,7 @@ public class CompilerOptions {
 		buf.append("\n\t- SuppressWarnings not fully analysed: ").append(getSeverityString(SuppressWarningsNotAnalysed)); //$NON-NLS-1$
 		buf.append("\n\t- ignore package from unnamed module: ").append(this.ignoreUnnamedModuleForSplitPackage ? ENABLED : DISABLED); //$NON-NLS-1$
 		buf.append("\n\t- use StringConcatFactory for String concatenation expressions: ").append(this.useStringConcatFactory ? ENABLED : DISABLED); //$NON-NLS-1$
-		buf.append("\n\t- simulate virtual machine's operand stack during code generartion: ").append(this.simulateOperandStack ? ENABLED : DISABLED); //$NON-NLS-1$
+		buf.append("\n\t- validate virtual machine's operand stack during code generation: ").append(this.validateOperandStack ? ENABLED : DISABLED); //$NON-NLS-1$
 		return buf.toString();
 	}
 

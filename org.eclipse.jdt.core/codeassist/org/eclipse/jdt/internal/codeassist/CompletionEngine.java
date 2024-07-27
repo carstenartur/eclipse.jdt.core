@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2023 IBM Corporation and others.
+ * Copyright (c) 2000, 2024 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -1556,7 +1556,6 @@ public final class CompletionEngine
 					} else {
 						completionName = appendUnlessNextToken(completionName, new char[] {';'}, TerminalTokens.TokenNameSEMICOLON);
 					}
-
 					int relevance = computeBaseRelevance();
 					relevance += computeRelevanceForResolution();
 					relevance += computeRelevanceForInterestingProposal(packageName, fullyQualifiedName);
@@ -4523,7 +4522,7 @@ public final class CompletionEngine
 				}
 				addExpectedType(expected, scope);
 			} else {
-				TypeVariableBinding[] typeVariables = ((ReferenceBinding)ref.resolvedType).typeVariables();
+				TypeVariableBinding[] typeVariables = ref.resolvedType.typeVariables();
 				int length = ref.typeArguments == null ? 0 : ref.typeArguments.length;
 				if(typeVariables != null && typeVariables.length >= length) {
 					int index = length - 1;
@@ -4551,7 +4550,7 @@ public final class CompletionEngine
 				}
 				addExpectedType(expected, scope);
 			} else {
-				TypeVariableBinding[] typeVariables = ((ReferenceBinding)ref.resolvedType).typeVariables();
+				TypeVariableBinding[] typeVariables = ref.resolvedType.typeVariables();
 				if(typeVariables != null) {
 					int iLength = arguments == null ? 0 : arguments.length;
 					done: for (int i = 0; i < iLength; i++) {
@@ -4964,6 +4963,13 @@ public final class CompletionEngine
 	private int computeRelevanceForEnum(){
 		if(this.assistNodeIsEnum) {
 			return R_ENUM;
+		}
+		return 0;
+	}
+
+	private int computeRelevanceForJavaLibrary(char[] packageName) {
+		if (new String(packageName).startsWith("java.")) { //$NON-NLS-1$
+			return R_JAVA_LIBRARY;
 		}
 		return 0;
 	}
@@ -9488,6 +9494,8 @@ public final class CompletionEngine
 		next : for (int f = methods.length; --f >= 0;) {
 			MethodBinding method = methods[f];
 
+			if (completingInPreamble(method))
+				continue next;
 			if (method.isSynthetic()) continue next;
 
 			if (method.isDefaultAbstract())	continue next;
@@ -9824,6 +9832,23 @@ public final class CompletionEngine
 		}
 
 		methodsFound.addAll(newMethodsFound);
+	}
+
+	protected boolean completingInPreamble(MethodBinding method) {
+		// don't propose a method within its own annotation, detected via source positions:
+		AbstractMethodDeclaration sourceMethod = method.sourceMethod();
+		if (sourceMethod == null)
+			return false;
+		int completionPosition = this.actualCompletionPosition + 1; // field is initialized as completionPosition-1
+		if (completionPosition < sourceMethod.declarationSourceStart)
+			return false;
+		if (completionPosition >= sourceMethod.bodyStart)
+			return false;
+		if (sourceMethod.javadoc != null) {
+			if (completionPosition > sourceMethod.javadoc.sourceStart && completionPosition < sourceMethod.javadoc.sourceEnd)
+				return false; // within javadoc, doesn't count as 'preamble'
+		}
+		return true;
 	}
 
 	private char[] capitalize(char[] name) {
@@ -11798,6 +11823,7 @@ public final class CompletionEngine
 				relevance += computeRelevanceForCaseMatching(token, sourceType.sourceName);
 				relevance += computeRelevanceForExpectingType(sourceType);
 				relevance += computeRelevanceForQualification(false);
+				relevance += computeRelevanceForJavaLibrary(sourceType.qualifiedPackageName());
 				relevance += computeRelevanceForRestrictions(IAccessRule.K_ACCESSIBLE); // no access restriction for type in the current unit
 
 				if (sourceType.isAnnotationType()) {
@@ -12374,6 +12400,7 @@ public final class CompletionEngine
 							isArrayCompletion ? originalExpectedType : refBinding);
 						relevance += computeRelevanceForQualification(isQualified);
 						relevance += computeRelevanceForRestrictions(accessibility);
+						relevance += computeRelevanceForJavaLibrary(packageName);
 
 						if(refBinding.isClass()) {
 							relevance += computeRelevanceForClass();
@@ -13839,7 +13866,7 @@ public final class CompletionEngine
 
 		if(parent instanceof ParameterizedSingleTypeReference) {
 			ParameterizedSingleTypeReference ref = (ParameterizedSingleTypeReference) parent;
-			TypeVariableBinding[] typeVariables = ((ReferenceBinding)ref.resolvedType).typeVariables();
+			TypeVariableBinding[] typeVariables = ref.resolvedType.typeVariables();
 			int length = ref.typeArguments == null ? 0 : ref.typeArguments.length;
 			int nodeIndex = -1;
 			for(int i = length - 1 ; i > -1 ; i--) {
@@ -13863,7 +13890,7 @@ public final class CompletionEngine
 			}
 		} else if(parent instanceof ParameterizedQualifiedTypeReference) {
 			ParameterizedQualifiedTypeReference ref = (ParameterizedQualifiedTypeReference) parent;
-			TypeVariableBinding[] typeVariables = ((ReferenceBinding)ref.resolvedType).typeVariables();
+			TypeVariableBinding[] typeVariables = ref.resolvedType.typeVariables();
 			TypeReference[][] arguments = ref.typeArguments;
 			int iLength = arguments == null ? 0 : arguments.length;
 			for (int i = 0; i < iLength; i++) {
@@ -14531,6 +14558,7 @@ public final class CompletionEngine
 		relevance += computeRelevanceForCaseMatching(this.completionToken, simpleTypeName);
 		relevance += computeRelevanceForExpectingType(packageName, simpleTypeName);
 		relevance += computeRelevanceForQualification(isQualified);
+		relevance += computeRelevanceForJavaLibrary(packageName);
 
 		int kind = modifiers & (ClassFileConstants.AccInterface | ClassFileConstants.AccEnum | ClassFileConstants.AccAnnotation);
 		switch (kind) {

@@ -212,7 +212,7 @@ public class IntersectionTypeBinding18 extends ReferenceBinding {
 		if (TypeBinding.equalsEquals(this, other))
 			return true;
 		if (other instanceof ReferenceBinding) {
-			TypeBinding[] rightIntersectingTypes = ((ReferenceBinding) other).getIntersectingTypes();
+			TypeBinding[] rightIntersectingTypes = other.getIntersectingTypes();
 			if (rightIntersectingTypes != null && rightIntersectingTypes.length > 1) {
 				int numRequired = rightIntersectingTypes.length;
 				TypeBinding[] required = new TypeBinding[numRequired];
@@ -357,7 +357,10 @@ public class IntersectionTypeBinding18 extends ReferenceBinding {
 	public ReferenceBinding downwardsProjection(Scope scope, TypeBinding[] mentionedTypeVariables) {
 		ReferenceBinding[] projectedTypes = new ReferenceBinding[this.intersectingTypes.length];
 		for (int i = 0; i < this.intersectingTypes.length; ++i) {
-			projectedTypes[i] = this.intersectingTypes[i].downwardsProjection(scope, mentionedTypeVariables);
+			ReferenceBinding projected = this.intersectingTypes[i].downwardsProjection(scope, mentionedTypeVariables);
+			if (projected == null)
+				return null;
+			projectedTypes[i] = projected;
 		}
 		return (ReferenceBinding) scope.environment().createIntersectionType18(projectedTypes);
 	}

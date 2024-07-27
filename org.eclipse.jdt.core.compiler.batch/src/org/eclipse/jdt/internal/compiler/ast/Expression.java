@@ -462,6 +462,8 @@ public final boolean checkCastTypesCompatibility(Scope scope, TypeBinding castTy
 							if (match != null) {
 								return checkUnsafeCast(scope, castType, interfaceType, match, true);
 							}
+							if (((ReferenceBinding) castType).isDisjointFrom(interfaceType))
+								return false;
 							if (use15specifics) {
 								checkUnsafeCast(scope, castType, expressionType, null /*no match*/, true);
 								// ensure there is no collision between both interfaces: i.e. I1 extends List<String>, I2 extends List<Object>
@@ -506,6 +508,9 @@ public final boolean checkCastTypesCompatibility(Scope scope, TypeBinding castTy
 							}
 							if (((ReferenceBinding) castType).isFinal()) {
 								// no subclass for castType, thus compile-time check is invalid
+								return false;
+							}
+							if (((ReferenceBinding) castType).isDisjointFrom((ReferenceBinding) expressionType)) {
 								return false;
 							}
 							if (use15specifics) {
@@ -562,6 +567,9 @@ public final boolean checkCastTypesCompatibility(Scope scope, TypeBinding castTy
 							match = castType.findSuperTypeOriginatingFrom(expressionType);
 							if (match != null) {
 								return checkUnsafeCast(scope, castType, expressionType, match, true);
+							}
+							if (refExprType.isDisjointFrom((ReferenceBinding) castType)) {
+								return false;
 							}
 							if (use15specifics) {
 								checkUnsafeCast(scope, castType, expressionType, null /*no match*/, true);

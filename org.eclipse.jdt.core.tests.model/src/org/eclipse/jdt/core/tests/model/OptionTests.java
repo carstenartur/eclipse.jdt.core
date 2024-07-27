@@ -23,8 +23,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import junit.framework.Test;
-
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.Path;
@@ -34,10 +32,13 @@ import org.eclipse.core.runtime.preferences.IEclipsePreferences.PreferenceChange
 import org.eclipse.jdt.core.IJavaProject;
 import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.formatter.DefaultCodeFormatterConstants;
+import org.eclipse.jdt.core.tests.util.Util;
 import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 import org.eclipse.jdt.internal.core.JavaModelManager;
 import org.eclipse.jdt.internal.core.JavaProject;
 import org.osgi.service.prefs.BackingStoreException;
+
+import junit.framework.Test;
 
 @SuppressWarnings({"rawtypes", "unchecked"})
 public class OptionTests extends ModifyingResourceTests {
@@ -70,6 +71,14 @@ protected void tearDown() throws Exception {
 	super.tearDown();
 }
 
+@Override
+public void tearDownSuite() throws Exception {
+	// We have to reset classpath variables because we've modified defaults
+	// in getExternalJCLPathString() below
+	Util.cleanupClassPathVariablesAndContainers();
+	super.tearDownSuite();
+}
+
 /**
  * Test persistence of project custom options
  */
@@ -81,14 +90,16 @@ public void test01() throws CoreException {
 				new String[] {}, // source folders
 				new String[] {}, // lib folders
 				new String[] {}, // projects
-				"");
+				"",
+				"" /* no compliance to force defaults */);
 		IJavaProject projectB =
 			this.createJavaProject(
 				"B",
 				new String[] {}, // source folders
 				new String[] {}, // lib folders
 				new String[] {}, // projects
-				"");
+				"",
+				"" /* no compliance to force defaults */);
 
 		Hashtable options = new Hashtable();
 		options.put(JavaCore.COMPILER_PB_DEPRECATION_IN_DEPRECATED_CODE, JavaCore.DISABLED);
@@ -134,14 +145,16 @@ public void test02() throws CoreException {
 				new String[] {}, // source folders
 				new String[] {}, // lib folders
 				new String[] {}, // projects
-				"");
+				"",
+				"" /* no compliance to force defaults */);
 		IJavaProject projectB =
 			this.createJavaProject(
 				"B",
 				new String[] {}, // source folders
 				new String[] {}, // lib folders
 				new String[] {}, // projects
-				"");
+				"",
+				"" /* no compliance to force defaults */);
 
 		String globalEncoding = JavaCore.getOption(JavaCore.CORE_ENCODING);
 
@@ -176,14 +189,16 @@ public void test03() throws CoreException {
 				new String[] {}, // source folders
 				new String[] {}, // lib folders
 				new String[] {}, // projects
-				"");
+				"",
+				"" /* no compliance to force defaults */);
 		IJavaProject projectB =
 			this.createJavaProject(
 				"B",
 				new String[] {}, // source folders
 				new String[] {}, // lib folders
 				new String[] {}, // projects
-				"");
+				"",
+				"" /* no compliance to force defaults */);
 
 		Hashtable options = new Hashtable();
 		options.put(JavaCore.COMPILER_PB_DEPRECATION_IN_DEPRECATED_CODE, JavaCore.DISABLED);
@@ -228,14 +243,16 @@ public void test04() throws CoreException {
 				new String[] {}, // source folders
 				new String[] {}, // lib folders
 				new String[] {}, // projects
-				"");
+				"",
+				"" /* no compliance to force defaults */);
 		IJavaProject projectB =
 			this.createJavaProject(
 				"B",
 				new String[] {}, // source folders
 				new String[] {}, // lib folders
 				new String[] {}, // projects
-				"");
+				"",
+				"" /* no compliance to force defaults */);
 
 		Hashtable options = new Hashtable();
 		options.put(JavaCore.COMPILER_PB_DEPRECATION_IN_DEPRECATED_CODE, JavaCore.DISABLED);
@@ -281,14 +298,16 @@ public void test05() throws CoreException {
 				new String[] {}, // source folders
 				new String[] {}, // lib folders
 				new String[] {}, // projects
-				"");
+				"",
+				"" /* no compliance to force defaults */);
 		IJavaProject projectB =
 			this.createJavaProject(
 				"B",
 				new String[] {}, // source folders
 				new String[] {}, // lib folders
 				new String[] {}, // projects
-				"");
+				"",
+				"" /* no compliance to force defaults */);
 
 		String globalEncoding = JavaCore.getOption(JavaCore.CORE_ENCODING);
 
@@ -323,14 +342,16 @@ public void test06() throws CoreException {
 				new String[] {}, // source folders
 				new String[] {}, // lib folders
 				new String[] {}, // projects
-				"");
+				"",
+				"" /* no compliance to force defaults */);
 		IJavaProject projectB =
 			this.createJavaProject(
 				"B",
 				new String[] {}, // source folders
 				new String[] {}, // lib folders
 				new String[] {}, // projects
-				"");
+				"",
+				"" /* no compliance to force defaults */);
 
 		Hashtable options = new Hashtable();
 		options.put(JavaCore.COMPILER_PB_DEPRECATION_IN_DEPRECATED_CODE, JavaCore.DISABLED);
@@ -378,7 +399,8 @@ public void test07() throws CoreException {
 				new String[] {}, // source folders
 				new String[] {}, // lib folders
 				new String[] {}, // projects
-				"");
+				"",
+				"" /* no compliance to force defaults */);
 //		Preferences preferences = projectA.getPreferences();
 //		preferences.addPropertyChangeListener(new TestPropertyListener());
 		IEclipsePreferences eclipsePreferences = projectA.getEclipsePreferences();
@@ -424,7 +446,8 @@ public void test08() throws CoreException {
 				new String[] {}, // source folders
 				new String[] {}, // lib folders
 				new String[] {}, // projects
-				"");
+				"",
+				"" /* no compliance to force defaults */);
 
 		Hashtable options = new Hashtable();
 		options.put(JavaCore.COMPILER_TASK_TAGS, "TODO:");
@@ -464,7 +487,8 @@ public void test08() throws CoreException {
 public void test09() throws CoreException {
 	try {
 		this.eventCount = 0;
-		JavaProject projectA = (JavaProject) this.createJavaProject("A", new String[] {}, "");
+		JavaProject projectA = (JavaProject) this.createJavaProject("A", new String[] {}, new String[] {}, "",
+				"" /* no compliance to force defaults */);
 //		Preferences preferences = projectA.getPreferences();
 //		preferences.addPropertyChangeListener(new TestPropertyListener());
 		IEclipsePreferences eclipsePreferences = projectA.getEclipsePreferences();
@@ -526,12 +550,13 @@ public void test11() throws CoreException {
  * Ensures that classpath problems are removed when a missing classpath variable is added through the preferences
  * (regression test for bug 109691 Importing preferences does not update classpath variables)
  */
-public void test12() throws CoreException {
+public void test12() throws Exception {
 	IEclipsePreferences preferences = JavaModelManager.getJavaModelManager().getInstancePreferences();
 	try {
 		IJavaProject project = createJavaProject("P", new String[0], new String[] {"TEST"}, "");
 		waitForAutoBuild();
-		preferences.put(JavaModelManager.CP_VARIABLE_PREFERENCES_PREFIX+"TEST", getExternalJCLPathString());
+		setupExternalJCL("jclMin" + CompilerOptions.getFirstSupportedJavaVersion());
+		preferences.put(JavaModelManager.CP_VARIABLE_PREFERENCES_PREFIX+"TEST", getExternalJCLPathString(CompilerOptions.getFirstSupportedJavaVersion()));
 		assertBuildPathMarkers("Unexpected markers", "", project);
 	} finally {
 		deleteProject("P");

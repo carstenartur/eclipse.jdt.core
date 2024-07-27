@@ -21,11 +21,7 @@ package org.eclipse.jdt.internal.compiler.ast;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import java.util.function.Function;
 import java.util.function.IntPredicate;
 import org.eclipse.jdt.internal.compiler.ASTVisitor;
@@ -243,7 +239,7 @@ public class SwitchStatement extends Expression {
 			TypeBinding ref = SwitchStatement.this.expression.resolvedType;
 			if (!(ref instanceof ReferenceBinding))
 				return;
-			RecordComponentBinding[] comps = ((ReferenceBinding)ref).components();
+			RecordComponentBinding[] comps = ref.components();
 			if (comps == null || comps.length <= i) // safety-net for incorrect code.
 				return;
 			if (this.next == null)
@@ -352,8 +348,8 @@ public class SwitchStatement extends Expression {
 					availableTypes.add(child.type);
 				}
 			}
-			if (node.type instanceof ReferenceBinding && ((ReferenceBinding)node.type).isSealed()) {
-				List<ReferenceBinding> allAllowedTypes = getAllPermittedTypes((ReferenceBinding) node.type);
+			if (node.type instanceof ReferenceBinding ref && ref.isSealed()) {
+				List<ReferenceBinding> allAllowedTypes = ref.getAllEnumerableReferenceTypes();
 				this.covers &= isExhaustiveWithCaseTypes(allAllowedTypes, availableTypes);
 				return this.covers;
 			}
@@ -425,12 +421,12 @@ public class SwitchStatement extends Expression {
 						this.scope.enclosingCase = this.cases[caseIndex]; // record entering in a switch case block
 						caseIndex++;
 						if (prevCaseStmtIndex == i - 1) {
-							if (((CaseStatement) this.statements[prevCaseStmtIndex]).containsPatternVariable())
+							if (this.statements[prevCaseStmtIndex].containsPatternVariable())
 								this.scope.problemReporter().illegalFallthroughFromAPattern(this.statements[prevCaseStmtIndex]);
 						}
 						prevCaseStmtIndex = i;
 						if (fallThroughState == FALLTHROUGH && complaintLevel <= NOT_COMPLAINED) {
-							if (((CaseStatement) statement).containsPatternVariable())
+							if (statement.containsPatternVariable())
 								this.scope.problemReporter().IllegalFallThroughToPattern(this.scope.enclosingCase);
 							else if ((statement.bits & ASTNode.DocumentedFallthrough) == 0) { // the case is not fall-through protected by a line comment
 								this.scope.problemReporter().possibleFallThroughCase(this.scope.enclosingCase);
@@ -897,6 +893,9 @@ public class SwitchStatement extends Expression {
 				 * enum constants and the class that is using the switch on the enum has not been recompiled
 				 */
 				if (compilerOptions.complianceLevel >= ClassFileConstants.JDK19) {
+					if (codeStream.lastAbruptCompletion != codeStream.position) {
+						codeStream.goto_(this.breakLabel); // hop, skip and jump over match exception throw.
+					}
 					codeStream.newJavaLangMatchException();
 					codeStream.dup();
 					codeStream.aconst_null();
@@ -1244,13 +1243,13 @@ public class SwitchStatement extends Expression {
 			}
 			reportMixingCaseTypes();
 
-			// check default case for all kinds of switch:
+			// check default case for non-enum switch:
 			boolean flagged = checkAndFlagDefaultSealed(upperScope, compilerOptions);
 			if (!flagged && this.defaultCase == null) {
 				if (ignoreMissingDefaultCase(compilerOptions, isEnumSwitch) && isEnumSwitch) {
 						upperScope.methodScope().hasMissingSwitchDefault = true;
 				} else {
-					if (!isExhaustive()) {
+					if (!isEnumSwitch && !isExhaustive()) {
 						if (isEnhanced)
 							upperScope.problemReporter().enhancedSwitchMissingDefaultCase(this.expression);
 						else
@@ -1258,19 +1257,18 @@ public class SwitchStatement extends Expression {
 					}
 				}
 			}
-			// for enum switch, check if all constants are accounted for (perhaps depending on existence of a default case)
+			// Exhaustiveness check for enum switch
 			if (isEnumSwitch && compilerOptions.complianceLevel >= ClassFileConstants.JDK1_5) {
 				if (this.defaultCase == null || compilerOptions.reportMissingEnumCaseDespiteDefault) {
-					int constantCount = this.otherConstants == null ? 0 : this.otherConstants.length; // could be null if no case statement
-					// The previous computation of exhaustiveness by comparing the size of cases to the enum fields
-					// no longer holds true when we throw in a pattern expression to the mix.
-					// And if there is a total pattern, then we don't have to check further.
+					int constantCount = this.otherConstants == null ? 0 : this.otherConstants.length;
+					if (isEnhanced)
+						this.switchBits |= SwitchStatement.Exhaustive; // negated below if found otherwise
 					if (!((this.switchBits & TotalPattern) != 0) &&
-							(this.containsPatterns ||
+							((this.containsPatterns || this.containsNull) ||
 							(constantCount >= this.caseCount &&
 							constantCount != ((ReferenceBinding)expressionType).enumConstantCount()))) {
-						FieldBinding[] enumFields = ((ReferenceBinding)expressionType.erasure()).fields();
-						for (int i = 0, max = enumFields.length; i <max; i++) {
+						FieldBinding[] enumFields = ((ReferenceBinding) expressionType.erasure()).fields();
+						for (int i = 0, max = enumFields.length; i < max; i++) {
 							FieldBinding enumConstant = enumFields[i];
 							if ((enumConstant.modifiers & ClassFileConstants.AccEnum) == 0) continue;
 							findConstant : {
@@ -1278,14 +1276,24 @@ public class SwitchStatement extends Expression {
 									if ((enumConstant.id + 1) == this.otherConstants[j].c.intValue()) // zero should not be returned see bug 141810
 										break findConstant;
 								}
-								this.switchBits &= ~(1 << SwitchStatement.Exhaustive);
+								this.switchBits &= ~SwitchStatement.Exhaustive;
 								// enum constant did not get referenced from switch
 								boolean suppress = (this.defaultCase != null && (this.defaultCase.bits & DocumentedCasesOmitted) != 0);
 								if (!suppress) {
-									reportMissingEnumConstantCase(upperScope, enumConstant);
+									if (isEnhanced)
+										upperScope.problemReporter().enhancedSwitchMissingDefaultCase(this.expression);
+									else
+										reportMissingEnumConstantCase(upperScope, enumConstant);
 								}
 							}
 						}
+					}
+				}
+				if (this.defaultCase == null) {
+					if (ignoreMissingDefaultCase(compilerOptions, isEnumSwitch)) {
+						upperScope.methodScope().hasMissingSwitchDefault = true;
+					} else {
+						upperScope.problemReporter().missingDefaultCase(this, isEnumSwitch, expressionType);
 					}
 				}
 			}
@@ -1365,7 +1373,7 @@ public class SwitchStatement extends Expression {
 				return checkAndFlagDefaultRecord(skope, compilerOptions, ref);
 		}
 		if (!ref.isSealed()) return false;
-		if (!isExhaustiveWithCaseTypes(getAllPermittedTypes(ref), this.caseLabelElementTypes)) {
+		if (!isExhaustiveWithCaseTypes(ref.getAllEnumerableReferenceTypes(), this.caseLabelElementTypes)) {
 			if (this instanceof SwitchExpression) // non-exhaustive switch expressions will be flagged later.
 				return false;
 			skope.problemReporter().enhancedSwitchMissingDefaultCase(this.expression);
@@ -1374,25 +1382,6 @@ public class SwitchStatement extends Expression {
 		this.switchBits |= SwitchStatement.Exhaustive;
 		return false;
 	}
-	List<ReferenceBinding> getAllPermittedTypes(ReferenceBinding ref) {
-		if (!ref.isSealed())
-			return new ArrayList<>(0);
-
-		Set<ReferenceBinding> permSet = new HashSet<>(Arrays.asList(ref.permittedTypes()));
-		if (ref.isClass() && (!ref.isAbstract()))
-			permSet.add(ref);
-		Set<ReferenceBinding> oldSet = new HashSet<>(permSet);
-		do {
-			for (ReferenceBinding type : permSet) {
-				oldSet.addAll(Arrays.asList(type.permittedTypes()));
-			}
-			Set<ReferenceBinding> tmp = oldSet;
-			oldSet = permSet;
-			permSet = tmp;
-		} while (oldSet.size() != permSet.size());
-		return Arrays.asList(permSet.toArray(new ReferenceBinding[0]));
-	}
-
 	private boolean checkAndFlagDefaultRecord(BlockScope skope, CompilerOptions compilerOptions, ReferenceBinding ref) {
 		RecordComponentBinding[] comps = ref.components();
 		List<ReferenceBinding> allallowedTypes = new ArrayList<>();
@@ -1419,7 +1408,6 @@ public class SwitchStatement extends Expression {
 		return false;
 	}
 	private boolean isExhaustiveWithCaseTypes(List<ReferenceBinding> allAllowedTypes,  List<TypeBinding> listedTypes) {
-		// first KISS (Keep It Simple Stupid)
 		int pendingTypes = allAllowedTypes.size();
 		for (ReferenceBinding pt : allAllowedTypes) {
 			/* Per JLS 14.11.1.1: A type T that names an abstract sealed class or sealed interface is covered
@@ -1438,63 +1426,7 @@ public class SwitchStatement extends Expression {
 				}
 			}
 		}
-		if (pendingTypes == 0)
-			return true;
-		// else - #KICKME (Keep It Complicated Keep Me Employed)"
-		List<TypeBinding> coveredTypes = new ArrayList<>(listedTypes);
-		List<ReferenceBinding> remainingTypes = new ArrayList<>(allAllowedTypes);
-		remainingTypes.removeAll(coveredTypes);
-
-		Map<TypeBinding, List<TypeBinding>> impliedTypes = new HashMap<>();
-
-		for (ReferenceBinding type : remainingTypes) {
-			impliedTypes.put(type, new ArrayList<>());
-			List<ReferenceBinding> typesToAdd = new ArrayList<>();
-			for (ReferenceBinding impliedType : allAllowedTypes) {
-				if (impliedType.equals(type)) continue;
-				if (type.isClass()) {
-					if (impliedType.isAbstract() && type.superclass().equals(impliedType)) {
-						typesToAdd.add(impliedType);
-					}
-					if (Arrays.asList(type.superInterfaces()).contains(impliedType))
-						typesToAdd.add(impliedType);
-				} else if (type.isInterface()) {
-					if (Arrays.asList(impliedType.superInterfaces()).contains(type))
-						typesToAdd.add(impliedType);
-				}
-			}
-			if (!typesToAdd.isEmpty()) {
-				impliedTypes.get(type).addAll(typesToAdd);
-			}
-		}
-		boolean delta = true;
-		while (delta) {
-			delta = false;
-			List<ReferenceBinding> typesToAdd = new ArrayList<>();
-			for (ReferenceBinding type : remainingTypes) {
-				boolean add = false;
-				if (type.isClass()) {
-					for (TypeBinding tb : impliedTypes.get(type)) {
-						if (coveredTypes.contains(tb)) {
-							add = true;
-							break;
-						}
-					}
-				} else if (type.isInterface()) {
-					add = coveredTypes.containsAll(impliedTypes.get(type));
-				}
-				if (add) {
-					typesToAdd.add(type);
-				}
-			}
-			if (!typesToAdd.isEmpty()) {
-				remainingTypes.removeAll(typesToAdd);
-				coveredTypes.addAll(typesToAdd);
-				typesToAdd.clear();
-				delta = true;
-			}
-		}
-		return remainingTypes.isEmpty();
+		return pendingTypes == 0;
 	}
 	private boolean needPatternDispatchCopy() {
 		if (this.containsPatterns || (this.switchBits & QualifiedEnum) != 0)

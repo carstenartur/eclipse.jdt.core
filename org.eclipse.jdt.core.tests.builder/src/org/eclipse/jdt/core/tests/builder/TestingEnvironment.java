@@ -27,6 +27,7 @@ import org.eclipse.jdt.internal.core.JavaModelManager;
 import org.eclipse.jdt.internal.core.JavaProject;
 
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 public class TestingEnvironment {
@@ -89,12 +90,7 @@ public class TestingEnvironment {
 	public IPath addClass(IPath packagePath, String className, String contents) {
 		checkAssertion("a workspace must be open", this.isOpen); //$NON-NLS-1$
 		IPath classPath = packagePath.append(className + ".java"); //$NON-NLS-1$
-		try {
-			createFile(classPath, contents.getBytes("UTF8")); //$NON-NLS-1$
-		} catch (UnsupportedEncodingException e) {
-			e.printStackTrace();
-			checkAssertion("e1", false); //$NON-NLS-1$
-		}
+		createFile(classPath, contents.getBytes(StandardCharsets.UTF_8));
 		return classPath;
 	}
 
@@ -185,7 +181,7 @@ public void addClassFolder(IPath projectPath, IPath classFolderPath, boolean isE
 	}
 
 	public IPath addProject(String projectName){
-		return addProject(projectName, "1.4");
+		return addProject(projectName, CompilerOptions.getFirstSupportedJavaVersion());
 	}
 
 	public IPath addProject(String projectName, String compliance){
@@ -193,19 +189,7 @@ public void addClassFolder(IPath projectPath, IPath classFolderPath, boolean isE
 		IProject project = createProject(projectName);
 		int requiredComplianceFlag = 0;
 		String compilerVersion = null;
-		if ("1.5".equals(compliance)) {
-			requiredComplianceFlag = AbstractCompilerTest.F_1_5;
-			compilerVersion = CompilerOptions.VERSION_1_5;
-		}
-		else if ("1.6".equals(compliance)) {
-			requiredComplianceFlag = AbstractCompilerTest.F_1_6;
-			compilerVersion = CompilerOptions.VERSION_1_6;
-		}
-		else if ("1.7".equals(compliance)) {
-			requiredComplianceFlag = AbstractCompilerTest.F_1_7;
-			compilerVersion = CompilerOptions.VERSION_1_7;
-		}
-		else if ("1.8".equals(compliance)) {
+		if ("1.8".equals(compliance)) {
 			requiredComplianceFlag = AbstractCompilerTest.F_1_8;
 			compilerVersion = CompilerOptions.VERSION_1_8;
 		}
@@ -245,7 +229,7 @@ public void addClassFolder(IPath projectPath, IPath classFolderPath, boolean isE
 		} else if ("19".equals(compliance)) {
 			requiredComplianceFlag = AbstractCompilerTest.F_19;
 			compilerVersion = CompilerOptions.VERSION_19;
-		} else if (!"1.4".equals(compliance) && !"1.3".equals(compliance)) {
+		} else {
 			throw new UnsupportedOperationException("Test framework doesn't support compliance level: " + compliance);
 		}
 		if (requiredComplianceFlag != 0) {
@@ -370,12 +354,7 @@ public void addLibrary(IPath projectPath, IPath libraryPath, IPath sourceAttachm
 	public IPath addFile(IPath root, String fileName, String contents){
 		checkAssertion("a workspace must be open", this.isOpen); //$NON-NLS-1$
 		IPath filePath = root.append(fileName);
-		try {
-			createFile(filePath, contents.getBytes("UTF8")); //$NON-NLS-1$
-		} catch (UnsupportedEncodingException e) {
-			e.printStackTrace();
-			checkAssertion("e1", false); //$NON-NLS-1$
-		}
+		createFile(filePath, contents.getBytes(StandardCharsets.UTF_8));
 		return filePath;
 	}
 
@@ -468,27 +447,12 @@ public void cleanBuild(String projectName) {
 	}
 
 	private IFile createFile(IPath path, byte[] contents) {
-		ByteArrayInputStream is = null;
 		try {
 			IFile file = this.workspace.getRoot().getFile(path);
-
-			is = new ByteArrayInputStream(contents);
-			if (file.exists()) {
-				file.setContents(is, true, false, null);
-			} else {
-				file.create(is, true, null);
-			}
+			file.write(contents, true, false, false, null);
 			return file;
 		} catch (CoreException e) {
 			handle(e);
-		} finally {
-			if (is != null) {
-				try {
-					is.close();
-				} catch (IOException e) {
-					// ignore
-				}
-			}
 		}
 		return null;
 	}

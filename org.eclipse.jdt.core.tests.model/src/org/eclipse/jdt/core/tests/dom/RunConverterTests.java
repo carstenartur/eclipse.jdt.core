@@ -62,6 +62,8 @@ public static Class[] getAllTestClasses() {
 		ASTConverter_RecordPattern_Test.class,
 		ASTConverterStringTemplateTest.class,
 		ASTConverterSuperAfterStatements.class,
+		ASTConverterEitherOrMultiPatternTest.class,
+		CompilationUnitResolverDiscoveryTest.class
 	};
 }
 public static Test suite() {

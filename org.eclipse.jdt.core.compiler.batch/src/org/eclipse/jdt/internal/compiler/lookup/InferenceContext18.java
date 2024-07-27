@@ -180,6 +180,8 @@ public class InferenceContext18 {
 	// the following two flags control to what degree we continue with incomplete information:
 	private boolean isInexactVarargsInference = false;
 	boolean prematureOverloadResolution = false;
+	// during reduction we ignore missing types but record that fact here:
+	boolean hasIgnoredMissingType;
 
 	public static boolean isSameSite(InvocationSite site1, InvocationSite site2) {
 		if (site1 == site2)
@@ -754,6 +756,7 @@ public class InferenceContext18 {
 	protected int getInferenceKind(MethodBinding nonGenericMethod, TypeBinding[] argumentTypes) {
 		switch (this.scope.parameterCompatibilityLevel(nonGenericMethod, argumentTypes)) {
 			case Scope.AUTOBOX_COMPATIBLE:
+			case Scope.COMPATIBLE_IGNORING_MISSING_TYPE: // if in doubt the method with missing types should be accepted to signal its relevance for resolution
 				return CHECK_LOOSE;
 			case Scope.VARARGS_COMPATIBLE:
 				return CHECK_VARARG;
@@ -2064,27 +2067,17 @@ public class InferenceContext18 {
 			return false;
 		ReferenceBinding rAlpha = this.environment.createParameterizedType(
 				(ReferenceBinding) typeBinding.original(), alphas, typeBinding.enclosingType(), typeBinding.getTypeAnnotations());
-		TypeBinding[] rPrimes = this.currentBounds.condition18_5_5_item_4(rAlpha, alphas, tPrime, this);
-		if (rPrimes != null) {
-			// TODO:
+		TypeBinding rPrime = this.currentBounds.condition18_5_5_item_4(rAlpha, alphas, tPrime, this);
+		if (rPrime != null) {
 			/* The constraint formula ‹T' = R'› is reduced (18.2) and the resulting bounds are
-			 * incorporated into B1 to produce a new bound set, B2.
-			 * TODO: refactor the method below into two? - instead of creating array - here reusing. */
-			for (TypeBinding rPrime : rPrimes) {
-				if (!rPrime.isParameterizedType()) continue;
-				try {
-					if (!reduceAndIncorporate(ConstraintTypeFormula.create(tPrime, rPrime, ReductionResult.SAME))) {
-						 /* If B2 contains the bound false, inference fails. */
-						return false;
-					}
-				} catch (InferenceFailureException e) {
+			 * incorporated into B1 to produce a new bound set, B2. */
+			try {
+				if (!reduceAndIncorporate(ConstraintTypeFormula.create(tPrime, rPrime, ReductionResult.SAME))) {
+					 /* If B2 contains the bound false, inference fails. */
 					return false;
 				}
-//				if (rPrime.typeArguments().length == 0) continue; // TODO: should we?
-//				if (!reduceWithEqualityConstraints(new TypeBinding[] {tPrime}, new TypeBinding[] {rPrime})) {
-//					 /* If B2 contains the bound false, inference fails. */
-//					return false;
-//				}
+			} catch (InferenceFailureException e) {
+				return false;
 			}
 		} /* else part: Otherwise, B2 is the same as B1.*/
 		return true;

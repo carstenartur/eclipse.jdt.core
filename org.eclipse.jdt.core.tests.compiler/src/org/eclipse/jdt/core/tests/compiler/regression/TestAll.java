@@ -94,6 +94,8 @@ public static Test suite() {
 	standardTests.add(InitializationTests.class);
 	standardTests.add(ResourceLeakTests.class);
 	standardTests.add(PackageBindingTest.class);
+	standardTests.add(NameEnvironmentAnswerListenerTest.class);
+	standardTests.add(XtextDependencies.class);
 
 	// add all javadoc tests
 	for (int i=0, l=JavadocTest.ALL_CLASSES.size(); i<l; i++) {
@@ -228,6 +230,7 @@ public static Test suite() {
 	 // add 17 specific test here (check duplicates)
 	 ArrayList since_17 = new ArrayList();
 	 since_17.add(SealedTypesTests.class);
+	 since_17.add(SealedTypesSpecReviewTest.class);
 	 since_17.add(InstanceofPrimaryPatternTest.class);
 	 since_17.add(BatchCompilerTest_17.class);
 
@@ -247,7 +250,7 @@ public static Test suite() {
 	 ArrayList since_22 = new ArrayList();
 //	 since_22.add(SuperAfterStatementsTest.class);
 	 since_22.add(UnnamedPatternsAndVariablesTest.class);
-	 since_22.add(UseOfUnderscoreWithPreviewTest.class);
+	 since_22.add(UseOfUnderscoreJava22Test.class);
 	 since_22.add(SuperAfterStatementsTest.class);
 	 since_22.add(StringTemplateTest.class);
 	 since_22.add(SwitchPatternTest21.class);
@@ -259,49 +262,15 @@ public static Test suite() {
 	all.addTest(new TestSuite(HashtableOfObjectTest.class));
 	all.addTest(new TestSuite(JrtUtilTest.class));
 	int possibleComplianceLevels = AbstractCompilerTest.getPossibleComplianceLevels();
-	if ((possibleComplianceLevels & AbstractCompilerTest.F_1_3) != 0) {
-		ArrayList tests_1_3 = (ArrayList)standardTests.clone();
-		tests_1_3.add(Compliance_1_3.class);
-		tests_1_3.add(JavadocTest_1_3.class);
-		tests_1_3.add(Compliance_CLDC.class);
-		TestCase.resetForgottenFilters(tests_1_3);
-		all.addTest(AbstractCompilerTest.buildComplianceTestSuite(ClassFileConstants.JDK1_3, tests_1_3));
-	}
-	if ((possibleComplianceLevels & AbstractCompilerTest.F_1_4) != 0) {
-		ArrayList tests_1_4 = (ArrayList)standardTests.clone();
-		tests_1_4.addAll(since_1_4);
-		tests_1_4.add(Compliance_1_4.class);
-		tests_1_4.add(ClassFileReaderTest_1_4.class);
-		tests_1_4.add(JavadocTest_1_4.class);
-		TestCase.resetForgottenFilters(tests_1_4);
-		all.addTest(AbstractCompilerTest.buildComplianceTestSuite(ClassFileConstants.JDK1_4, tests_1_4));
-	}
-	if ((possibleComplianceLevels & AbstractCompilerTest.F_1_5) != 0) {
-		ArrayList tests_1_5 = (ArrayList)standardTests.clone();
-		tests_1_5.addAll(since_1_4);
-		tests_1_5.addAll(since_1_5);
-		TestCase.resetForgottenFilters(tests_1_5);
-		all.addTest(AbstractCompilerTest.buildComplianceTestSuite(ClassFileConstants.JDK1_5, tests_1_5));
-	}
-	if ((possibleComplianceLevels & AbstractCompilerTest.F_1_6) != 0) {
-		ArrayList tests_1_6 = (ArrayList)standardTests.clone();
-		tests_1_6.addAll(since_1_4);
-		tests_1_6.addAll(since_1_5);
-		tests_1_6.addAll(since_1_6);
-		TestCase.resetForgottenFilters(tests_1_6);
-		all.addTest(AbstractCompilerTest.buildComplianceTestSuite(ClassFileConstants.JDK1_6, tests_1_6));
-	}
-	if ((possibleComplianceLevels & AbstractCompilerTest.F_1_7) != 0) {
-		ArrayList tests_1_7 = (ArrayList)standardTests.clone();
-		tests_1_7.addAll(since_1_4);
-		tests_1_7.addAll(since_1_5);
-		tests_1_7.addAll(since_1_6);
-		tests_1_7.addAll(since_1_7);
-		TestCase.resetForgottenFilters(tests_1_7);
-		all.addTest(AbstractCompilerTest.buildComplianceTestSuite(ClassFileConstants.JDK1_7, tests_1_7));
-	}
+
 	if ((possibleComplianceLevels & AbstractCompilerTest.F_1_8) != 0) {
 		ArrayList tests_1_8 = (ArrayList)standardTests.clone();
+		tests_1_8.add(Compliance_1_3.class);
+		tests_1_8.add(JavadocTest_1_3.class);
+		tests_1_8.add(Compliance_CLDC.class);
+		tests_1_8.add(Compliance_1_4.class);
+		tests_1_8.add(ClassFileReaderTest_1_4.class);
+		tests_1_8.add(JavadocTest_1_4.class);
 		tests_1_8.addAll(since_1_4);
 		tests_1_8.addAll(since_1_5);
 		tests_1_8.addAll(since_1_6);

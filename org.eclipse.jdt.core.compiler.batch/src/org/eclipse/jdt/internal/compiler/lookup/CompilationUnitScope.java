@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2023 IBM Corporation and others.
+ * Copyright (c) 2000, 2024 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -408,6 +408,13 @@ void connectTypeHierarchy() {
 	for (SourceTypeBinding topLevelType : this.topLevelTypes)
 		topLevelType.scope.connectTypeHierarchy();
 }
+void sealTypeHierarchy() {
+	for (SourceTypeBinding sourceType : this.topLevelTypes) {
+		sourceType.scope.connectPermittedTypes();
+	}
+	for (SourceTypeBinding topLevelType : this.topLevelTypes)
+		topLevelType.scope.connectImplicitPermittedTypes();
+}
 void integrateAnnotationsInHierarchy() {
 	// Only now that all hierarchy information is built we're ready for ...
 	// ... integrating annotations
@@ -417,15 +424,6 @@ void integrateAnnotationsInHierarchy() {
 			topLevelType.scope.referenceType().updateSupertypesWithAnnotations(Collections.emptyMap());
 	} finally {
 		this.environment.suppressImportErrors = false;
-	}
-	// ... checking on permitted types
-	connectPermittedTypes();
-	for (SourceTypeBinding topLevelType : this.topLevelTypes)
-		topLevelType.scope.connectImplicitPermittedTypes();
-}
-private void connectPermittedTypes() {
-	for (SourceTypeBinding sourceType : this.topLevelTypes) {
-		sourceType.scope.connectPermittedTypes();
 	}
 }
 void faultInImports() {
@@ -1101,11 +1099,13 @@ private int checkAndRecordImportBinding(
 	final char[] name = importReference.getSimpleName();
 	if (importBinding instanceof ReferenceBinding || conflictingType != null) {
 		ReferenceBinding referenceBinding = conflictingType == null ? (ReferenceBinding) importBinding : conflictingType;
-		ReferenceBinding typeToCheck = referenceBinding.problemId() == ProblemReasons.Ambiguous
-			? ((ProblemReferenceBinding) referenceBinding).closestMatch
-			: referenceBinding;
-		if (importReference.isTypeUseDeprecated(typeToCheck, this))
-			problemReporter().deprecatedType(typeToCheck, importReference);
+		if (compilerOptions().complianceLevel <= ClassFileConstants.JDK1_8) { // not any more since JEP 211 / JDK 9
+			ReferenceBinding typeToCheck = referenceBinding.problemId() == ProblemReasons.Ambiguous
+				? ((ProblemReferenceBinding) referenceBinding).closestMatch
+				: referenceBinding;
+			if (importReference.isTypeUseDeprecated(typeToCheck, this))
+				problemReporter().deprecatedType(typeToCheck, importReference);
+		}
 
 		ReferenceBinding existingType = typesBySimpleNames.get(name);
 		if (existingType != null) {

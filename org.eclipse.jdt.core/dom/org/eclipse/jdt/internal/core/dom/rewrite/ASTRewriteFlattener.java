@@ -951,6 +951,21 @@ public class ASTRewriteFlattener extends ASTVisitor {
 		return false;
 	}
 
+	@Override
+	public boolean visit(EitherOrMultiPattern node) {
+		if (DOMASTUtil.isEitherOrMultiPatternSupported(node.getAST())) {
+			int size = 1;
+			for (Pattern pattern : node.patterns()) {
+				visitPattern(pattern);
+				if (size < node.patterns().size()) {
+					this.result.append(", ");//$NON-NLS-1$
+				}
+				size++;
+			}
+		}
+		return false;
+	}
+
 	private boolean visitPattern(Pattern node) {
 		if (node instanceof RecordPattern) {
 			return visit((RecordPattern) node);
@@ -1605,7 +1620,12 @@ public class ASTRewriteFlattener extends ASTVisitor {
 	@Override
 	public boolean visit(TypePattern node) {
 		if (DOMASTUtil.isPatternSupported(node.getAST())) {
-			node.getPatternVariable().accept(this);
+			if(node.getAST().apiLevel() < AST.JLS22) {
+				node.getPatternVariable().accept(this);
+			} else {
+				node.getPatternVariable2().accept(this);
+			}
+
 		}
 		return false;
 	}

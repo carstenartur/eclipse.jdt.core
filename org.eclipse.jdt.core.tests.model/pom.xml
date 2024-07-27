@@ -15,11 +15,11 @@
   <parent>
     <artifactId>tests-pom</artifactId>
     <groupId>org.eclipse.jdt</groupId>
-    <version>4.32.0-SNAPSHOT</version>
+    <version>4.33.0-SNAPSHOT</version>
     <relativePath>../tests-pom/</relativePath>
   </parent>
   <artifactId>org.eclipse.jdt.core.tests.model</artifactId>
-  <version>3.13.0-SNAPSHOT</version>
+  <version>3.13.100-SNAPSHOT</version>
   <packaging>eclipse-test-plugin</packaging>
 
   <properties>
@@ -34,9 +34,7 @@
       	<configuration>
       	  <argLine>-Xmx1G -Djdt.default.test.compliance=1.8 -DDetectVMInstallationsJob.disabled=true ${tycho.surefire.argLine}</argLine>
       	  <includes>
-      	  	<include>org/eclipse/jdt/core/tests/model/AllJavaModelTestsTracing.class</include>
-      	  	<include>org/eclipse/jdt/core/tests/dom/RunAllTestsTracing.class</include>
-      	  	<include>org/eclipse/jdt/core/tests/RunFormatterTests.class</include>
+      	  	<include>org/eclipse/jdt/core/tests/RunAllJdtModelTestsTracing.class</include>
       	  </includes>
          </configuration>
       </plugin>
@@ -90,7 +88,7 @@
 			</plugins>
 		</build>
 		<properties>
-			<tycho.surefire.argLine>--add-modules ALL-SYSTEM -Dcompliance=1.4,1.7,1.8,14,17</tycho.surefire.argLine>
+			<tycho.surefire.argLine>--add-modules ALL-SYSTEM -Dcompliance=1.8,14,17</tycho.surefire.argLine>
 		</properties>
 	</profile>
 	<profile>
@@ -111,7 +109,7 @@
 			</plugins>
 		</build>
 		<properties>
-			<tycho.surefire.argLine>--add-modules ALL-SYSTEM -Dcompliance=1.4,1.7,1.8,15,18</tycho.surefire.argLine>
+			<tycho.surefire.argLine>--add-modules ALL-SYSTEM -Dcompliance=1.8,15,18</tycho.surefire.argLine>
 		</properties>
 	</profile>
 	<profile>
@@ -132,7 +130,7 @@
 			</plugins>
 		</build>
 		<properties>
-			<tycho.surefire.argLine>--add-modules ALL-SYSTEM -Dcompliance=1.4,1.7,1.8,17,19</tycho.surefire.argLine>
+			<tycho.surefire.argLine>--add-modules ALL-SYSTEM -Dcompliance=1.8,17,19</tycho.surefire.argLine>
 		</properties>
 	</profile>
 	<profile>
@@ -153,7 +151,7 @@
 			</plugins>
 		</build>
 		<properties>
-			<tycho.surefire.argLine>--add-modules ALL-SYSTEM -Dcompliance=1.4,1.8,17,19,21</tycho.surefire.argLine>
+			<tycho.surefire.argLine>--add-modules ALL-SYSTEM -Dcompliance=1.8,17,19,21</tycho.surefire.argLine>
 		</properties>
 	</profile>
 	<profile>

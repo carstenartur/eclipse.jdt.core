@@ -159,7 +159,7 @@ protected boolean buildStructure(OpenableElementInfo info, final IProgressMonito
 	}
 	// underlying resource is null in the case of a working copy on a class file in a jar
 	if (underlyingResource != null)
-		unitInfo.timestamp = ((IFile)underlyingResource).getModificationStamp();
+		unitInfo.timestamp = underlyingResource.getModificationStamp();
 
 	// compute other problems if needed
 	CompilationUnitDeclaration compilationUnitDeclaration = null;
@@ -667,23 +667,15 @@ public char[] getContents() {
 		// no need to force opening of CU to get the content
 		// also this cannot be a working copy, as its buffer is never closed while the working copy is alive
 		IFile file = (IFile) getResource();
-		// Get encoding from file
-		String encoding;
 		try {
-			encoding = file.getCharset();
-		} catch(CoreException ce) {
-			// do not use any encoding
-			encoding = null;
-		}
-		try {
-			return Util.getResourceContentsAsCharArray(file, encoding);
+			return Util.getResourceContentsAsCharArray(file);
 		} catch (JavaModelException e) {
 			if (JavaModelManager.getJavaModelManager().abortOnMissingSource.get() == Boolean.TRUE) {
 				IOException ioException =
 					e.getJavaModelStatus().getCode() == IJavaModelStatusConstants.IO_EXCEPTION ?
 						(IOException)e.getException() :
 						new IOException(e.getMessage());
-				throw new AbortCompilationUnit(null, ioException, encoding);
+				throw new AbortCompilationUnit(null, ioException, null);
 			} else {
 				Util.log(e);
 			}
@@ -1385,7 +1377,7 @@ protected void toStringInfo(int tab, StringBuilder buffer, Object info, boolean 
  */
 protected void updateTimeStamp(CompilationUnit original) throws JavaModelException {
 	long timeStamp =
-		((IFile) original.getResource()).getModificationStamp();
+		original.getResource().getModificationStamp();
 	if (timeStamp == IResource.NULL_STAMP) {
 		throw new JavaModelException(
 			new JavaModelStatus(IJavaModelStatusConstants.INVALID_RESOURCE));

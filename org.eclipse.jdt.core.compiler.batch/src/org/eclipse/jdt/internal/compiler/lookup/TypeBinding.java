@@ -38,6 +38,7 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -308,17 +309,29 @@ public TypeBinding erasure() {
 /**
  * Perform an upwards type projection as per JLS 4.10.5
  * @param scope Relevant scope for evaluating type projection
- * @param mentionedTypeVariables Filter for mentioned type variabled
- * @return Upwards type projection of 'this', or null if downwards projection is undefined
+ * @param mentionedTypeVariables Filter for mentioned type variables
+ * @return Upwards type projection of 'this', or null if upwards projection is undefined
 */
 public TypeBinding upwardsProjection(Scope scope, TypeBinding[] mentionedTypeVariables) {
+	return this;
+}
+/**
+ * Perform an upwards type projection as per JLS 4.10.5
+ * @param scope Relevant scope for evaluating type projection
+ * @return Upwards type projection of 'this', or null if upwards projection is undefined
+*/
+public TypeBinding upwardsProjection(Scope scope) {
+	TypeBinding[] mentionedTypeVariables= syntheticTypeVariablesMentioned();
+	if (mentionedTypeVariables != null && mentionedTypeVariables.length > 0) {
+		return upwardsProjection(scope, mentionedTypeVariables);
+	}
 	return this;
 }
 
 /**
  * Perform a downwards type projection as per JLS 4.10.5
  * @param scope Relevant scope for evaluating type projection
- * @param mentionedTypeVariables Filter for mentioned type variabled
+ * @param mentionedTypeVariables Filter for mentioned type variables
  * @return Downwards type projection of 'this', or null if downwards projection is undefined
 */
 public TypeBinding downwardsProjection(Scope scope, TypeBinding[] mentionedTypeVariables) {
@@ -1792,6 +1805,14 @@ public boolean isFreeTypeVariable() {
  */
 public boolean isNonDenotable() {
 	return false;
+}
+
+public boolean isSealed() {
+	return false;
+}
+
+public List<ReferenceBinding> getAllEnumerableReferenceTypes() {
+	return Collections.emptyList();
 }
 
 }

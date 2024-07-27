@@ -75,11 +75,24 @@ public class SealedTypesTests extends AbstractRegressionTest9 {
 		runNegativeTest(testFiles, expectedCompilerLog, JavacTestOptions.forReleaseWithPreview("17"));
 	}
 	protected void runWarningTest(String[] testFiles, String expectedCompilerLog) {
-		runWarningTest(testFiles, expectedCompilerLog, null);
+		runWarningTest(testFiles, expectedCompilerLog, (Map<String, String>) null);
 	}
 	protected void runWarningTest(String[] testFiles, String expectedCompilerLog, Map<String, String> customOptions) {
 		runWarningTest(testFiles, expectedCompilerLog, customOptions, null);
 	}
+
+	protected void runWarningTest(String[] testFiles, String expectedCompilerLog, String expectedOutput) {
+
+		Runner runner = new Runner();
+		runner.testFiles = testFiles;
+		runner.expectedCompilerLog = expectedCompilerLog;
+		runner.expectedOutputString = expectedOutput;
+		runner.customOptions = getCompilerOptions();
+		runner.vmArguments = new String[] {"--enable-preview"};
+		runner.javacTestOptions = JavacTestOptions.forReleaseWithPreview("16");
+		runner.runWarningTest();
+	}
+
 	protected void runWarningTest(String[] testFiles, String expectedCompilerLog,
 			Map<String, String> customOptions, String javacAdditionalTestOptions) {
 
@@ -1086,10 +1099,31 @@ public class SealedTypesTests extends AbstractRegressionTest9 {
 				"}\n",
 			},
 			"----------\n" +
-			"1. ERROR in p1\\X.java (at line 2)\n" +
+			"1. ERROR in p1\\X.java (at line 1)\n" +
+			"	package p1;\n" +
+			"	^^^^^^^^^^^\n" +
+			"Syntax error on token(s), misplaced construct(s)\n" +
+			"----------\n" +
+			"2. ERROR in p1\\X.java (at line 1)\n" +
+			"	package p1;\n" +
+			"public  non-sealed @interface X {\n" +
+			"	^^^^^^^^^^^^^^^^^^^^^^^\n" +
+			"Syntax error on token(s), misplaced construct(s)\n" +
+			"----------\n" +
+			"3. ERROR in p1\\X.java (at line 2)\n" +
 			"	public  non-sealed @interface X {\n" +
-			"	                              ^\n" +
-			"An interface X declared as non-sealed should have a sealed direct superinterface\n" +
+			"	            ^^^^^^\n" +
+			"Syntax error, insert \"Identifier (\" to complete MethodHeaderName\n" +
+			"----------\n" +
+			"4. ERROR in p1\\X.java (at line 2)\n" +
+			"	public  non-sealed @interface X {\n" +
+			"	            ^^^^^^\n" +
+			"Syntax error, insert \")\" to complete MethodDeclaration\n" +
+			"----------\n" +
+			"5. ERROR in p1\\X.java (at line 2)\n" +
+			"	public  non-sealed @interface X {\n" +
+			"	            ^^^^^^\n" +
+			"Syntax error, insert \";\" to complete RecordBodyDeclarations\n" +
 			"----------\n");
 	}
 	public void testBug563806_035() {
@@ -1611,7 +1645,12 @@ public class SealedTypesTests extends AbstractRegressionTest9 {
 					"}",
 				},
 				"----------\n" +
-				"1. ERROR in p1\\X.java (at line 7)\n" +
+				"1. ERROR in p1\\X.java (at line 6)\n" +
+				"	sealed class Y extends X permits SubInnerY {\n" +
+				"	                                 ^^^^^^^^^\n" +
+				"SubInnerY cannot be resolved to a type\n" +
+				"----------\n" +
+				"2. ERROR in p1\\X.java (at line 7)\n" +
 				"	final class SubInnerY extends Y {}\n" +
 				"	                              ^\n" +
 				"The type SubInnerY extending a sealed class A.Y should be a permitted subtype of A.Y\n" +
@@ -2818,7 +2857,7 @@ public class SealedTypesTests extends AbstractRegressionTest9 {
 			"2. ERROR in X.java (at line 5)\n" +
 			"	<permits>this(t);\n" +
 			"	         ^^^^^^^^\n" +
-			"The parameterized constructor <permits>X(permits) of type X is not applicable for the arguments (Integer)\n" +
+			"The constructor X(permits) refers to the missing type permits\n" +
 			"----------\n");
 	}
 	@SuppressWarnings({ "unchecked", "rawtypes" })
@@ -2845,7 +2884,7 @@ public class SealedTypesTests extends AbstractRegressionTest9 {
 			"3. ERROR in X.java (at line 5)\n" +
 			"	<permits>this(t);\n" +
 			"	         ^^^^^^^^\n" +
-			"The parameterized constructor <permits>X(permits) of type X is not applicable for the arguments (Integer)\n" +
+			"The constructor X(permits) refers to the missing type permits\n" +
 			"----------\n",
 			null,
 			true,
@@ -2869,7 +2908,7 @@ public class SealedTypesTests extends AbstractRegressionTest9 {
 			"1. ERROR in X.java (at line 5)\n" +
 			"	new <permits>X(t).foo();\n" +
 			"	^^^^^^^^^^^^^^^^^\n" +
-			"The parameterized constructor <permits>X(permits) of type X is not applicable for the arguments (Integer)\n" +
+			"The constructor X(permits) refers to the missing type permits\n" +
 			"----------\n" +
 			"2. ERROR in X.java (at line 5)\n" +
 			"	new <permits>X(t).foo();\n" +
@@ -2897,7 +2936,7 @@ public class SealedTypesTests extends AbstractRegressionTest9 {
 			"1. ERROR in X.java (at line 5)\n" +
 			"	new <permits>X(t).foo();\n" +
 			"	^^^^^^^^^^^^^^^^^\n" +
-			"The parameterized constructor <permits>X(permits) of type X is not applicable for the arguments (Integer)\n" +
+			"The constructor X(permits) refers to the missing type permits\n" +
 			"----------\n" +
 			"2. ERROR in X.java (at line 5)\n" +
 			"	new <permits>X(t).foo();\n" +
@@ -2931,7 +2970,7 @@ public class SealedTypesTests extends AbstractRegressionTest9 {
 			"2. ERROR in X.java (at line 6)\n" +
 			"	x.<permits>foo(0);\n" +
 			"	           ^^^\n" +
-			"The parameterized method <permits>foo(permits) of type X is not applicable for the arguments (Integer)\n" +
+			"The method foo(permits) from the type X refers to the missing type permits\n" +
 			"----------\n");
 	}
 	@SuppressWarnings({ "unchecked", "rawtypes" })
@@ -2959,7 +2998,7 @@ public class SealedTypesTests extends AbstractRegressionTest9 {
 			"3. ERROR in X.java (at line 6)\n" +
 			"	x.<permits>foo(0);\n" +
 			"	           ^^^\n" +
-			"The parameterized method <permits>foo(permits) of type X is not applicable for the arguments (Integer)\n" +
+			"The method foo(permits) from the type X refers to the missing type permits\n" +
 			"----------\n",
 			null,
 			true,
@@ -4441,7 +4480,7 @@ public class SealedTypesTests extends AbstractRegressionTest9 {
 			"2. ERROR in X.java (at line 5)\n" +
 			"	<sealed>this(t);\n" +
 			"	        ^^^^^^^^\n" +
-			"The parameterized constructor <sealed>X(sealed) of type X is not applicable for the arguments (Integer)\n" +
+			"The constructor X(sealed) refers to the missing type sealed\n" +
 			"----------\n");
 	}
 	@SuppressWarnings({ "unchecked", "rawtypes" })
@@ -4468,7 +4507,7 @@ public class SealedTypesTests extends AbstractRegressionTest9 {
 			"3. ERROR in X.java (at line 5)\n" +
 			"	<sealed>this(t);\n" +
 			"	        ^^^^^^^^\n" +
-			"The parameterized constructor <sealed>X(sealed) of type X is not applicable for the arguments (Integer)\n" +
+			"The constructor X(sealed) refers to the missing type sealed\n" +
 			"----------\n",
 			null,
 			true,
@@ -4492,7 +4531,7 @@ public class SealedTypesTests extends AbstractRegressionTest9 {
 			"1. ERROR in X.java (at line 5)\n" +
 			"	new <sealed>X(t).foo();\n" +
 			"	^^^^^^^^^^^^^^^^\n" +
-			"The parameterized constructor <sealed>X(sealed) of type X is not applicable for the arguments (Integer)\n" +
+			"The constructor X(sealed) refers to the missing type sealed\n" +
 			"----------\n" +
 			"2. ERROR in X.java (at line 5)\n" +
 			"	new <sealed>X(t).foo();\n" +
@@ -4520,7 +4559,7 @@ public class SealedTypesTests extends AbstractRegressionTest9 {
 			"1. ERROR in X.java (at line 5)\n" +
 			"	new <sealed>X(t).foo();\n" +
 			"	^^^^^^^^^^^^^^^^\n" +
-			"The parameterized constructor <sealed>X(sealed) of type X is not applicable for the arguments (Integer)\n" +
+			"The constructor X(sealed) refers to the missing type sealed\n" +
 			"----------\n" +
 			"2. ERROR in X.java (at line 5)\n" +
 			"	new <sealed>X(t).foo();\n" +
@@ -4554,7 +4593,7 @@ public class SealedTypesTests extends AbstractRegressionTest9 {
 			"2. ERROR in X.java (at line 6)\n" +
 			"	x.<sealed>foo(0);\n" +
 			"	          ^^^\n" +
-			"The parameterized method <sealed>foo(sealed) of type X is not applicable for the arguments (Integer)\n" +
+			"The method foo(sealed) from the type X refers to the missing type sealed\n" +
 			"----------\n");
 	}
 	@SuppressWarnings({ "unchecked", "rawtypes" })
@@ -4582,7 +4621,7 @@ public class SealedTypesTests extends AbstractRegressionTest9 {
 			"3. ERROR in X.java (at line 6)\n" +
 			"	x.<sealed>foo(0);\n" +
 			"	          ^^^\n" +
-			"The parameterized method <sealed>foo(sealed) of type X is not applicable for the arguments (Integer)\n" +
+			"The method foo(sealed) from the type X refers to the missing type sealed\n" +
 			"----------\n",
 			null,
 			true,
@@ -5715,12 +5754,17 @@ public class SealedTypesTests extends AbstractRegressionTest9 {
 					"	final class Y extends X {}\n" +
 					"}"
 				},
-				"----------\n"
-				+ "1. ERROR in X.java (at line 2)\n"
-				+ "	final class Y extends X {}\n"
-				+ "	                      ^\n"
-				+ "The type Y extending a sealed class X should be a permitted subtype of X\n"
-				+ "----------\n");
+				"----------\n" +
+				"1. ERROR in X.java (at line 1)\n" +
+				"	public sealed class X permits Y {\n" +
+				"	                              ^\n" +
+				"Y cannot be resolved to a type\n" +
+				"----------\n" +
+				"2. ERROR in X.java (at line 2)\n" +
+				"	final class Y extends X {}\n" +
+				"	                      ^\n" +
+				"The type Y extending a sealed class X should be a permitted subtype of X\n" +
+				"----------\n");
 	}
 	public void testBug578619_1() {
 		runConformTest(
@@ -5844,5 +5888,438 @@ public class SealedTypesTests extends AbstractRegressionTest9 {
 				+ "	                               ^^^^^^\n"
 				+ "Type arguments are not allowed here\n"
 				+ "----------\n");
+	}
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/2093
+	// [sealed types] ECJ complains of cycles in hierarchy where none exists
+	public void testIssue2093() {
+		runConformTest(
+				new String[] {
+						"X.java",
+						"""
+						record Bar() implements TheA.FooOrBar {
+						}
+
+						record Foo() implements TheA.FooOrBar {
+						}
+
+						sealed interface Base permits TheA, TheB {
+						}
+
+						record TheA() implements Base {
+							public sealed interface FooOrBar permits Foo, Bar {
+							}
+						}
+
+						record TheB<T extends TheA.FooOrBar>() implements Base {
+						}
+						public class X {
+						    public static void main(String [] args) {
+						        System.out.println("Compiled and ran fine!");
+					        }
+				        }
+						"""
+				},
+				"Compiled and ran fine!");
+	}
+
+	// https://bugs.eclipse.org/bugs/show_bug.cgi?id=576471
+	// Sealed type hierarchy doesn't compile if there are redundant type references
+	public void testBug576471() {
+		runConformTest(
+				new String[] {
+						"X.java",
+						"""
+						public class X {
+							public sealed interface I permits IA, C1, C2 {}
+							public sealed interface IA extends I permits A {}
+							public abstract sealed class A implements IA permits C1, C2 {}
+							public final class C1 extends A implements I {}
+							public final class C2 extends A implements I {}
+							public static void main(String [] args) {
+						        System.out.println("Compiled and ran fine!");
+					        }
+						}
+						"""
+				},
+				"Compiled and ran fine!");
+	}
+
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/1808
+	// [sealed-classes] Incorrect unused import warning
+	public void testIssue1808() {
+		runNegativeTest(
+				new String[] {
+						"X.java",
+						"""
+						public sealed interface X permits B {
+						    record B(int data) {}
+						    public static void main(String [] args) {
+						        System.out.println("Compiled and ran fine!");
+					        }
+						}
+						"""
+				},
+				"----------\n" +
+				"1. ERROR in X.java (at line 1)\n" +
+				"	public sealed interface X permits B {\n" +
+				"	                                  ^\n" +
+				"B cannot be resolved to a type\n");
+	}
+
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/1808
+	// [sealed-classes] Incorrect unused import warning
+	public void testIssue1808_1() {
+		runNegativeTest(
+				new String[] {
+						"X.java",
+						"""
+						public sealed interface X permits B {
+						    record B(int data) implements X {}
+						    public static void main(String [] args) {
+						        System.out.println("Compiled and ran fine!");
+					        }
+						}
+						"""
+				},
+				"----------\n" +
+				"1. ERROR in X.java (at line 1)\n" +
+				"	public sealed interface X permits B {\n" +
+				"	                                  ^\n" +
+				"B cannot be resolved to a type\n" +
+				"----------\n" +
+				"2. ERROR in X.java (at line 2)\n" +
+				"	record B(int data) implements X {}\n" +
+				"	                              ^\n" +
+				"The type B that implements a sealed interface X should be a permitted subtype of X\n" +
+				"----------\n");
+	}
+
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/1808
+	// [sealed-classes] Incorrect unused import warning
+	public void testIssue1808_2() {
+		runConformTest(
+				new String[] {
+						"X.java",
+						"""
+						public sealed interface X permits X.B {
+						    record B(int data)  implements X {}
+						    public static void main(String [] args) {
+						        System.out.println("Compiled and ran fine!");
+					        }
+						}
+						"""
+				},
+				"Compiled and ran fine!");
+	}
+
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/1808
+	// [sealed-classes] Incorrect unused import warning
+	public void testIssue1808_3() {
+		runWarningTest(
+				new String[] {
+						"foo/X.java",
+						"""
+						package foo;
+						import foo.X.B;
+						public sealed interface X permits B {
+						    record B(int data) implements X {}
+						    public static void main(String [] args) {
+						        System.out.println("Compiled and ran fine!");
+					        }
+						}
+						"""
+				},
+				"",
+				"Compiled and ran fine!");
+	}
+
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/1808
+	// [sealed-classes] Incorrect unused import warning
+	public void testIssue1808_4() {
+		runWarningTest(
+				new String[] {
+						"foo/X.java",
+						"""
+						package foo;
+						import foo.X.B;
+						public sealed interface X permits X.B {
+						    record B(int data) implements X {}
+						    public static void main(String [] args) {
+						        System.out.println("Compiled and ran fine!");
+					        }
+						}
+						"""
+				},
+
+				"----------\n"
+				+ "1. WARNING in foo\\X.java (at line 2)\n"
+				+ "	import foo.X.B;\n"
+				+ "	       ^^^^^^^\n"
+				+ "The import foo.X.B is never used\n"
+				+ "----------\n",
+
+				"Compiled and ran fine!");
+	}
+
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/2595
+	// [sealed types] ECJ accepts a cast from a disjoint interface to a sealed interface
+	public void testIssue2595_0() {
+		runNegativeTest(
+				new String[] {
+						"X.java",
+						"""
+						interface I {
+						}
+
+						final class C {
+						}
+
+						public class X {
+							void test(C c) {
+								if (c instanceof I) // Compile-time error!
+									System.out.println("It's an I");
+							}
+							void test(I i) {
+								if (i instanceof C) // Compile-time error!
+									System.out.println("It's a C");
+							}
+						}
+						"""
+				},
+				"----------\n" +
+				"1. ERROR in X.java (at line 9)\n" +
+				"	if (c instanceof I) // Compile-time error!\n" +
+				"	    ^^^^^^^^^^^^^^\n" +
+				"Incompatible conditional operand types C and I\n" +
+				"----------\n" +
+				"2. ERROR in X.java (at line 13)\n" +
+				"	if (i instanceof C) // Compile-time error!\n" +
+				"	    ^^^^^^^^^^^^^^\n" +
+				"Incompatible conditional operand types I and C\n" +
+				"----------\n");
+	}
+
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/2595
+	// [sealed types] ECJ accepts a cast from a disjoint interface to a sealed interface
+	public void testIssue2595_1() {
+		runNegativeTest(
+				new String[] {
+						"X.java",
+						"""
+						public class X {
+							interface I {
+							}
+
+							sealed class C permits D {
+							}
+
+							final class D extends C {
+							}
+
+							void test(C c) {
+								if (c instanceof I) // Compile-time error!
+									System.out.println("It's an I");
+							}
+
+							void test(I i) {
+								if (i instanceof C) // Compile-time error!
+									System.out.println("It's a C");
+							}
+						}
+						"""
+				},
+				"----------\n" +
+				"1. ERROR in X.java (at line 12)\n" +
+				"	if (c instanceof I) // Compile-time error!\n" +
+				"	    ^^^^^^^^^^^^^^\n" +
+				"Incompatible conditional operand types X.C and X.I\n" +
+				"----------\n" +
+				"2. ERROR in X.java (at line 17)\n" +
+				"	if (i instanceof C) // Compile-time error!\n" +
+				"	    ^^^^^^^^^^^^^^\n" +
+				"Incompatible conditional operand types X.I and X.C\n" +
+				"----------\n");
+	}
+
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/2595
+	// [sealed types] ECJ accepts a cast from a disjoint interface to a sealed interface
+	public void testIssue2595_2() {
+		runConformTest(
+				new String[] {
+						"X.java",
+						"""
+						public class X {
+							interface I {}
+							sealed class C permits D, E {}
+							non-sealed class D extends C {}
+							final class E extends C {}
+						    class F extends D implements I {}
+
+							void test (C c) {
+							    if (c instanceof I)
+							        System.out.println("It's an I");
+							}
+
+							void test (I i) {
+							    if (i instanceof C)
+							        System.out.println("It's a C");
+							}
+
+						    public static void main(String [] args) {
+						        new X().test(((C) new X().new F()));
+						        new X().test(((I) new X().new F()));
+						    }
+						}
+						"""
+				},
+				"It's an I\nIt's a C");
+	}
+
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/2595
+	// [sealed types] ECJ accepts a cast from a disjoint interface to a sealed interface
+	public void testIssue2595_3() {
+		runNegativeTest(
+				new String[] {
+						"X.java",
+						"""
+						sealed interface Intf permits PermittedA {}
+						final class PermittedA implements Intf {}
+						interface Standalone {}
+						public class X {
+						    public Intf foo(Standalone st) {
+						    	return (Intf) st;
+						    }
+						}
+						"""
+				},
+				"----------\n" +
+				"1. ERROR in X.java (at line 6)\r\n" +
+				"	return (Intf) st;\r\n" +
+				"	       ^^^^^^^^^\n" +
+				"Cannot cast from Standalone to Intf\n" +
+				"----------\n");
+	}
+
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/2667
+	// [Sealed Types] Failure to cast an Object to a generic sealed interface type
+	public void testIssue2667() {
+		runWarningTest(
+				new String[] {
+						"Either.java",
+						"""
+						import java.util.NoSuchElementException;
+
+						public sealed interface Either<L,R> {
+
+						    L getLeft();
+						    R getRight();
+
+						    record Left<L, R>(L error) implements Either<L, R> {
+						        @Override
+						        public L getLeft() {
+						            return error;
+						        }
+						        @Override
+						        public R getRight() {
+						            throw new NoSuchElementException();
+						        }
+						    }
+
+						    record Right<L, R>(R value) implements Either<L, R> {
+						        @Override
+						        public L getLeft() {
+						            throw new NoSuchElementException();
+						        }
+						        @Override
+						        public R getRight() {
+						            return value;
+						        }
+						    }
+
+						    public static void main(String[] args) {
+						        Object o = new Left<String, Integer>("boo");
+						        var either = (Either<String, Integer>) o;
+						        System.out.println(either.getLeft());
+						    }
+						}
+						"""
+				},
+				"----------\n" +
+				"1. WARNING in Either.java (at line 32)\n" +
+				"	var either = (Either<String, Integer>) o;\n" +
+				"	             ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n" +
+				"Type safety: Unchecked cast from Object to Either<String,Integer>\n" +
+				"----------\n",
+				"boo");
+	}
+
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/2672
+	// [Sealed Types] Strange error from ECJ: Syntax error on token "permits", permits expected
+	public void testIssue2672() {
+		runNegativeTest(
+				new String[] {
+						"test/IShape.java",
+						"""
+						package test;
+
+						public sealed interface IShape permits Circle {\\n\
+						}
+						class Circle {
+						}
+						"""
+				},
+				"----------\n" +
+				"1. ERROR in test\\IShape.java (at line 3)\n" +
+				"	public sealed interface IShape permits Circle {\\n}\n" +
+				"	                                       ^^^^^^\n" +
+				"Permitted type Circle does not declare test.IShape as direct super interface \n" +
+				"----------\n" +
+				"2. ERROR in test\\IShape.java (at line 3)\n" +
+				"	public sealed interface IShape permits Circle {\\n}\n" +
+				"	                                               ^^\n" +
+				"Syntax error on tokens, delete these tokens\n" +
+				"----------\n");
+	}
+
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/2654
+	// [Sealed Types] Compiler does not handle non-sealed contextual keyword correctly
+	public void testIssue2654() {
+		runNegativeTest(
+				new String[] {
+						"X.java",
+						"""
+						non-sealed public class X {
+							int foo(int non, int sealed) {
+								return non-sealed;
+							}
+						}
+						"""
+				},
+				"----------\n" +
+				"1. ERROR in X.java (at line 1)\n" +
+				"	non-sealed public class X {\n" +
+				"	                        ^\n" +
+				"A class X declared as non-sealed should have either a sealed direct superclass or a sealed direct superinterface\n" +
+				"----------\n");
+	}
+
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/2654
+	// [Sealed Types] Compiler does not handle non-sealed contextual keyword correctly
+	public void testIssue2654_2() {
+		runConformTest(
+				new String[] {
+						"X.java",
+						"""
+						public class X {
+							static int foo(int non, int sealed) {
+								return non-sealed;
+							}
+						    public static void main(String [] args) {
+						        System.out.println(foo(142, 100));
+						    }
+						}
+						"""
+				},
+				"42");
 	}
 }

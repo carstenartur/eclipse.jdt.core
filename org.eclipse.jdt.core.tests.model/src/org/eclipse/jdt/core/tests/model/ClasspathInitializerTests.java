@@ -25,6 +25,8 @@ import org.eclipse.core.runtime.preferences.IEclipsePreferences;
 import org.eclipse.core.runtime.preferences.InstanceScope;
 import org.eclipse.jdt.core.*;
 import org.eclipse.jdt.core.tests.model.Semaphore.TimeOutException;
+import org.eclipse.jdt.core.tests.util.Util;
+import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 import org.eclipse.jdt.internal.core.ClasspathEntry;
 import org.eclipse.jdt.internal.core.JavaModelManager;
 import org.eclipse.jdt.internal.core.JavaModelStatus;
@@ -97,11 +99,7 @@ static {
 }
 @Override
 protected void tearDown() throws Exception {
-	// Cleanup caches
-	JavaModelManager manager = JavaModelManager.getJavaModelManager();
-	manager.containers = new HashMap(5);
-	manager.variables = new HashMap(5);
-
+	Util.cleanupClassPathVariablesAndContainers();
 	super.tearDown();
 }
 
@@ -1395,7 +1393,7 @@ public void testVariableInitializerDeprecated() throws CoreException, IOExceptio
 		addLibrary(project, "lib.jar", null, new String[0],
 				new String[]{"META-INF/MANIFEST.MF",
 					"Manifest-Version: 1.0\n"} ,
-					JavaCore.VERSION_1_4);
+					CompilerOptions.getFirstSupportedJavaVersion());
 		IClasspathEntry variable = JavaCore.newVariableEntry(new Path("TEST_DEPRECATED"), null, null);
 		IJavaModelStatus status = JavaConventions.validateClasspathEntry(project, variable, false);
 		assertStatus("Classpath variable 'TEST_DEPRECATED' in project 'P1' is deprecated: Test deprecated flag", status);
@@ -1452,7 +1450,7 @@ public void testVariableInitializerReadOnly() throws CoreException, IOException 
 		addLibrary(project, "lib.jar", null, new String[0],
 				new String[]{"META-INF/MANIFEST.MF",
 					"Manifest-Version: 1.0\n"} ,
-					JavaCore.VERSION_1_4);
+					CompilerOptions.getFirstSupportedJavaVersion());
 		IClasspathEntry variable = JavaCore.newVariableEntry(new Path("TEST_READ_ONLY"), null, null);
 		IJavaModelStatus status = JavaConventions.validateClasspathEntry(project, variable, false);
 		assertStatus("OK", status);
@@ -1480,7 +1478,7 @@ public void testVariableInitializerDeprecatedAndReadOnly() throws CoreException,
 		addLibrary(project, "lib.jar", null, new String[0],
 				new String[]{"META-INF/MANIFEST.MF",
 					"Manifest-Version: 1.0\n"} ,
-					JavaCore.VERSION_1_4);
+					CompilerOptions.getFirstSupportedJavaVersion());
 		IClasspathEntry variable = JavaCore.newVariableEntry(new Path("TEST_DEPRECATED_READ_ONLY"), null, null);
 		IJavaModelStatus status = JavaConventions.validateClasspathEntry(project, variable, false);
 		assertStatus("Classpath variable 'TEST_DEPRECATED_READ_ONLY' in project 'P1' is deprecated: A deprecated and read-only initializer", status);
@@ -1514,7 +1512,7 @@ public void testVariableInitializerBug172207() throws CoreException, IOException
 		addLibrary(project, "lib.jar", null, new String[0],
 				new String[]{"META-INF/MANIFEST.MF",
 					"Manifest-Version: 1.0\n"} ,
-					JavaCore.VERSION_1_4);
+					CompilerOptions.getFirstSupportedJavaVersion());
 		IClasspathEntry variable = JavaCore.newVariableEntry(new Path("TEST_DEPRECATED_READ_ONLY"), null, null);
 		IClasspathEntry[] entries = project.getRawClasspath();
 		int length = entries.length;

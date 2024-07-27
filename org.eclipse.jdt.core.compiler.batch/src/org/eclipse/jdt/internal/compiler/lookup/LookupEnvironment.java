@@ -48,6 +48,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.internal.compiler.ClassFile;
@@ -153,6 +154,7 @@ public class LookupEnvironment implements ProblemReasons, TypeConstants {
 		NONE,
 		CHECK_AND_SET_IMPORTS,
 		CONNECT_TYPE_HIERARCHY,
+		SEAL_TYPE_HIERARCHY,
 		BUILD_FIELDS_AND_METHODS,
 		INTEGRATE_ANNOTATIONS_IN_HIERARCHY,
 		CHECK_PARAMETERIZED_TYPES;
@@ -181,6 +183,7 @@ public class LookupEnvironment implements ProblemReasons, TypeConstants {
 			switch (this) {
 				case CHECK_AND_SET_IMPORTS -> scope.checkAndSetImports();
 				case CONNECT_TYPE_HIERARCHY -> scope.connectTypeHierarchy();
+				case SEAL_TYPE_HIERARCHY -> scope.sealTypeHierarchy();
 				case BUILD_FIELDS_AND_METHODS -> scope.buildFieldsAndMethods();
 				case INTEGRATE_ANNOTATIONS_IN_HIERARCHY -> scope.integrateAnnotationsInHierarchy();
 				case CHECK_PARAMETERIZED_TYPES -> scope.checkParameterizedTypes();
@@ -766,11 +769,14 @@ private PackageBinding computePackageFrom(char[][] constantPoolName, boolean isM
 			if (this.module.isUnnamed()) {
 				char[][] declaringModules = ((IModuleAwareNameEnvironment) this.nameEnvironment).getUniqueModulesDeclaringPackage(new char[][] {constantPoolName[0]}, ModuleBinding.ANY);
 				if (declaringModules != null) {
+					List<PackageBinding> bindings = new ArrayList<>();
 					for (char[] mod : declaringModules) {
 						ModuleBinding declaringModule = this.root.getModule(mod);
 						if (declaringModule != null)
-							packageBinding = SplitPackageBinding.combine(declaringModule.getTopLevelPackage(constantPoolName[0]), packageBinding, this.module);
+							bindings.add(declaringModule.getTopLevelPackage(constantPoolName[0]));
 					}
+					if (!bindings.isEmpty())
+						packageBinding = SplitPackageBinding.combineAll(bindings, this.module);
 				}
 			} else {
 				packageBinding = this.module.getTopLevelPackage(constantPoolName[0]);
@@ -789,14 +795,17 @@ private PackageBinding computePackageFrom(char[][] constantPoolName, boolean isM
 			if (this.useModuleSystem) {
 				if (this.module.isUnnamed()) {
 					char[][] currentCompoundName = CharOperation.arrayConcat(parent.compoundName, constantPoolName[i]);
-					char[][] declaringModules = ((IModuleAwareNameEnvironment) this.nameEnvironment).getModulesDeclaringPackage(
+					char[][] declaringModules = ((IModuleAwareNameEnvironment) this.nameEnvironment).getUniqueModulesDeclaringPackage(
 							currentCompoundName, ModuleBinding.ANY);
+					List<PackageBinding> bindings = new ArrayList<>();
 					if (declaringModules != null) {
 						for (char[] mod : declaringModules) {
 							ModuleBinding declaringModule = this.root.getModule(mod);
 							if (declaringModule != null)
-								packageBinding = SplitPackageBinding.combine(declaringModule.getVisiblePackage(currentCompoundName), packageBinding, this.module);
+								bindings.add(declaringModule.getVisiblePackage(currentCompoundName));
 						}
+						if (!bindings.isEmpty())
+							packageBinding = SplitPackageBinding.combineAll(bindings, this.module);
 					}
 				} else {
 					packageBinding = this.module.getVisiblePackage(parent, constantPoolName[i]);
@@ -1468,8 +1477,8 @@ public WildcardBinding createWildcard(ReferenceBinding genericType, int rank, Ty
 	return this.typeSystem.getWildcard(genericType, rank, bound, otherBounds, boundKind);
 }
 
-public CaptureBinding createCapturedWildcard(WildcardBinding wildcard, ReferenceBinding contextType, int start, int end, ASTNode cud, int id) {
-	return this.typeSystem.getCapturedWildcard(wildcard, contextType, start, end, cud, id);
+public CaptureBinding createCapturedWildcard(WildcardBinding wildcard, ReferenceBinding contextType, int start, int end, ASTNode cud, Supplier<Integer> idSupplier) {
+	return this.typeSystem.getCapturedWildcard(wildcard, contextType, start, end, cud, idSupplier);
 }
 
 public WildcardBinding createWildcard(ReferenceBinding genericType, int rank, TypeBinding bound, TypeBinding[] otherBounds, int boundKind, AnnotationBinding [] annotations) {
@@ -2394,7 +2403,7 @@ public Binding getInaccessibleBinding(char[][] compoundName, ModuleBinding clien
 		int length = compoundName.length;
 		for (int j=length; j>0; j--) {
 			char[][] candidateName = CharOperation.subarray(compoundName, 0, j);
-			char[][] moduleNames = moduleEnv.getModulesDeclaringPackage(candidateName, ModuleBinding.ANY);
+			char[][] moduleNames = moduleEnv.getUniqueModulesDeclaringPackage(candidateName, ModuleBinding.ANY);
 			if (moduleNames != null) {
 				// in some module a package named candidateName exists, verify observability & inaccessibility:
 				PackageBinding inaccessiblePackage = null;

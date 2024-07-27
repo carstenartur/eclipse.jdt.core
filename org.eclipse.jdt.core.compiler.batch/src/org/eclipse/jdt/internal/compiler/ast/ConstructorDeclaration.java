@@ -302,8 +302,6 @@ public void generateCode(ClassScope classScope, ClassFile classFile) {
 		if (referenceContext != null) {
 			unitResult = referenceContext.compilationResult();
 			problemCount = unitResult.problemCount;
-			if (referenceContext.initContainsSwitchWithTry)
-				this.containsSwitchWithTry = true;
 		}
 	}
 	do {
@@ -461,7 +459,7 @@ private void internalGenerateCode(ClassScope classScope, ClassFile classFile) {
 				codeStream.stmtInPreConContext = statement.inPreConstructorContext;
 				statement.generateCode(this.scope, codeStream);
 				codeStream.stmtInPreConContext = false;
-				if (!this.compilationResult.hasErrors() && codeStream.stackDepth != 0) {
+				if (!this.compilationResult.hasErrors() && (codeStream.stackDepth != 0 || codeStream.operandStack.size() != 0)) {
 					this.scope.problemReporter().operandStackSizeInappropriate(this);
 				}
 			}
@@ -688,13 +686,8 @@ public void resolveStatements() {
 }
 
 private void partitionConstructorStatements() {
-
-
-	if (!(JavaFeature.STATEMENTS_BEFORE_SUPER.isSupported(
-			this.scope.compilerOptions().sourceLevel,
-			this.scope.compilerOptions().enablePreviewFeatures)))
-		return;
-
+	if (this.scope.compilerOptions().sourceLevel < ClassFileConstants.JDK22)
+			return;
 	if (!this.constructorCall.isImplicitSuper()) {
 		this.postPrologueConstructorCall = this.constructorCall;
 		this.postPrologueConstructorCall.firstStatement = true;

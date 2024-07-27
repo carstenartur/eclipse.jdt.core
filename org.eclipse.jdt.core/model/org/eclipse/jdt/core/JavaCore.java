@@ -336,13 +336,12 @@ public final class JavaCore extends Plugin {
 	/**
 	 * Compiler option ID: Defining Target Java Platform.
 	 * <p>For binary compatibility reasons, .class files are tagged with a minimal required VM version.</p>
-	 * <p>Note that <code>"1.4"</code> and higher target versions require the compliance mode to be at least as high
+	 * <p>Note that <code>"1.8"</code> and higher target versions require the compliance mode to be at least as high
 	 *    as the target version. Usually, compliance, target, and source versions are set to the same values.</p>
-	 * <p><code>"cldc1.1"</code> requires the source version to be <code>"1.3"</code> and the compliance version to be <code>"1.4"</code> or lower.</p>
 	 * <dl>
 	 * <dt>Option id:</dt><dd><code>"org.eclipse.jdt.core.compiler.codegen.targetPlatform"</code></dd>
-	 * <dt>Possible values:</dt><dd><code>{ "1.1", "cldc1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8", "9", "10", "11" }</code></dd>
-	 * <dt>Default:</dt><dd><code>"1.2"</code></dd>
+	 * <dt>Possible values:</dt><dd><code>{ "1.8", "9", ..., {@link #latestSupportedJavaVersion()} }</code></dd>
+	 * <dt>Default:</dt><dd><code>"1.8"</code></dd>
 	 * </dl>
 	 * @category CompilerOptionID
 	 * @see #COMPILER_COMPLIANCE
@@ -356,16 +355,17 @@ public final class JavaCore extends Plugin {
 	 *    subroutine code sequences (mostly corresponding to try finally blocks). The generated code will thus
 	 *    get bigger, but will load faster on virtual machines since the verification process is then much simpler.</p>
 	 * <p>This mode is anticipating support for the Java Specification Request 202.</p>
-	 * <p>Note that JSR inlining is optional only for target platform lesser than 1.5. From 1.5 on, the JSR
-	 *    inlining is mandatory (also see related setting {@link #COMPILER_CODEGEN_TARGET_PLATFORM}).</p>
+	 * <p>Note that from 1.5 on, the JSR inlining is mandatory (also see related setting {@link #COMPILER_CODEGEN_TARGET_PLATFORM}).</p>
 	 * <dl>
 	 * <dt>Option id:</dt><dd><code>"org.eclipse.jdt.core.compiler.codegen.inlineJsrBytecode"</code></dd>
 	 * <dt>Possible values:</dt><dd><code>{ "enabled", "disabled" }</code></dd>
-	 * <dt>Default:</dt><dd><code>"disabled"</code></dd>
+	 * <dt>Default:</dt><dd><code>"enabled"</code></dd>
 	 * </dl>
 	 * @since 3.0
 	 * @category CompilerOptionID
+	 * @deprecated this option is implicitly enabled and can't be switched off anymore
 	 */
+	@Deprecated
 	public static final String COMPILER_CODEGEN_INLINE_JSR_BYTECODE = PLUGIN_ID + ".compiler.codegen.inlineJsrBytecode"; //$NON-NLS-1$
 	/**
 	 * Compiler option ID: Javadoc Comment Support.
@@ -2222,8 +2222,8 @@ public final class JavaCore extends Plugin {
 	 *    set to the same version as the source level.</p>
 	 * <dl>
 	 * <dt>Option id:</dt><dd><code>"org.eclipse.jdt.core.compiler.source"</code></dd>
-	 * <dt>Possible values:</dt><dd><code>{ "1.3", "1.4", "1.5", "1.6", "1.7", "1.8", "9", "10", "11" }</code></dd>
-	 * <dt>Default:</dt><dd><code>"1.3"</code></dd>
+	 * <dt>Possible values:</dt><dd><code>{ "1.8", "9", ..., {@link #latestSupportedJavaVersion()} }</code></dd>
+	 * <dt>Default:</dt><dd><code>"1.8"</code></dd>
 	 * </dl>
 	 * @since 2.0
 	 * @category CompilerOptionID
@@ -2240,8 +2240,8 @@ public final class JavaCore extends Plugin {
 	 *    should match the compliance setting.</p>
 	 * <dl>
 	 * <dt>Option id:</dt><dd><code>"org.eclipse.jdt.core.compiler.compliance"</code></dd>
-	 * <dt>Possible values:</dt><dd><code>{ "1.3", "1.4", "1.5", "1.6", "1.7", "1.8", "9", "10", "11" }</code></dd>
-	 * <dt>Default:</dt><dd><code>"1.4"</code></dd>
+	 * <dt>Possible values:</dt><dd><code>{ "1.8", "9", ..., {@link #latestSupportedJavaVersion()} }</code></dd>
+	 * <dt>Default:</dt><dd><code>"1.8"</code></dd>
 	 * </dl>
 	 * @since 2.0
 	 * @category CompilerOptionID
@@ -3322,9 +3322,27 @@ public final class JavaCore extends Plugin {
 	 * @category OptionValue
 	 */
 	public static final String VERSION_CLDC_1_1 = "cldc1.1"; //$NON-NLS-1$
-	private static List<String> allVersions = Collections.unmodifiableList(Arrays.asList(VERSION_CLDC_1_1, VERSION_1_1, VERSION_1_2, VERSION_1_3, VERSION_1_4, VERSION_1_5,
+	private static final List<String> allVersions = Collections.unmodifiableList(Arrays.asList(VERSION_CLDC_1_1, VERSION_1_1, VERSION_1_2, VERSION_1_3, VERSION_1_4, VERSION_1_5,
 			VERSION_1_6, VERSION_1_7, VERSION_1_8, VERSION_9, VERSION_10, VERSION_11, VERSION_12, VERSION_13, VERSION_14, VERSION_15, VERSION_16, VERSION_17, VERSION_18,
 			VERSION_19, VERSION_20, VERSION_21, VERSION_22));
+
+	/**
+	 * Unordered set of all Java source versions <b>not supported</b> by compiler anymore.
+	 * The values are from {@link JavaCore}{@code #VERSION_*}.
+	 */
+	private static final Set<String> UNSUPPORTED_VERSIONS = CompilerOptions.UNSUPPORTED_VERSIONS;
+
+	/**
+	 * Ordered set (from oldest to latest) of all Java source versions <b>supported</b> by compiler.
+	 * The values are from {@link JavaCore}{@code #VERSION_*}.
+	 */
+	private static final List<String> SUPPORTED_VERSIONS;
+	static {
+		ArrayList<String> temp = new ArrayList<>();
+		temp.addAll(allVersions);
+		temp.removeAll(UNSUPPORTED_VERSIONS);
+		SUPPORTED_VERSIONS = Collections.unmodifiableList(temp);
+	}
 
 	/**
 	 * Returns all {@link JavaCore}{@code #VERSION_*} levels in the order of their
@@ -3335,6 +3353,22 @@ public final class JavaCore extends Plugin {
 	 */
 	public static List<String> getAllVersions() {
 		return allVersions;
+	}
+
+	/**
+	 * Returns all Java source versions fully supported by Eclipse compiler in the order of their introduction. For
+	 * example, {@link JavaCore#VERSION_1_8} appears before {@link JavaCore#VERSION_10}.
+	 * <p>
+	 * Note, some not included older or newer Java versions might be known by Eclipse compiler internally but not
+	 * exposed via this API because compiler does not support these anymore (or yet).
+	 *
+	 * @return all Java source versions fully supported by Eclipse compiler
+	 * @see #isJavaSourceVersionSupportedByCompiler(String)
+	 * @see #getFirstJavaSourceVersionSupportedByCompiler()
+	 * @since 3.39
+	 */
+	public static List<String> getAllJavaSourceVersionsSupportedByCompiler() {
+		return SUPPORTED_VERSIONS;
 	}
 
 	/**
@@ -3350,6 +3384,22 @@ public final class JavaCore extends Plugin {
 	 */
 	public static boolean isSupportedJavaVersion(String version) {
 		return CompilerOptions.versionToJdkLevel(version, false) > 0;
+	}
+
+	/**
+	 * Not all known Java versions are supported by Eclipse compiler. This method answers if the given Java source
+	 * version is fully supported.
+	 *
+	 * @return {@code true} if the given string represents Java language version is fully supported by Eclipse compiler
+	 * @see #getAllJavaSourceVersionsSupportedByCompiler()
+	 * @see #getFirstJavaSourceVersionSupportedByCompiler()
+	 * @since 3.39
+	 */
+	public static boolean isJavaSourceVersionSupportedByCompiler(String version) {
+		if(version == null || version.isBlank()) {
+			return false;
+		}
+		return SUPPORTED_VERSIONS.contains(version);
 	}
 
 	/**
@@ -6339,51 +6389,12 @@ public final class JavaCore extends Plugin {
 		long jdkLevel = CompilerOptions.versionToJdkLevel(compliance);
 		int major = (int) (jdkLevel >>> 16);
 		switch(major) {
-			case ClassFileConstants.MAJOR_VERSION_1_3:
-				options.put(JavaCore.COMPILER_COMPLIANCE, JavaCore.VERSION_1_3);
-				options.put(JavaCore.COMPILER_SOURCE, JavaCore.VERSION_1_3);
-				options.put(JavaCore.COMPILER_CODEGEN_TARGET_PLATFORM, JavaCore.VERSION_1_1);
-				options.put(JavaCore.COMPILER_PB_ASSERT_IDENTIFIER, JavaCore.IGNORE);
-				options.put(JavaCore.COMPILER_PB_ENUM_IDENTIFIER, JavaCore.IGNORE);
-				break;
-			case ClassFileConstants.MAJOR_VERSION_1_4:
-				options.put(JavaCore.COMPILER_COMPLIANCE, JavaCore.VERSION_1_4);
-				options.put(JavaCore.COMPILER_SOURCE, JavaCore.VERSION_1_3);
-				options.put(JavaCore.COMPILER_CODEGEN_TARGET_PLATFORM, JavaCore.VERSION_1_2);
-				options.put(JavaCore.COMPILER_PB_ASSERT_IDENTIFIER, JavaCore.WARNING);
-				options.put(JavaCore.COMPILER_PB_ENUM_IDENTIFIER, JavaCore.WARNING);
-				break;
-			case ClassFileConstants.MAJOR_VERSION_1_5:
-				options.put(JavaCore.COMPILER_COMPLIANCE, JavaCore.VERSION_1_5);
-				options.put(JavaCore.COMPILER_SOURCE, JavaCore.VERSION_1_5);
-				options.put(JavaCore.COMPILER_CODEGEN_TARGET_PLATFORM, JavaCore.VERSION_1_5);
-				options.put(JavaCore.COMPILER_PB_ASSERT_IDENTIFIER, JavaCore.ERROR);
-				options.put(JavaCore.COMPILER_PB_ENUM_IDENTIFIER, JavaCore.ERROR);
-				options.put(JavaCore.COMPILER_CODEGEN_INLINE_JSR_BYTECODE, JavaCore.ENABLED);
-				break;
-			case ClassFileConstants.MAJOR_VERSION_1_6:
-				options.put(JavaCore.COMPILER_COMPLIANCE, JavaCore.VERSION_1_6);
-				options.put(JavaCore.COMPILER_SOURCE, JavaCore.VERSION_1_6);
-				options.put(JavaCore.COMPILER_CODEGEN_TARGET_PLATFORM, JavaCore.VERSION_1_6);
-				options.put(JavaCore.COMPILER_PB_ASSERT_IDENTIFIER, JavaCore.ERROR);
-				options.put(JavaCore.COMPILER_PB_ENUM_IDENTIFIER, JavaCore.ERROR);
-				options.put(JavaCore.COMPILER_CODEGEN_INLINE_JSR_BYTECODE, JavaCore.ENABLED);
-				break;
-			case ClassFileConstants.MAJOR_VERSION_1_7:
-				options.put(JavaCore.COMPILER_COMPLIANCE, JavaCore.VERSION_1_7);
-				options.put(JavaCore.COMPILER_SOURCE, JavaCore.VERSION_1_7);
-				options.put(JavaCore.COMPILER_CODEGEN_TARGET_PLATFORM, JavaCore.VERSION_1_7);
-				options.put(JavaCore.COMPILER_PB_ASSERT_IDENTIFIER, JavaCore.ERROR);
-				options.put(JavaCore.COMPILER_PB_ENUM_IDENTIFIER, JavaCore.ERROR);
-				options.put(JavaCore.COMPILER_CODEGEN_INLINE_JSR_BYTECODE, JavaCore.ENABLED);
-				break;
 			case ClassFileConstants.MAJOR_VERSION_1_8:
 				options.put(JavaCore.COMPILER_COMPLIANCE, JavaCore.VERSION_1_8);
 				options.put(JavaCore.COMPILER_SOURCE, JavaCore.VERSION_1_8);
 				options.put(JavaCore.COMPILER_CODEGEN_TARGET_PLATFORM, JavaCore.VERSION_1_8);
 				options.put(JavaCore.COMPILER_PB_ASSERT_IDENTIFIER, JavaCore.ERROR);
 				options.put(JavaCore.COMPILER_PB_ENUM_IDENTIFIER, JavaCore.ERROR);
-				options.put(JavaCore.COMPILER_CODEGEN_INLINE_JSR_BYTECODE, JavaCore.ENABLED);
 				break;
 			case ClassFileConstants.MAJOR_VERSION_9:
 				options.put(JavaCore.COMPILER_COMPLIANCE, JavaCore.VERSION_9);
@@ -6391,7 +6402,6 @@ public final class JavaCore extends Plugin {
 				options.put(JavaCore.COMPILER_CODEGEN_TARGET_PLATFORM, JavaCore.VERSION_9);
 				options.put(JavaCore.COMPILER_PB_ASSERT_IDENTIFIER, JavaCore.ERROR);
 				options.put(JavaCore.COMPILER_PB_ENUM_IDENTIFIER, JavaCore.ERROR);
-				options.put(JavaCore.COMPILER_CODEGEN_INLINE_JSR_BYTECODE, JavaCore.ENABLED);
 				options.put(JavaCore.COMPILER_RELEASE, JavaCore.ENABLED);
 				break;
 			case ClassFileConstants.MAJOR_VERSION_10:
@@ -6400,7 +6410,6 @@ public final class JavaCore extends Plugin {
 				options.put(JavaCore.COMPILER_CODEGEN_TARGET_PLATFORM, JavaCore.VERSION_10);
 				options.put(JavaCore.COMPILER_PB_ASSERT_IDENTIFIER, JavaCore.ERROR);
 				options.put(JavaCore.COMPILER_PB_ENUM_IDENTIFIER, JavaCore.ERROR);
-				options.put(JavaCore.COMPILER_CODEGEN_INLINE_JSR_BYTECODE, JavaCore.ENABLED);
 				options.put(JavaCore.COMPILER_RELEASE, JavaCore.ENABLED);
 				break;
 			default:
@@ -6411,7 +6420,6 @@ public final class JavaCore extends Plugin {
 					options.put(JavaCore.COMPILER_CODEGEN_TARGET_PLATFORM, version);
 					options.put(JavaCore.COMPILER_PB_ASSERT_IDENTIFIER, JavaCore.ERROR);
 					options.put(JavaCore.COMPILER_PB_ENUM_IDENTIFIER, JavaCore.ERROR);
-					options.put(JavaCore.COMPILER_CODEGEN_INLINE_JSR_BYTECODE, JavaCore.ENABLED);
 					options.put(JavaCore.COMPILER_RELEASE, JavaCore.ENABLED);
 					options.put(JavaCore.COMPILER_PB_ENABLE_PREVIEW_FEATURES, JavaCore.DISABLED);
 					options.put(JavaCore.COMPILER_PB_REPORT_PREVIEW_FEATURES, JavaCore.WARNING);
@@ -6453,6 +6461,20 @@ public final class JavaCore extends Plugin {
 	public static String latestSupportedJavaVersion() {
 		return allVersions.get(allVersions.size() - 1);
 	}
+
+	/**
+	 * First (oldest) Java source version supported by the Eclipse compiler.
+	 * This is the first entry from {@link JavaCore#getAllJavaSourceVersionsSupportedByCompiler()}.
+	 *
+	 * @return first (oldest) Java source version supported by the Eclipse compiler
+	 * @see #getAllJavaSourceVersionsSupportedByCompiler()
+	 * @see #isJavaSourceVersionSupportedByCompiler(String)
+	 * @since 3.39
+	 */
+	public static String getFirstJavaSourceVersionSupportedByCompiler() {
+		return SUPPORTED_VERSIONS.get(0);
+	}
+
 	/**
 	 * Compares two given versions of the Java platform. The versions being compared must both be
 	 * one of the supported values mentioned in

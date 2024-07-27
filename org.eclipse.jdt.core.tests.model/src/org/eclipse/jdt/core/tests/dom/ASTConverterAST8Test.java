@@ -22,6 +22,7 @@ import org.eclipse.jdt.core.*;
 import org.eclipse.jdt.core.dom.*;
 import org.eclipse.jdt.core.jdom.*;
 import org.eclipse.jdt.core.util.IModifierConstants;
+import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 
 @SuppressWarnings({"rawtypes"})
 public class ASTConverterAST8Test extends ConverterTestSetup {
@@ -6548,7 +6549,7 @@ public class ASTConverterAST8Test extends ConverterTestSetup {
 		assertTrue("Not a type literal", expression instanceof TypeLiteral); //$NON-NLS-1$
 		ITypeBinding typeBinding = expression.resolveTypeBinding();
 		assertNotNull("No type binding", typeBinding); //$NON-NLS-1$
-		assertEquals("Wrong name", "Class", typeBinding.getName()); //$NON-NLS-1$ //$NON-NLS-2$
+		assertEquals("Wrong name", "Class<String>", typeBinding.getName()); //$NON-NLS-1$ //$NON-NLS-2$
 	}
 
 	/**
@@ -6572,7 +6573,7 @@ public class ASTConverterAST8Test extends ConverterTestSetup {
 		assertTrue("Not a type literal", expression instanceof TypeLiteral); //$NON-NLS-1$
 		ITypeBinding typeBinding = expression.resolveTypeBinding();
 		assertNotNull("No type binding", typeBinding); //$NON-NLS-1$
-		assertEquals("Wrong name", "Class", typeBinding.getName()); //$NON-NLS-1$ //$NON-NLS-2$
+		assertEquals("Wrong name", "Class<String>", typeBinding.getName()); //$NON-NLS-1$ //$NON-NLS-2$
 	}
 
 	/**
@@ -6993,8 +6994,8 @@ public class ASTConverterAST8Test extends ConverterTestSetup {
 		assertNotNull("No compilation unit", result); //$NON-NLS-1$
 		assertTrue("result is not a compilation unit", result instanceof CompilationUnit); //$NON-NLS-1$
 		CompilationUnit compilationUnit = (CompilationUnit) result;
-		assertEquals("Wrong size", 2, compilationUnit.getMessages().length); //$NON-NLS-1$
-		assertEquals("Wrong size", 2, compilationUnit.getProblems().length); //$NON-NLS-1$
+		assertEquals("Wrong size", 1, compilationUnit.getMessages().length); //$NON-NLS-1$
+		assertEquals("Wrong size", 1, compilationUnit.getProblems().length); //$NON-NLS-1$
 		ASTNode node = getASTNode(compilationUnit, 0, 1, 0);
 		assertTrue("Not an ExpressionStatement", node instanceof ExpressionStatement); //$NON-NLS-1$
 		ExpressionStatement expressionStatement = (ExpressionStatement) node;
@@ -8414,8 +8415,8 @@ public class ASTConverterAST8Test extends ConverterTestSetup {
 			compiler_source = project.getOption(JavaCore.COMPILER_SOURCE, true);
 			compiler_compliance = project.getOption(JavaCore.COMPILER_COMPLIANCE, true);
 			project.setOption(JavaCore.COMPILER_PB_ASSERT_IDENTIFIER, JavaCore.ERROR);
-			project.setOption(JavaCore.COMPILER_SOURCE, JavaCore.VERSION_1_4);
-			project.setOption(JavaCore.COMPILER_COMPLIANCE, JavaCore.VERSION_1_4);
+			project.setOption(JavaCore.COMPILER_SOURCE, CompilerOptions.getFirstSupportedJavaVersion());
+			project.setOption(JavaCore.COMPILER_COMPLIANCE, CompilerOptions.getFirstSupportedJavaVersion());
 			ASTNode result = runConversion(getJLS8(), sourceUnit, true);
 			assertNotNull("No compilation unit", result); //$NON-NLS-1$
 			assertTrue("result is not a compilation unit", result instanceof CompilationUnit); //$NON-NLS-1$

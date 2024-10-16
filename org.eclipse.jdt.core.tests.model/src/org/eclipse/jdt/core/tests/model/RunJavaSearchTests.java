@@ -17,11 +17,9 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
-
-import org.eclipse.jdt.core.tests.junit.extension.TestCase;
-
 import junit.framework.Test;
 import junit.framework.TestSuite;
+import org.eclipse.jdt.core.tests.junit.extension.TestCase;
 
 @SuppressWarnings({"rawtypes", "unchecked"})
 public class RunJavaSearchTests extends junit.framework.TestCase {
@@ -84,6 +82,7 @@ public class RunJavaSearchTests extends junit.framework.TestCase {
 		allClasses.add(JavaSearchNameEnvironmentTest.class);
 		allClasses.add(JavaSearchSuperAfterStatementTests.class);
 		allClasses.add(JavaSearchIssue190Test.class);
+		allClasses.add(JavaSearchImplicitTypeDeclarationTests.class);
 
 		// Reset forgotten subsets of tests
 		TestCase.TESTS_PREFIX = null;

@@ -18,7 +18,6 @@
 package org.eclipse.jdt.internal.compiler.env;
 
 import java.net.URI;
-
 import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.internal.compiler.lookup.BinaryTypeBinding.ExternalAnnotationStatus;
 import org.eclipse.jdt.internal.compiler.lookup.LookupEnvironment;
@@ -101,7 +100,7 @@ char[][] getInterfaceNames();
  * A name is a simple name or a qualified, dot separated name.
  * For example, Hashtable or java.util.Hashtable.
  */
-default char[][] getPermittedSubtypeNames() {
+default char[][] getPermittedSubtypesNames() {
 	return null;
 }
 

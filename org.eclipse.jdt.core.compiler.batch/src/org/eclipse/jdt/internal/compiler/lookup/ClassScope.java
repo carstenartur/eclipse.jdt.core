@@ -39,19 +39,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
 import org.eclipse.jdt.core.compiler.CharOperation;
-import org.eclipse.jdt.internal.compiler.ast.ASTNode;
-import org.eclipse.jdt.internal.compiler.ast.AbstractMethodDeclaration;
-import org.eclipse.jdt.internal.compiler.ast.AbstractVariableDeclaration;
-import org.eclipse.jdt.internal.compiler.ast.FieldDeclaration;
-import org.eclipse.jdt.internal.compiler.ast.LambdaExpression;
-import org.eclipse.jdt.internal.compiler.ast.QualifiedAllocationExpression;
-import org.eclipse.jdt.internal.compiler.ast.RecordComponent;
-import org.eclipse.jdt.internal.compiler.ast.SingleTypeReference;
-import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
-import org.eclipse.jdt.internal.compiler.ast.TypeParameter;
-import org.eclipse.jdt.internal.compiler.ast.TypeReference;
+import org.eclipse.jdt.internal.compiler.ast.*;
 import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.env.AccessRestriction;
 import org.eclipse.jdt.internal.compiler.env.ICompilationUnit;
@@ -106,7 +95,7 @@ public class ClassScope extends Scope {
 			}
 		}
 		anonymousType.typeBits |= inheritedBits;
-		anonymousType.setPermittedTypes(Binding.NO_PERMITTEDTYPES); // JLS 15 JEP 360 Preview - Sec 15.9.5
+		anonymousType.setPermittedTypes(Binding.NO_PERMITTED_TYPES);
 		if (supertype.isInterface()) {
 			anonymousType.setSuperClass(getJavaLangObject());
 			anonymousType.setSuperInterfaces(new ReferenceBinding[] { supertype });
@@ -126,7 +115,8 @@ public class ClassScope extends Scope {
 		} else {
 			anonymousType.setSuperClass(supertype);
 			anonymousType.setSuperInterfaces(Binding.NO_SUPERINTERFACES);
-			checkForEnumSealedPreview(supertype, anonymousType);
+			if (supertype.isEnum() && supertype instanceof SourceTypeBinding superEnum)
+				implicitlySealEnumHierarchy(superEnum, anonymousType);
 			TypeReference typeReference = this.referenceContext.allocation.type;
 			if (typeReference != null) { // no check for enum constant body
 				this.referenceContext.superclass = typeReference;
@@ -162,25 +152,19 @@ public class ClassScope extends Scope {
 		anonymousType.verifyMethods(environment().methodVerifier());
 	}
 
-	private void checkForEnumSealedPreview(ReferenceBinding supertype, LocalTypeBinding anonymousType) {
-		if (!JavaFeature.SEALED_CLASSES.isSupported(compilerOptions())
-				|| !supertype.isEnum()
-				|| !(supertype instanceof SourceTypeBinding))
-			return;
-
-		SourceTypeBinding sourceSuperType = (SourceTypeBinding) supertype;
-		ReferenceBinding[] permTypes = sourceSuperType.permittedTypes();
-		int sz = permTypes == null ? 0 : permTypes.length;
-		if (sz == 0) {
-			permTypes = new ReferenceBinding[] {anonymousType};
-		} else {
-			System.arraycopy(permTypes, 0,
-					permTypes = new ReferenceBinding[sz + 1], 0,
-					sz);
-			permTypes[sz] = anonymousType;
+	private void implicitlySealEnumHierarchy(SourceTypeBinding superEnum, LocalTypeBinding anonymousType) {
+		if (JavaFeature.SEALED_CLASSES.isSupported(compilerOptions())) {
+			ReferenceBinding[] permittedTypes = superEnum.permittedTypes();
+			int sz = permittedTypes == null ? 0 : permittedTypes.length;
+			if (sz == 0) {
+				permittedTypes = new ReferenceBinding[] { anonymousType };
+			} else {
+				System.arraycopy(permittedTypes, 0, permittedTypes = new ReferenceBinding[sz + 1], 0, sz);
+				permittedTypes[sz] = anonymousType;
+			}
+			anonymousType.modifiers |= ClassFileConstants.AccFinal;
+			superEnum.setPermittedTypes(permittedTypes);
 		}
-		anonymousType.modifiers |= ClassFileConstants.AccFinal; // JLS 15 / sealed preview/Sec 8.9.1
-		sourceSuperType.setPermittedTypes(permTypes);
 	}
 
 	void buildComponents() {
@@ -610,8 +594,7 @@ public class ClassScope extends Scope {
 		CompilerOptions options = compilerOptions();
 		boolean is16Plus = compilerOptions().sourceLevel >= ClassFileConstants.JDK16;
 		boolean isSealedSupported = JavaFeature.SEALED_CLASSES.isSupported(options);
-		boolean flagSealedNonModifiers = isSealedSupported &&
-				(modifiers & (ExtraCompilerModifiers.AccSealed | ExtraCompilerModifiers.AccNonSealed)) != 0;
+		boolean hierarchySealed = (modifiers & (ExtraCompilerModifiers.AccSealed | ExtraCompilerModifiers.AccNonSealed)) != 0;
 
 		switch (modifiers & (ExtraCompilerModifiers.AccSealed | ExtraCompilerModifiers.AccNonSealed | ClassFileConstants.AccFinal)) {
 			case ExtraCompilerModifiers.AccSealed, ExtraCompilerModifiers.AccNonSealed, ClassFileConstants.AccFinal, ClassFileConstants.AccDefault : break;
@@ -654,7 +637,7 @@ public class ClassScope extends Scope {
 				}
 				final int UNEXPECTED_MODIFIERS =~(ClassFileConstants.AccEnum | ClassFileConstants.AccStrictfp);
 				if ((modifiers & ExtraCompilerModifiers.AccJustFlag & UNEXPECTED_MODIFIERS) != 0
-						|| flagSealedNonModifiers) {
+						|| hierarchySealed) {
 					problemReporter().illegalModifierForLocalEnumDeclaration(sourceType);
 					return;
 				}
@@ -675,8 +658,19 @@ public class ClassScope extends Scope {
 				if (compilerOptions().complianceLevel < ClassFileConstants.JDK9)
 					modifiers |= ClassFileConstants.AccFinal;
 			    // set AccEnum flag for anonymous body of enum constants
-			    if (this.referenceContext.allocation.type == null)
+			    if (this.referenceContext.allocation.type == null) {
 			    	modifiers |= ClassFileConstants.AccEnum;
+			    	// 8.1.1.4 local enum classes are implicitly static - we can't trust isLocalType() which answers true for all anonymous types.
+			    	Scope scope = this;
+					while ((scope = scope.parent) != null) {
+						if (scope instanceof MethodScope methodScope) {
+							if (methodScope.referenceContext instanceof TypeDeclaration)
+								continue;
+							modifiers |= ClassFileConstants.AccStatic;
+							break;
+						}
+					}
+			    }
 			} else if (this.parent.referenceContext() instanceof TypeDeclaration) {
 				TypeDeclaration typeDecl = (TypeDeclaration) this.parent.referenceContext();
 				if (TypeDeclaration.kind(typeDecl.modifiers) == TypeDeclaration.INTERFACE_DECL) {
@@ -754,7 +748,7 @@ public class ClassScope extends Scope {
 						| ClassFileConstants.AccStrictfp | ClassFileConstants.AccAnnotation
 						| ((is16Plus && this.parent instanceof ClassScope) ? ClassFileConstants.AccStatic : 0));
 				if ((realModifiers & UNEXPECTED_MODIFIERS) != 0
-						|| flagSealedNonModifiers)
+						|| hierarchySealed)
 					problemReporter().localStaticsIllegalVisibilityModifierForInterfaceLocalType(sourceType);
 //				if ((modifiers & ClassFileConstants.AccStatic) != 0) {
 //					problemReporter().recordIllegalStaticModifierForLocalClassOrInterface(sourceType);
@@ -776,24 +770,23 @@ public class ClassScope extends Scope {
 				modifiers |= ClassFileConstants.AccSynthetic;
 			}
 			modifiers |= ClassFileConstants.AccAbstract;
-			} else if ((realModifiers & ClassFileConstants.AccEnum) != 0) {
+		} else if ((realModifiers & ClassFileConstants.AccEnum) != 0) {
 			// detect abnormal cases for enums
 			if (isMemberType) { // includes member types defined inside local types
-				final int UNEXPECTED_MODIFIERS = ~(ClassFileConstants.AccPublic | ClassFileConstants.AccPrivate | ClassFileConstants.AccProtected | ClassFileConstants.AccStatic | ClassFileConstants.AccStrictfp | ClassFileConstants.AccEnum);
-				if ((realModifiers & UNEXPECTED_MODIFIERS) != 0 || flagSealedNonModifiers) {
+				final int UNEXPECTED_MODIFIERS = ~(ClassFileConstants.AccPublic | ClassFileConstants.AccPrivate
+						| ClassFileConstants.AccProtected | ClassFileConstants.AccStatic
+						| ClassFileConstants.AccStrictfp | ClassFileConstants.AccEnum);
+				if ((realModifiers & UNEXPECTED_MODIFIERS) != 0 || hierarchySealed) {
 					problemReporter().illegalModifierForMemberEnum(sourceType);
 					modifiers &= ~ClassFileConstants.AccAbstract; // avoid leaking abstract modifier
 					realModifiers &= ~ClassFileConstants.AccAbstract;
 //					modifiers &= ~(realModifiers & UNEXPECTED_MODIFIERS);
 //					realModifiers = modifiers & ExtraCompilerModifiers.AccJustFlag;
 				}
-			} else if (sourceType.isLocalType()) {
-//				if (flagSealedNonModifiers)
-//					problemReporter().illegalModifierForLocalEnum(sourceType);
-				// each enum constant is an anonymous local type and its modifiers were already checked as an enum constant field
-			} else {
-				final int UNEXPECTED_MODIFIERS = ~(ClassFileConstants.AccPublic | ClassFileConstants.AccStrictfp | ClassFileConstants.AccEnum);
-				if ((realModifiers & UNEXPECTED_MODIFIERS) != 0 || flagSealedNonModifiers)
+			} else if (!sourceType.isLocalType()) { // local types already handled earlier.
+				final int UNEXPECTED_MODIFIERS = ~(ClassFileConstants.AccPublic | ClassFileConstants.AccStrictfp
+						| ClassFileConstants.AccEnum);
+				if ((realModifiers & UNEXPECTED_MODIFIERS) != 0 || hierarchySealed)
 					problemReporter().illegalModifierForEnum(sourceType);
 			}
 			if (!sourceType.isAnonymousType()) {
@@ -808,14 +801,16 @@ public class ClassScope extends Scope {
 					TypeDeclaration typeDeclaration = this.referenceContext;
 					FieldDeclaration[] fields = typeDeclaration.fields;
 					int fieldsLength = fields == null ? 0 : fields.length;
-					if (fieldsLength == 0) break checkAbstractEnum; // has no constants so must implement the method itself
+					if (fieldsLength == 0)
+						break checkAbstractEnum; // has no constants so must implement the method itself
 					AbstractMethodDeclaration[] methods = typeDeclaration.methods;
 					int methodsLength = methods == null ? 0 : methods.length;
 					// TODO (kent) cannot tell that the superinterfaces are empty or that their methods are implemented
 					boolean definesAbstractMethod = typeDeclaration.superInterfaces != null;
 					for (int i = 0; i < methodsLength && !definesAbstractMethod; i++)
 						definesAbstractMethod = methods[i].isAbstract();
-					if (!definesAbstractMethod) break checkAbstractEnum; // all methods have bodies
+					if (!definesAbstractMethod)
+						break checkAbstractEnum; // all methods have bodies
 					boolean needAbstractBit = false;
 					for (int i = 0; i < fieldsLength; i++) {
 						FieldDeclaration fieldDecl = fields[i];
@@ -827,8 +822,10 @@ public class ClassScope extends Scope {
 							}
 						}
 					}
-					// tag this enum as abstract since an abstract method must be implemented AND all enum constants define an anonymous body
-					// as a result, each of its anonymous constants will see it as abstract and must implement each inherited abstract method
+					// tag this enum as abstract since an abstract method must be implemented AND all enum constants
+					// define an anonymous body
+					// as a result, each of its anonymous constants will see it as abstract and must implement each
+					// inherited abstract method
 					if (needAbstractBit) {
 						modifiers |= ClassFileConstants.AccAbstract;
 					}
@@ -893,7 +890,7 @@ public class ClassScope extends Scope {
 			} else if (sourceType.isLocalType()) {
 				final int UNEXPECTED_MODIFIERS = ~(ClassFileConstants.AccAbstract | ClassFileConstants.AccFinal | ClassFileConstants.AccStrictfp
 						| ((is16Plus && this.parent instanceof ClassScope) ? ClassFileConstants.AccStatic : 0));
-				if ((realModifiers & UNEXPECTED_MODIFIERS) != 0 || flagSealedNonModifiers)
+				if ((realModifiers & UNEXPECTED_MODIFIERS) != 0 || hierarchySealed)
 					problemReporter().illegalModifierForLocalClass(sourceType);
 			} else {
 				final int UNEXPECTED_MODIFIERS = ~(ClassFileConstants.AccPublic | ClassFileConstants.AccAbstract | ClassFileConstants.AccFinal | ClassFileConstants.AccStrictfp);
@@ -1181,7 +1178,7 @@ public class ClassScope extends Scope {
 		if (sourceType.id == TypeIds.T_JavaLangObject) { // handle the case of redefining java.lang.Object up front
 			sourceType.setSuperClass(null);
 			sourceType.setSuperInterfaces(Binding.NO_SUPERINTERFACES);
-			sourceType.setPermittedTypes(Binding.NO_PERMITTEDTYPES);
+			sourceType.setPermittedTypes(Binding.NO_PERMITTED_TYPES);
 			if (!sourceType.isClass())
 				problemReporter().objectMustBeClass(sourceType);
 			if (this.referenceContext.superclass != null || (this.referenceContext.superInterfaces != null && this.referenceContext.superInterfaces.length > 0))
@@ -1308,7 +1305,7 @@ public class ClassScope extends Scope {
 	}
 	void connectPermittedTypes() {
 		SourceTypeBinding sourceType = this.referenceContext.binding;
-		sourceType.setPermittedTypes(Binding.NO_PERMITTEDTYPES);
+		sourceType.setPermittedTypes(Binding.NO_PERMITTED_TYPES);
 		if (sourceType.id == TypeIds.T_JavaLangObject || sourceType.isEnum()) // already handled
 			return;
 
@@ -1321,30 +1318,24 @@ public class ClassScope extends Scope {
 				nextPermittedType : for (int i = 0; i < length; i++) {
 					TypeReference permittedTypeRef = this.referenceContext.permittedTypes[i];
 					ReferenceBinding permittedType = findPermittedtype(permittedTypeRef);
-					if (permittedType == null) { // detected cycle
+					if (permittedType == null) {
 						continue nextPermittedType;
 					}
-					if (!isPermittedTypeInAllowedFormat(sourceType, permittedTypeRef, permittedType))
-						continue nextPermittedType;
 
-					// check for simple interface collisions
-					// Check for a duplicate interface once the name is resolved, otherwise we may be confused (i.e. a.b.I and c.d.I)
 					for (int j = 0; j < i; j++) {
 						if (TypeBinding.equalsEquals(permittedTypeBindings[j], permittedType)) {
-							problemReporter().sealedDuplicateTypeInPermits(sourceType, permittedTypeRef, permittedType);
+							problemReporter().duplicatePermittedType(sourceType, permittedTypeRef, permittedType);
 							continue nextPermittedType;
 						}
 					}
-					// only want to reach here when no errors are reported
 					permittedTypeBindings[count++] = permittedType;
 				}
-				// hold onto all correctly resolved superinterfaces
 				if (count > 0) {
 					if (count != length)
 						System.arraycopy(permittedTypeBindings, 0, permittedTypeBindings = new ReferenceBinding[count], 0, count);
 					sourceType.setPermittedTypes(permittedTypeBindings);
 				} else {
-					sourceType.setPermittedTypes(Binding.NO_PERMITTEDTYPES);
+					sourceType.setPermittedTypes(Binding.NO_PERMITTED_TYPES);
 				}
 			} finally {
 				sourceType.tagBits &= ~TagBits.SealingTypeHierarchy;
@@ -1355,29 +1346,6 @@ public class ClassScope extends Scope {
 			for (ReferenceBinding memberType : memberTypes)
 				((SourceTypeBinding) memberType).scope.connectPermittedTypes();
 		}
-	}
-
-	private boolean isPermittedTypeInAllowedFormat(SourceTypeBinding sourceType, TypeReference permittedTypeRef,
-			ReferenceBinding permittedType) {
-		if (!(permittedType.isMemberType() && permittedTypeRef instanceof SingleTypeReference))
-			return true;
-		ReferenceBinding enclosingType = permittedType.enclosingType();
-		while (enclosingType != null) {
-			if (TypeBinding.equalsEquals(sourceType, enclosingType)) {
-				CompilationUnitScope cu = this.compilationUnitScope();
-				if (cu.imports != null || cu.imports.length > 0) {
-					for (ImportBinding ib : cu.imports) {
-						Binding resolvedImport = cu.resolveSingleImport(ib, Binding.TYPE);
-						if (resolvedImport instanceof TypeBinding &&
-						  TypeBinding.equalsEquals(permittedType, (TypeBinding) resolvedImport))
-							return true;
-					}
-				}
-				return false;
-			}
-			enclosingType = enclosingType.enclosingType();
-		}
-		return true;
 	}
 
 	private boolean connectRecordSuperclass() {
@@ -1673,7 +1641,7 @@ public class ClassScope extends Scope {
 		} catch (AbortCompilation e) {
 			SourceTypeBinding sourceType = this.referenceContext.binding;
 			if (sourceType.superInterfaces == null)  sourceType.setSuperInterfaces(Binding.NO_SUPERINTERFACES); // be more resilient for hierarchies (144976)
-			if (sourceType.permittedTypes == null)  sourceType.setPermittedTypes(Binding.NO_PERMITTEDTYPES);
+			if (sourceType.permittedTypes == null)  sourceType.setPermittedTypes(Binding.NO_PERMITTED_TYPES);
 			e.updateContext(typeReference, referenceCompilationUnit().compilationResult);
 			throw e;
 		} finally {
@@ -1698,10 +1666,10 @@ public class ClassScope extends Scope {
 			}
 			typeReference.bits |= ASTNode.IgnoreRawTypeCheck;
 			ReferenceBinding permittedType = (ReferenceBinding) typeReference.resolveType(this);
-			return permittedType;
+			return permittedType != null ? permittedType.actualType() : permittedType; // while permitted classes/interfaces cannot be parameterized with type arguments, they are not raw either
 		} catch (AbortCompilation e) {
 			SourceTypeBinding sourceType = this.referenceContext.binding;
-			if (sourceType.permittedTypes == null)  sourceType.setPermittedTypes(Binding.NO_PERMITTEDTYPES);
+			if (sourceType.permittedTypes == null)  sourceType.setPermittedTypes(Binding.NO_PERMITTED_TYPES);
 			e.updateContext(typeReference, referenceCompilationUnit().compilationResult);
 			throw e;
 		} finally {

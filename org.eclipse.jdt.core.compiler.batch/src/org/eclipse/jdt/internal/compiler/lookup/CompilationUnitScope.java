@@ -27,16 +27,22 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
-
 import org.eclipse.jdt.core.compiler.CharOperation;
-import org.eclipse.jdt.internal.compiler.ast.*;
+import org.eclipse.jdt.internal.compiler.ast.ASTNode;
+import org.eclipse.jdt.internal.compiler.ast.CompilationUnitDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.ImportReference;
+import org.eclipse.jdt.internal.compiler.ast.Invocation;
+import org.eclipse.jdt.internal.compiler.ast.ModuleDeclaration;
+import org.eclipse.jdt.internal.compiler.ast.TypeDeclaration;
 import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.env.AccessRestriction;
 import org.eclipse.jdt.internal.compiler.env.IUpdatableModule;
 import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 import org.eclipse.jdt.internal.compiler.impl.JavaFeature;
 import org.eclipse.jdt.internal.compiler.problem.ProblemReporter;
-import org.eclipse.jdt.internal.compiler.util.*;
+import org.eclipse.jdt.internal.compiler.util.HashtableOfObject;
+import org.eclipse.jdt.internal.compiler.util.HashtableOfType;
+import org.eclipse.jdt.internal.compiler.util.ObjectVector;
 
 public class CompilationUnitScope extends Scope {
 
@@ -785,6 +791,7 @@ ImportBinding[] getDefaultImports() {
 			this.environment.missingClassFileLocation, false, null/*resolving j.l.O is not specific to any referencing type*/);
 		BinaryTypeBinding missingObject = this.environment.createMissingType(null, TypeConstants.JAVA_LANG_OBJECT);
 		importBinding = missingObject.fPackage;
+		return new ImportBinding[] {new ImportBinding(TypeConstants.JAVA_LANG, true, importBinding, null)};
 	}
 	return this.environment.root.defaultImports = new ImportBinding[] {new ImportBinding(TypeConstants.JAVA_LANG, true, importBinding, null)};
 }

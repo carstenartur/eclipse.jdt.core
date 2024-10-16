@@ -52,13 +52,13 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-
 import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.internal.compiler.ast.LambdaExpression;
 import org.eclipse.jdt.internal.compiler.ast.MethodDeclaration;
@@ -2106,11 +2106,6 @@ public ReferenceBinding superclass() {
 }
 
 @Override
-public ReferenceBinding[] permittedTypes() {
-	return Binding.NO_PERMITTEDTYPES;
-}
-
-@Override
 public ReferenceBinding[] superInterfaces() {
 	return Binding.NO_SUPERINTERFACES;
 }
@@ -2558,7 +2553,7 @@ public List<ReferenceBinding> getAllEnumerableReferenceTypes() {
 		return Collections.emptyList();
 
 	Set<ReferenceBinding> permSet = new HashSet<>(Arrays.asList(permittedTypes()));
-	if (isClass() && (!isAbstract()))
+	if (isClass() && canBeInstantiated())
 		permSet.add(this);
 	Set<ReferenceBinding> oldSet = new HashSet<>(permSet);
 	do {
@@ -2569,7 +2564,7 @@ public List<ReferenceBinding> getAllEnumerableReferenceTypes() {
 		oldSet = permSet;
 		permSet = tmp;
 	} while (oldSet.size() != permSet.size());
-	return Arrays.asList(permSet.toArray(new ReferenceBinding[0]));
+	return new ArrayList<>(permSet);
 }
 
 // 5.1.6.1 Allowed Narrowing Reference Conversion

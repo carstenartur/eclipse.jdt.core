@@ -17,7 +17,7 @@ package org.eclipse.jdt.core.tests.dom;
 
 import java.io.IOException;
 import java.util.List;
-
+import junit.framework.Test;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.jdt.core.BindingKey;
 import org.eclipse.jdt.core.ICompilationUnit;
@@ -28,77 +28,9 @@ import org.eclipse.jdt.core.IMethod;
 import org.eclipse.jdt.core.IType;
 import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.JavaModelException;
-import org.eclipse.jdt.core.dom.AST;
-import org.eclipse.jdt.core.dom.ASTNode;
-import org.eclipse.jdt.core.dom.ASTParser;
-import org.eclipse.jdt.core.dom.ASTRequestor;
-import org.eclipse.jdt.core.dom.AnnotatableType;
-import org.eclipse.jdt.core.dom.Annotation;
-import org.eclipse.jdt.core.dom.AnonymousClassDeclaration;
-import org.eclipse.jdt.core.dom.ArrayCreation;
-import org.eclipse.jdt.core.dom.ArrayInitializer;
-import org.eclipse.jdt.core.dom.ArrayType;
-import org.eclipse.jdt.core.dom.Assignment;
-import org.eclipse.jdt.core.dom.Block;
-import org.eclipse.jdt.core.dom.CastExpression;
-import org.eclipse.jdt.core.dom.CatchClause;
-import org.eclipse.jdt.core.dom.ClassInstanceCreation;
-import org.eclipse.jdt.core.dom.CompilationUnit;
-import org.eclipse.jdt.core.dom.ConditionalExpression;
-import org.eclipse.jdt.core.dom.CreationReference;
-import org.eclipse.jdt.core.dom.Dimension;
-import org.eclipse.jdt.core.dom.EnhancedForStatement;
-import org.eclipse.jdt.core.dom.Expression;
-import org.eclipse.jdt.core.dom.ExpressionMethodReference;
-import org.eclipse.jdt.core.dom.ExpressionStatement;
-import org.eclipse.jdt.core.dom.FieldDeclaration;
-import org.eclipse.jdt.core.dom.ForStatement;
-import org.eclipse.jdt.core.dom.IAnnotationBinding;
-import org.eclipse.jdt.core.dom.IBinding;
-import org.eclipse.jdt.core.dom.IMethodBinding;
-import org.eclipse.jdt.core.dom.ITypeBinding;
-import org.eclipse.jdt.core.dom.IVariableBinding;
-import org.eclipse.jdt.core.dom.InstanceofExpression;
-import org.eclipse.jdt.core.dom.IntersectionType;
-import org.eclipse.jdt.core.dom.Javadoc;
-import org.eclipse.jdt.core.dom.LambdaExpression;
-import org.eclipse.jdt.core.dom.MarkerAnnotation;
-import org.eclipse.jdt.core.dom.MethodDeclaration;
-import org.eclipse.jdt.core.dom.MethodInvocation;
-import org.eclipse.jdt.core.dom.MethodRef;
-import org.eclipse.jdt.core.dom.MethodRefParameter;
-import org.eclipse.jdt.core.dom.Modifier;
-import org.eclipse.jdt.core.dom.Name;
-import org.eclipse.jdt.core.dom.NameQualifiedType;
-import org.eclipse.jdt.core.dom.NodeFinder;
-import org.eclipse.jdt.core.dom.ParameterizedType;
-import org.eclipse.jdt.core.dom.PrimitiveType;
-import org.eclipse.jdt.core.dom.QualifiedName;
-import org.eclipse.jdt.core.dom.QualifiedType;
-import org.eclipse.jdt.core.dom.ReturnStatement;
-import org.eclipse.jdt.core.dom.SimpleName;
-import org.eclipse.jdt.core.dom.SimpleType;
-import org.eclipse.jdt.core.dom.SingleMemberAnnotation;
-import org.eclipse.jdt.core.dom.SingleVariableDeclaration;
-import org.eclipse.jdt.core.dom.Statement;
-import org.eclipse.jdt.core.dom.SuperMethodReference;
-import org.eclipse.jdt.core.dom.TagElement;
-import org.eclipse.jdt.core.dom.TryStatement;
-import org.eclipse.jdt.core.dom.Type;
-import org.eclipse.jdt.core.dom.TypeDeclaration;
-import org.eclipse.jdt.core.dom.TypeDeclarationStatement;
-import org.eclipse.jdt.core.dom.TypeLiteral;
-import org.eclipse.jdt.core.dom.TypeMethodReference;
-import org.eclipse.jdt.core.dom.TypeParameter;
-import org.eclipse.jdt.core.dom.VariableDeclaration;
-import org.eclipse.jdt.core.dom.VariableDeclarationExpression;
-import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
-import org.eclipse.jdt.core.dom.VariableDeclarationStatement;
-import org.eclipse.jdt.core.dom.WildcardType;
+import org.eclipse.jdt.core.dom.*;
 import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.core.ResolvedBinaryMethod;
-
-import junit.framework.Test;
 
 @SuppressWarnings({"rawtypes"})
 public class ASTConverter18Test extends ConverterTestSetup {
@@ -5481,6 +5413,67 @@ public void testLambdaParameterSourcePosition() throws JavaModelException {
 	ILocalVariable variableElement = (ILocalVariable)variableBinding.getJavaElement();
 	assertEquals(26, variableElement.getSourceRange().getOffset());
 	assertEquals(1, variableElement.getSourceRange().getLength());
+}
+
+public void testSVDStartPositionIssue_1() throws JavaModelException {
+	String contents = """
+				public class X {
+					public static void example() {
+						try {
+							System.out.println("try");
+						}
+						/** */
+						catch (RuntimeException e) {
+							System.out.println("catch");
+						}
+					}
+				}
+			""";
+	this.workingCopy = getWorkingCopy("/Converter22/src/xyz/X.java", true/*resolve*/);
+	CompilationUnit cu = (CompilationUnit) buildAST(contents, this.workingCopy);
+	TypeDeclaration typedeclaration = (TypeDeclaration) getASTNode(cu, 0);
+	MethodDeclaration methodDeclaration = (MethodDeclaration) typedeclaration.bodyDeclarations().get(0);
+	Block block = methodDeclaration.getBody();
+	List<ASTNode> statements = block.statements();
+	TryStatement tryStatement = (TryStatement) statements.get(0);
+	List<ASTNode> catchClauseList = tryStatement.catchClauses();
+	CatchClause catchClause = (CatchClause) catchClauseList.get(0);
+	SingleVariableDeclaration svd = catchClause.getException();
+
+	assertEquals("Not a Single Variable Declaration", ASTNode.SINGLE_VARIABLE_DECLARATION, svd.getNodeType());
+	assertEquals("Not a Simple Type", ASTNode.SIMPLE_TYPE, svd.getType().getNodeType());
+	assertEquals("Not a Simple Name", ASTNode.SIMPLE_NAME, svd.getName().getNodeType());
+	assertEquals("Single Variable Declaration length is not correct", svd.getLength(), contents.substring(contents.indexOf("RuntimeException e")).indexOf(')'));
+	assertEquals("Single Variable Declaration startPosition is not correct", svd.getStartPosition(), contents.indexOf("RuntimeException"));
+}
+
+public void testSVDStartPositionIssue_2() throws JavaModelException {
+	String contents = """
+			public class X {
+				public static void example() {
+					try {
+						System.out.println("try");
+					}
+					/** */
+					catch(/** abc*/ RuntimeException e) {
+						System.out.println("catch");
+					}
+				}
+			}
+		""";
+	this.workingCopy = getWorkingCopy("/Converter22/src/xyz/X.java", true/*resolve*/);
+	CompilationUnit cu = (CompilationUnit) buildAST(contents, this.workingCopy);
+	TypeDeclaration typedeclaration = (TypeDeclaration) getASTNode(cu, 0);
+	MethodDeclaration methodDeclaration = (MethodDeclaration) typedeclaration.bodyDeclarations().get(0);
+	Block block = methodDeclaration.getBody();
+	List<ASTNode> statements = block.statements();
+	TryStatement tryStatement = (TryStatement) statements.get(0);
+	List<ASTNode> catchClauseList = tryStatement.catchClauses();
+	CatchClause catchClause = (CatchClause) catchClauseList.get(0);
+	SingleVariableDeclaration svd = catchClause.getException();
+
+	assertEquals("Single Variable Declaration length is not correct", svd.getLength(), contents.substring(contents.indexOf("/** abc*/ RuntimeException e")).indexOf(')'));
+	assertEquals("Single Variable Declaration startPosition is not correct", svd.getStartPosition(), contents.indexOf("/** abc*/ RuntimeException"));
 }
 
 }

@@ -24,7 +24,7 @@ import java.util.Hashtable;
 import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
-
+import junit.framework.Test;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.resources.IWorkspaceDescription;
 import org.eclipse.core.resources.IWorkspaceRoot;
@@ -49,8 +49,6 @@ import org.eclipse.jdt.internal.formatter.DefaultCodeFormatterOptions.Alignment;
 import org.eclipse.jface.text.IRegion;
 import org.eclipse.jface.text.Region;
 import org.eclipse.text.edits.TextEdit;
-
-import junit.framework.Test;
 
 @SuppressWarnings({"rawtypes", "unchecked"})
 public class FormatterRegressionTests extends AbstractJavaModelTests {
@@ -16397,5 +16395,73 @@ public void testGH1473c() throws JavaModelException {
 	this.formatterPrefs.brace_position_for_block_in_case_after_arrow = DefaultCodeFormatterConstants.NEXT_LINE_SHIFTED;
 	String input = getCompilationUnit("Formatter", "", "testGH1473", "in.java").getSource();
 	formatSource(input, getCompilationUnit("Formatter", "", "testGH1473", "C_out.java").getSource());
+}
+// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/3070
+// [Formatter] leading space added to conditional statements following an unnamed variable
+public void testIssue3070() {
+	setComplianceLevel(CompilerOptions.VERSION_23);
+	String source =
+		"""
+		class Example {
+			private void foo() {
+				var a = false;
+
+				try {
+				} catch (Exception _) { // <- the unnamed variable triggers the issue
+				}
+
+				if (a) { // <- no leading space before the variable name
+				}
+			}
+		}
+		""";
+	formatSource(source,
+		"""
+		class Example {
+			private void foo() {
+				var a = false;
+
+				try {
+				} catch (Exception _) { // <- the unnamed variable triggers the issue
+				}
+
+				if (a) { // <- no leading space before the variable name
+				}
+			}
+		}
+		""");
+}
+public void testIssue3070_2() {
+	setComplianceLevel(CompilerOptions.VERSION_23);
+	String source =
+		"""
+		class Example {
+			private void foo() {
+				var a = false;
+
+				try {
+				} catch (Exception e) { // <- the unnamed variable triggers the issue
+				}
+
+				if (a) { // <- no leading space before the variable name
+				}
+			}
+		}
+		""";
+	formatSource(source,
+		"""
+		class Example {
+			private void foo() {
+				var a = false;
+
+				try {
+				} catch (Exception e) { // <- the unnamed variable triggers the issue
+				}
+
+				if (a) { // <- no leading space before the variable name
+				}
+			}
+		}
+		""");
 }
 }

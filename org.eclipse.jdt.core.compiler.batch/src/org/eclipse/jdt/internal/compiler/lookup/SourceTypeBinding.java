@@ -67,7 +67,6 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.eclipse.jdt.core.compiler.CharOperation;
-import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.IErrorHandlingPolicy;
 import org.eclipse.jdt.internal.compiler.ast.*;
 import org.eclipse.jdt.internal.compiler.ast.TypeReference.AnnotationPosition;
@@ -1119,17 +1118,9 @@ private Map.Entry<TypeReference, ReferenceBinding> getFirstSealedSuperTypeOrInte
 	}
 	return null;
 }
-// TODO: Optimize the multiple loops - defer until the feature becomes standard.
+
 private void checkPermitsInType() {
-//	if (/* this.isRecordDeclaration || */this.isEnum())
-//		return; // handled separately
 	TypeDeclaration typeDecl = this.scope.referenceContext;
-	if (this.isInterface()) {
-		if (isSealed() && isNonSealed()) {
-			this.scope.problemReporter().sealedInterfaceIsSealedAndNonSealed(this, typeDecl);
-			return;
-		}
-	}
 	boolean hasPermittedTypes = this.permittedTypes != null && this.permittedTypes.length > 0;
 	if (hasPermittedTypes) {
 		if (!this.isSealed())
@@ -1170,11 +1161,13 @@ private void checkPermitsInType() {
 			return;
 		}
 	} else if (this.isNonSealed()) {
-		if (!foundSealedSuperTypeOrInterface) {
-			if (this.isClass() && !this.isRecord()) // record to give only illegal modifier error.
-				this.scope.problemReporter().sealedDisAllowedNonSealedModifierInClass(this, typeDecl);
-			else if (this.isInterface())
-				this.scope.problemReporter().sealedDisAllowedNonSealedModifierInInterface(this, typeDecl);
+		if (!this.isSealed()) { // lest we bark again.
+			if (!foundSealedSuperTypeOrInterface) {
+				if (this.isClass() && !this.isRecord()) // record to give only illegal modifier error.
+					this.scope.problemReporter().sealedDisAllowedNonSealedModifierInClass(this, typeDecl);
+				else if (this.isInterface())
+					this.scope.problemReporter().sealedDisAllowedNonSealedModifierInInterface(this, typeDecl);
+			}
 		}
 	}
 	if (foundSealedSuperTypeOrInterface) {
@@ -1281,40 +1274,6 @@ private void reportSealedSuperTypeDoesNotPermitProblem(TypeReference superTypeRe
 			}
 		}
 	}
-}
-
-public List<SourceTypeBinding> collectAllTypeBindings(TypeDeclaration typeDecl, CompilationUnitScope unitScope) {
-	class TypeBindingsCollector extends ASTVisitor {
-		List<SourceTypeBinding> types = new ArrayList<>();
-		@Override
-		public boolean visit(
-				TypeDeclaration localTypeDeclaration,
-				BlockScope scope1) {
-				checkAndAddBinding(localTypeDeclaration.binding);
-				return true;
-			}
-			@Override
-			public boolean visit(
-				TypeDeclaration memberTypeDeclaration,
-				ClassScope scope1) {
-				checkAndAddBinding(memberTypeDeclaration.binding);
-				return true;
-			}
-			@Override
-			public boolean visit(
-				TypeDeclaration typeDeclaration,
-				CompilationUnitScope scope1) {
-				checkAndAddBinding(typeDeclaration.binding);
-				return true; // do nothing by default, keep traversing
-			}
-			private void checkAndAddBinding(SourceTypeBinding stb) {
-				if (stb != null)
-					this.types.add(stb);
-			}
-	}
-	TypeBindingsCollector typeCollector = new TypeBindingsCollector();
-	typeDecl.traverse(typeCollector, unitScope);
-	return typeCollector.types;
 }
 
 private boolean checkPermitsAndAdd(ReferenceBinding superType) {
@@ -3269,7 +3228,29 @@ public ReferenceBinding setSuperClass(ReferenceBinding superClass) {
 			annotatedType.superclass = superClass;
 		}
 	}
+	if (superClass != null && superClass.actualType() instanceof SourceTypeBinding sourceSuperType && sourceSuperType.isSealed()
+			&& (sourceSuperType.scope.referenceContext.permittedTypes == null || (sourceSuperType.scope.referenceContext.permittedTypes.length > 0 && sourceSuperType.scope.referenceContext.permittedTypes[0].isImplicit()))) {
+		sourceSuperType.setImplicitPermittedType(this);
+		if (this.isAnonymousType() && superClass.isEnum())
+			this.modifiers |= ClassFileConstants.AccFinal;
+	}
 	return this.superclass = superClass;
+}
+
+private void setImplicitPermittedType(SourceTypeBinding permittedType) {
+	ReferenceBinding[] typesPermitted = this.permittedTypes();
+	int sz = typesPermitted == null ? 0 : typesPermitted.length;
+	if (this.scope.referenceCompilationUnit() == permittedType.scope.referenceCompilationUnit()) {
+		if (sz == 0) {
+			typesPermitted = new ReferenceBinding[] { permittedType };
+		} else {
+			System.arraycopy(typesPermitted, 0, typesPermitted = new ReferenceBinding[sz + 1], 0, sz);
+			typesPermitted[sz] = permittedType;
+		}
+		this.setPermittedTypes(typesPermitted);
+	} else if (sz == 0) {
+		this.setPermittedTypes(Binding.NO_PERMITTED_TYPES);
+	}
 }
 
 // Propagate writes to all annotated variants so the clones evolve along.
@@ -3283,6 +3264,13 @@ public ReferenceBinding [] setSuperInterfaces(ReferenceBinding [] superInterface
 		for (int i = 0, length = annotatedTypes == null ? 0 : annotatedTypes.length; i < length; i++) {
 			SourceTypeBinding annotatedType = (SourceTypeBinding) annotatedTypes[i];
 			annotatedType.superInterfaces = superInterfaces;
+		}
+	}
+	for (int i = 0, length = superInterfaces == null ? 0 : superInterfaces.length; i < length; i++) {
+		ReferenceBinding superInterface = superInterfaces[i];
+		if (superInterface.actualType() instanceof SourceTypeBinding sourceSuperType && sourceSuperType.isSealed()
+				&& (sourceSuperType.scope.referenceContext.permittedTypes == null || (sourceSuperType.scope.referenceContext.permittedTypes.length > 0 && sourceSuperType.scope.referenceContext.permittedTypes[0].isImplicit()))) {
+			sourceSuperType.setImplicitPermittedType(this);
 		}
 	}
 	return this.superInterfaces = superInterfaces;

@@ -29,7 +29,6 @@ public class SwitchPatternTest extends AbstractRegressionTest9 {
 //		TESTS_NUMBERS = new int [] { 40 };
 //		TESTS_RANGE = new int[] { 1, -1 };
 //		TESTS_NAMES = new String[] { "testBug575053_002"};
-//		TESTS_NAMES = new String[] { "testBug575571_1"};
 	}
 
 	private static String previewLevel = "21";
@@ -2651,11 +2650,6 @@ public class SwitchPatternTest extends AbstractRegressionTest9 {
 				"	case List<String> s: \n" +
 				"	     ^^^^^^^^^^^^^^\n" +
 				"Type Object cannot be safely cast to List<String>\n" +
-				"----------\n" +
-				"3. ERROR in X.java (at line 9)\n" +
-				"	case List<String> s: \n" +
-				"	     ^^^^^^^^^^^^^^\n" +
-				"This case label is dominated by one of the preceding case labels\n" +
 				"----------\n");
 	}
 	public void testBug573921_8() {
@@ -7336,11 +7330,6 @@ public class SwitchPatternTest extends AbstractRegressionTest9 {
 				+ "	case WrapperRec(ExhaustiveSwitch.Data data) when data.name.isEmpty() -> { }\n"
 				+ "	                ^^^^^^^^^^^^^^^^\n"
 				+ "ExhaustiveSwitch cannot be resolved to a type\n"
-				+ "----------\n"
-				+ "4. ERROR in X.java (at line 12)\n"
-				+ "	case WrapperRec(ExhaustiveSwitch.Data data) when data.name.isEmpty() -> { }\n"
-				+ "	                ^^^^^^^^^^^^^^^^^^^^^^^^^^\n"
-				+ "Record component with type Data is not compatible with type ExhaustiveSwitch.Data\n"
 				+ "----------\n");
 	}
 	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/1955
@@ -9226,6 +9215,28 @@ public class SwitchPatternTest extends AbstractRegressionTest9 {
 						"""
 				},
 				"");
+	}
+
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/3135
+	// [Switch] default->null caused a building problem.
+	public void testIssue3135() {
+		runConformTest(
+				new String[] {
+						"X.java",
+						"""
+						public class X {
+						        public static void main(String[] args) {
+						            int i = 3;
+						            int[] arr = { 42, 2, 3 };
+						            System.out.println((switch (i) {
+						                case 3 -> arr;
+						                default -> null; // Replacing null with a non-null value can avoid this issue.
+						            })[0]);
+						        }
+						}
+						"""
+				},
+				"42");
 	}
 
 }

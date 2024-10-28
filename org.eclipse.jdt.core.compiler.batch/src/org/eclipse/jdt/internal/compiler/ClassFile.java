@@ -5842,7 +5842,6 @@ public class ClassFile implements TypeConstants, TypeIds {
 				superInterface.getAllAnnotationContexts(AnnotationTargetTypeConstants.CLASS_EXTENDS, i, allTypeAnnotationContexts);
 			}
 		}
-		// TODO: permittedTypes codegen
 		TypeParameter[] typeParameters = typeDeclaration.typeParameters;
 		if (typeParameters != null) {
 			for (int i = 0, max = typeParameters.length; i < max; i++) {
@@ -6044,7 +6043,7 @@ public class ClassFile implements TypeConstants, TypeIds {
 		if (aType.isAnonymousType()) {
 			ReferenceBinding superClass = aType.superclass;
 			if (superClass == null || !(superClass.isEnum() && superClass.isSealed()))
-			accessFlags &= ~ClassFileConstants.AccFinal;
+				accessFlags &= ~ClassFileConstants.AccFinal;
 		}
 		int finalAbstract = ClassFileConstants.AccFinal | ClassFileConstants.AccAbstract;
 		if ((accessFlags & finalAbstract) == finalAbstract) {

@@ -38,7 +38,6 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.lookup;
 
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -701,6 +700,10 @@ public boolean isClass() {
 
 public boolean isRecord() {
 	return false;
+}
+
+public boolean isRecordWithComponents() { // do records without components make sense ??!
+	return isRecord() && components() instanceof RecordComponentBinding [] components && components.length > 0;
 }
 
 /* Answer true if the receiver type can be assigned to the argument type (right)
@@ -1810,9 +1813,4 @@ public boolean isNonDenotable() {
 public boolean isSealed() {
 	return false;
 }
-
-public List<ReferenceBinding> getAllEnumerableReferenceTypes() {
-	return Collections.emptyList();
-}
-
 }

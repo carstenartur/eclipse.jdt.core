@@ -9,12 +9,11 @@
  * SPDX-License-Identifier: EPL-2.0
  *
  *******************************************************************************/
-package org.eclipse.jdt.core.tests.compiler.parser;
+package org.eclipse.jdt.core.tests.compiler.regression;
 
 import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Stream;
-import org.eclipse.jdt.core.tests.compiler.regression.AbstractRegressionTest9;
 import org.eclipse.jdt.internal.compiler.CompilationResult;
 import org.eclipse.jdt.internal.compiler.DefaultErrorHandlingPolicies;
 import org.eclipse.jdt.internal.compiler.ast.CompilationUnitDeclaration;
@@ -40,6 +39,19 @@ public class ImplicitlyDeclaredClassesTest extends AbstractRegressionTest9 {
 	public ImplicitlyDeclaredClassesTest(String testName){
 		super(testName);
 	}
+
+	// ========= OPT-IN to run.javac mode: ===========
+	@Override
+	protected void setUp() throws Exception {
+		this.runJavacOptIn = true;
+		super.setUp();
+	}
+	@Override
+	protected void tearDown() throws Exception {
+		super.tearDown();
+		this.runJavacOptIn = false; // do it last, so super can still clean up
+	}
+	// =================================================
 
 	public static Class<?> testClass() {
 		return ImplicitlyDeclaredClassesTest.class;
@@ -340,5 +352,32 @@ public class ImplicitlyDeclaredClassesTest extends AbstractRegressionTest9 {
 				"	^^^^\n" +
 				"Zork cannot be resolved to a type\n" +
 				"----------\n");
+	}
+	public void testGH3137a() {
+		runConformTest(new String[] {
+				"X.java",
+				"""
+				public static void main(String[] args) {
+					println("Hello1");
+					println("Hello2");
+				}"""
+		},
+		"Hello1\n" +
+		"Hello2");
+	}
+	public void testGH3137b() {
+		runConformTest(new String[] {
+				"X.java",
+				"""
+				public static void main(String[] args) {
+					String str = readln("Enter:");
+					println(str);
+				}
+				"""
+		},
+		"Enter:",
+		null,
+		VMARGS,
+		JavacTestOptions.SKIP);
 	}
 }

@@ -25,30 +25,34 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.eclipse.jdt.core.compiler.CharOperation;
-import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.codegen.CodeStream;
 import org.eclipse.jdt.internal.compiler.flow.FlowContext;
 import org.eclipse.jdt.internal.compiler.flow.FlowInfo;
 import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 import org.eclipse.jdt.internal.compiler.impl.Constant;
-import org.eclipse.jdt.internal.compiler.lookup.*;
+import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
+import org.eclipse.jdt.internal.compiler.lookup.FieldBinding;
+import org.eclipse.jdt.internal.compiler.lookup.LocalVariableBinding;
+import org.eclipse.jdt.internal.compiler.lookup.LookupEnvironment;
+import org.eclipse.jdt.internal.compiler.lookup.MethodBinding;
+import org.eclipse.jdt.internal.compiler.lookup.PolyTypeBinding;
+import org.eclipse.jdt.internal.compiler.lookup.Scope;
+import org.eclipse.jdt.internal.compiler.lookup.TypeBinding;
+import org.eclipse.jdt.internal.compiler.lookup.TypeIds;
 
 public class SwitchExpression extends SwitchStatement implements IPolyExpression {
 
 	/* package */ TypeBinding expectedType;
-	private ExpressionContext expressionContext = VANILLA_CONTEXT;
+	ExpressionContext expressionContext = VANILLA_CONTEXT;
 	private boolean isPolyExpression = false;
 	private TypeBinding[] originalValueResultExpressionTypes;
 	private TypeBinding[] finalValueResultExpressionTypes;
-	/* package */ Map<Expression, TypeBinding> originalTypeMap = new HashMap<>();
-
 
 	private int nullStatus = FlowInfo.UNKNOWN;
-	public List<Expression> resultExpressions;
-	public boolean resolveAll;
+	public List<Expression> resultExpressions = new ArrayList<>(0);
 	/* package */ List<Integer> resultExpressionNullStatus;
-	public boolean containsTry = false;
+	public boolean jvmStackVolatile = false;
 	private static Map<TypeBinding, TypeBinding[]> type_map;
 	static final char[] SECRET_YIELD_VALUE_NAME = " yieldValue".toCharArray(); //$NON-NLS-1$
 	int yieldResolvedPosition = -1;
@@ -128,52 +132,10 @@ public class SwitchExpression extends SwitchStatement implements IPolyExpression
 	}
 
 	@Override
-	protected void completeNormallyCheck(BlockScope blockScope) {
-		int sz = this.statements != null ? this.statements.length : 0;
-		if (sz == 0) return;
-		/* JLS 12 15.28.1 Given a switch expression, if the switch block consists of switch labeled rules
-		 * then it is a compile-time error if any switch labeled block can complete normally.
-		 */
-		if ((this.switchBits & LabeledRules) != 0) {
-			for (Statement stmt : this.statements) {
-				if (!(stmt instanceof Block))
-					continue;
-				if (stmt.canCompleteNormally())
-					blockScope.problemReporter().switchExpressionLastStatementCompletesNormally(stmt);
-			}
-			return;
-		}
-		/* JLS 12 15.28.1
-		 * If, on the other hand, the switch block consists of switch labeled statement groups, then it is a
-		 * compile-time error if either the last statement in the switch block can complete normally, or the
-		 * switch block includes one or more switch labels at the end.
-		 */
-		Statement lastNonCaseStmt = null;
-		Statement firstTrailingCaseStmt = null;
-		for (int i = sz - 1; i >= 0; i--) {
-			Statement stmt = this.statements[sz - 1];
-			if (stmt instanceof CaseStatement)
-				firstTrailingCaseStmt = stmt;
-			else {
-				lastNonCaseStmt = stmt;
-				break;
-			}
-		}
-		if (lastNonCaseStmt != null) {
-			if (lastNonCaseStmt.canCompleteNormally())
-				blockScope.problemReporter().switchExpressionLastStatementCompletesNormally(lastNonCaseStmt);
-			else if (lastNonCaseStmt instanceof ContinueStatement || lastNonCaseStmt instanceof ReturnStatement) {
-				blockScope.problemReporter().switchExpressionIllegalLastStatement(lastNonCaseStmt);
-			}
-		}
-		if (firstTrailingCaseStmt != null) {
-			blockScope.problemReporter().switchExpressionTrailingSwitchLabels(firstTrailingCaseStmt);
-		}
-	}
-	@Override
 	protected boolean needToCheckFlowInAbsenceOfDefaultBranch() { // JLS 12 16.1.8
 		return (this.switchBits & LabeledRules) == 0;
 	}
+
 	@Override
 	public Expression[] getPolyExpressions() {
 		List<Expression> polys = new ArrayList<>();
@@ -302,11 +264,11 @@ public class SwitchExpression extends SwitchStatement implements IPolyExpression
 	}
 	@Override
 	public void generateCode(BlockScope currentScope, CodeStream codeStream, boolean valueRequired) {
-		if (this.containsTry) {
+		if (this.jvmStackVolatile) {
 			spillOperandStack(codeStream);
 		}
 		super.generateCode(currentScope, codeStream);
-		if (this.containsTry) {
+		if (this.jvmStackVolatile) {
 			removeStoredTypes(codeStream);
 		}
 		if (!valueRequired) {
@@ -374,90 +336,57 @@ public class SwitchExpression extends SwitchStatement implements IPolyExpression
 			if (this.constant != Constant.NotAConstant) {
 				this.constant = Constant.NotAConstant;
 
-				// A switch expression is a poly expression if it appears in an assignment context or an invocation context (5.2, 5.3).
-				// Otherwise, it is a standalone expression.
-				if (this.expressionContext == ASSIGNMENT_CONTEXT || this.expressionContext == INVOCATION_CONTEXT) {
-					for (Expression e : this.resultExpressions) {
-						//Where a poly switch expression appears in a context of a particular kind with target type T,
-						//its result expressions similarly appear in a context of the same kind with target type T.
-						e.setExpressionContext(this.expressionContext);
-						e.setExpectedType(this.expectedType);
-					}
-				}
-
-				if (this.originalTypeMap == null)
-					this.originalTypeMap = new HashMap<>();
 				super.resolve(upperScope);
 
-				if (this.statements == null || this.statements.length == 0) {
-					//	Report Error JLS 13 15.28.1  The switch block must not be empty.
-					upperScope.problemReporter().switchExpressionEmptySwitchBlock(this);
-					return null;
-				}
-
-				resultExpressionsCount = this.resultExpressions != null ? this.resultExpressions.size() : 0;
+				resultExpressionsCount = this.resultExpressions.size();
 				if (resultExpressionsCount == 0) {
-					//  Report Error JLS 13 15.28.1
-					// It is a compile-time error if a switch expression has no result expressions.
-					upperScope.problemReporter().switchExpressionNoResultExpressions(this);
-					return null;
+					upperScope.problemReporter().unyieldingSwitchExpression(this);
+					return this.resolvedType = null;
 				}
 
-				if (this.originalValueResultExpressionTypes == null) {
-					this.originalValueResultExpressionTypes = new TypeBinding[resultExpressionsCount];
-					this.finalValueResultExpressionTypes = new TypeBinding[resultExpressionsCount];
-					for (int i = 0; i < resultExpressionsCount; ++i) {
-						this.finalValueResultExpressionTypes[i] = this.originalValueResultExpressionTypes[i] =
-								this.resultExpressions.get(i).resolvedType;
-					}
+				this.originalValueResultExpressionTypes = new TypeBinding[resultExpressionsCount];
+				this.finalValueResultExpressionTypes = new TypeBinding[resultExpressionsCount];
+				for (int i = 0; i < resultExpressionsCount; ++i) {
+					this.finalValueResultExpressionTypes[i] = this.originalValueResultExpressionTypes[i] = this.resultExpressions.get(i).resolvedType;
 				}
+
 				if (isPolyExpression()) { //The type of a poly switch expression is the same as its target type.
 					if (this.expectedType == null || !this.expectedType.isProperType(true)) {
 						return new PolyTypeBinding(this);
 					}
 					return this.resolvedType = computeConversions(this.scope, this.expectedType) ? this.expectedType : null;
 				}
-				// fall through
-			} else {
-				// re-resolving of poly expression:
-				resultExpressionsCount = this.resultExpressions != null ? this.resultExpressions.size() : 0;
+			} else { // re-resolving of poly expression:
+				resultExpressionsCount = this.resultExpressions.size();
 				if (resultExpressionsCount == 0)
 					return this.resolvedType = null; // error flagging would have been done during the earlier phase.
+				boolean yieldErrors = false;
 				for (int i = 0; i < resultExpressionsCount; i++) {
 					Expression resultExpr = this.resultExpressions.get(i);
-					TypeBinding origType = this.originalTypeMap.get(resultExpr);
-					// NB: if origType == null we assume that initial resolving failed hard, rendering re-resolving impossible
-					if (origType != null &&  origType.kind() == Binding.POLY_TYPE) {
+					if (resultExpr.isPolyExpression()) {
 						this.finalValueResultExpressionTypes[i] = this.originalValueResultExpressionTypes[i] =
 							resultExpr.resolveTypeExpecting(upperScope, this.expectedType);
 					}
-					// This is a kludge and only way completion can tell this node to resolve all
-					// resultExpressions. Ideal solution is to remove all other expressions except
-					// the one that contain the completion node.
-					if (this.resolveAll) continue;
 					if (resultExpr.resolvedType == null || !resultExpr.resolvedType.isValidBinding())
-						return this.resolvedType = null;
+						yieldErrors = true;
 				}
-				this.resolvedType = computeConversions(this.scope, this.expectedType) ? this.expectedType : null;
-				// fall through
+				if (yieldErrors)
+					return this.resolvedType = null;
+				return this.resolvedType = computeConversions(this.scope, this.expectedType) ? this.expectedType : null;
 			}
 
-			if (resultExpressionsCount == 1)
-				return this.resolvedType = this.originalValueResultExpressionTypes[0];
-
-			boolean typeUniformAcrossAllArms = true;
+			boolean uniformYield = true;
 			TypeBinding tmp = this.originalValueResultExpressionTypes[0];
-			for (int i = 1, l = this.originalValueResultExpressionTypes.length; i < l; ++i) {
+			for (int i = 1; i < resultExpressionsCount; ++i) {
 				TypeBinding originalType = this.originalValueResultExpressionTypes[i];
 				if (originalType != null && TypeBinding.notEquals(tmp, originalType)) {
-					typeUniformAcrossAllArms = false;
+					uniformYield = false;
 					break;
 				}
 			}
 			// If the result expressions all have the same type (which may be the null type),
 			// then that is the type of the switch expression.
-			if (typeUniformAcrossAllArms) {
-				tmp = this.originalValueResultExpressionTypes[0];
+			if (uniformYield) {
 				for (int i = 1; i < resultExpressionsCount; ++i) {
 					if (this.originalValueResultExpressionTypes[i] != null)
 						tmp = NullAnnotationMatching.moreDangerousType(tmp, this.originalValueResultExpressionTypes[i]);
@@ -517,11 +446,7 @@ public class SwitchExpression extends SwitchStatement implements IPolyExpression
 				 *  Otherwise, if any result expression is of type long, then other result expressions that are not of
 				 *  type long are widened to long.
 				 */
-				TypeBinding[] dfl = new TypeBinding[]{// do not change the order JLS 13 5.6
-						TypeBinding.DOUBLE,
-						TypeBinding.FLOAT,
-						TypeBinding.LONG};
-				for (TypeBinding binding : dfl) {
+				for (TypeBinding binding : new TypeBinding[] { TypeBinding.DOUBLE, TypeBinding.FLOAT, TypeBinding.LONG }) { // order important per JLS
 					if (typeSet.contains(binding)) {
 						resultNumeric = binding;
 						break;
@@ -570,7 +495,7 @@ public class SwitchExpression extends SwitchStatement implements IPolyExpression
 				}
 				return this.resolvedType = commonType.capture(this.scope, this.sourceStart, this.sourceEnd);
 			}
-			this.scope.problemReporter().switchExpressionIncompatibleResultExpressions(this);
+			this.scope.problemReporter().incompatibleSwitchExpressionResults(this);
 			return null;
 		} finally {
 			if (this.scope != null) this.scope.enclosingCase = null; // no longer inside switch case block
@@ -598,6 +523,18 @@ public class SwitchExpression extends SwitchStatement implements IPolyExpression
 	@Override
 	public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, FlowInfo flowInfo) {
 		flowInfo = super.analyseCode(currentScope, flowContext, flowInfo);
+		// 15.28.1
+		if ((this.switchBits & LabeledRules) != 0) {
+			for (Statement stmt : this.statements) {
+				if (stmt instanceof Block && stmt.canCompleteNormally())
+					currentScope.problemReporter().switchExpressionBlockCompletesNormally(stmt);
+			}
+		} else {
+			Statement ultimateStmt = this.statements[this.statements.length - 1]; // length guaranteed > 0
+			if (ultimateStmt.canCompleteNormally())
+				currentScope.problemReporter().switchExpressionBlockCompletesNormally(ultimateStmt);
+		}
+
 		this.resultExpressionNullStatus = new ArrayList<>(0);
 		final CompilerOptions compilerOptions = currentScope.compilerOptions();
 		if (compilerOptions.enableSyntacticNullAnalysisForFields) {
@@ -702,23 +639,19 @@ public class SwitchExpression extends SwitchStatement implements IPolyExpression
 		}
 		return true;
 	}
+
+	@Override
+	public StringBuilder printExpression(int tab, StringBuilder output, boolean makeShort) {
+		if (!makeShort) {
+			return super.printExpression(tab, output);
+		} else {
+			printIndent(tab, output).append("switch ("); //$NON-NLS-1$
+			return this.expression.printExpression(0, output).append(") { ... }"); //$NON-NLS-1$
+		}
+	}
+
 	@Override
 	public TypeBinding expectedType() {
 		return this.expectedType;
-	}
-	@Override
-	public void traverse(
-			ASTVisitor visitor,
-			BlockScope blockScope) {
-
-		if (visitor.visit(this, blockScope)) {
-			this.expression.traverse(visitor, blockScope);
-			if (this.statements != null) {
-				int statementsLength = this.statements.length;
-				for (int i = 0; i < statementsLength; i++)
-					this.statements[i].traverse(visitor, this.scope);
-			}
-		}
-		visitor.endVisit(this, blockScope);
 	}
 }

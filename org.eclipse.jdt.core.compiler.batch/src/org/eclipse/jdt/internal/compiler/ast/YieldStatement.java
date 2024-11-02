@@ -13,6 +13,9 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.ast;
 
+import static org.eclipse.jdt.internal.compiler.ast.ExpressionContext.ASSIGNMENT_CONTEXT;
+import static org.eclipse.jdt.internal.compiler.ast.ExpressionContext.INVOCATION_CONTEXT;
+
 import org.eclipse.jdt.internal.compiler.ASTVisitor;
 import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.codegen.CodeStream;
@@ -107,7 +110,7 @@ protected void setSubroutineSwitchExpression(SubRoutineStatement sub) {
 
 protected void addSecretYieldResultValue(BlockScope scope) {
 	SwitchExpression se = this.switchExpression;
-	if (se == null || !se.containsTry)
+	if (se == null || !se.jvmStackVolatile)
 		return;
 	LocalVariableBinding local = new LocalVariableBinding(
 			YieldStatement.SECRET_YIELD_RESULT_VALUE_NAME,
@@ -135,7 +138,7 @@ public void generateCode(BlockScope currentScope, CodeStream codeStream) {
 		return;
 	}
 	boolean generateExpressionResultCodeExpanded = false;
-	if (this.switchExpression != null && this.switchExpression.containsTry && this.switchExpression.resolvedType != null ) {
+	if (this.switchExpression != null && this.switchExpression.jvmStackVolatile && this.switchExpression.resolvedType != null ) {
 		generateExpressionResultCodeExpanded = true;
 		addSecretYieldResultValue(currentScope);
 		assert this.secretYieldResultValue != null;
@@ -200,34 +203,34 @@ public void generateCode(BlockScope currentScope, CodeStream codeStream) {
 @Override
 public void resolve(BlockScope scope) {
 
-	if (this.switchExpression != null || this.isImplicit) {
-		if (this.switchExpression == null && this.isImplicit && !this.expression.statementExpression()) {
-			if (scope.compilerOptions().sourceLevel >= ClassFileConstants.JDK14) {
-				/* JLS 13 14.11.2
-				Switch labeled rules in switch statements differ from those in switch expressions (15.28).
-				In switch statements they must be switch labeled statement expressions, ... */
-				scope.problemReporter().invalidExpressionAsStatement(this.expression);
-				return;
+	if (this.switchExpression == null) {
+		this.switchExpression = scope.enclosingSwitchExpression();
+		if (this.switchExpression != null) {
+			this.switchExpression.resultExpressions.add(this.expression);
+			if (this.switchExpression.expressionContext == ASSIGNMENT_CONTEXT || this.switchExpression.expressionContext == INVOCATION_CONTEXT) { // When switch expression is poly ...
+				this.expression.setExpressionContext(this.switchExpression.expressionContext); // result expressions feature in same context ...
+				this.expression.setExpectedType(this.switchExpression.expectedType);           // ... with the same target type
 			}
 		}
-	} else {
-		if (scope.compilerOptions().sourceLevel >= ClassFileConstants.JDK14) {
-			scope.problemReporter().switchExpressionsYieldOutsideSwitchExpression(this);
-		}
 	}
-	TypeBinding type = this.expression.resolveType(scope);
-	if (this.switchExpression != null && type != null)
-		this.switchExpression.originalTypeMap.put(this.expression, type);
+
+	if (this.isImplicit) {
+		if (this.switchExpression == null && !this.expression.statementExpression()) {
+			scope.problemReporter().invalidExpressionAsStatement(this.expression);
+			return;
+		}
+	} else if (this.switchExpression == null) {
+		scope.problemReporter().yieldOutsideSwitchExpression(this);
+	}
+	this.expression.resolveType(scope);
 }
 
 @Override
 public StringBuilder printStatement(int tab, StringBuilder output) {
-	if (!this.isImplicit)
-		printIndent(tab, output).append("yield"); //$NON-NLS-1$
 	if (this.isImplicit) {
 		this.expression.print(tab, output);
 	} else {
-		output.append(' ');
+		printIndent(tab, output).append("yield "); //$NON-NLS-1$
 		this.expression.printExpression(tab, output);
 	}
 	return output.append(';');

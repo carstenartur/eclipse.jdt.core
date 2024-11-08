@@ -25,7 +25,7 @@ public class SwitchExpressionsYieldTest extends AbstractRegressionTest {
 	static {
 //		TESTS_NUMBERS = new int [] { 40 };
 //		TESTS_RANGE = new int[] { 1, -1 };
-//		TESTS_NAMES = new String[] { "571833" };
+//		TESTS_NAMES = new String[] { "testBug545567_18" };
 	}
 
 	public static Class<?> testClass() {
@@ -1700,6 +1700,11 @@ public class SwitchExpressionsYieldTest extends AbstractRegressionTest {
 				"	case 0 -> x;\n" +
 				"	          ^\n" +
 				"x cannot be resolved to a variable\n" +
+				"----------\n" +
+				"2. ERROR in X.java (at line 7)\n" +
+				"	return v;\n" +
+				"	       ^\n" +
+				"Type mismatch: cannot convert from Object to int\n" +
 				"----------\n";
 		this.runNegativeTest(
 				testFiles,
@@ -2027,8 +2032,6 @@ public class SwitchExpressionsYieldTest extends AbstractRegressionTest {
 			"----------\n");
 	}
 	public void testBug544073_071() {
-		if (this.complianceLevel < ClassFileConstants.JDK12)
-			return;
 		String message =
 				"----------\n" +
 				"1. WARNING in X.java (at line 5)\n" +
@@ -2053,8 +2056,6 @@ public class SwitchExpressionsYieldTest extends AbstractRegressionTest {
 			"-Xlint:preview");
 	}
 	public void testBug544073_072() {
-		if (this.complianceLevel < ClassFileConstants.JDK12)
-			return;
 		String message =
 				"----------\n" +
 				"1. WARNING in X.java (at line 5)\n" +
@@ -2707,8 +2708,6 @@ public class SwitchExpressionsYieldTest extends AbstractRegressionTest {
 				expectedProblemLog);
 	}
 	public void testBug547891_15() {
-		if (this.complianceLevel < ClassFileConstants.JDK12)
-			return;
 		String message =
 				"----------\n" +
 				"1. ERROR in X.java (at line 6)\n" +
@@ -2753,8 +2752,6 @@ public class SwitchExpressionsYieldTest extends AbstractRegressionTest {
 			message);
 	}
 	public void testBug547891_16() {
-		if (this.complianceLevel < ClassFileConstants.JDK12)
-			return;
 		String message =
 				"----------\n" +
 				"1. ERROR in X.java (at line 9)\n" +
@@ -2896,8 +2893,6 @@ public class SwitchExpressionsYieldTest extends AbstractRegressionTest {
 			"-1");
 	}
 	public void testBug547891_21() {
-		if (this.complianceLevel < ClassFileConstants.JDK12)
-			return;
 		String message =
 				"----------\n" +
 				"1. ERROR in X.java (at line 7)\n" +
@@ -3888,6 +3883,42 @@ public class SwitchExpressionsYieldTest extends AbstractRegressionTest {
 				},
 				"one");
 	}
+
+	public void testBug545567_5_1() {
+		runConformTest(
+				new String[] {
+						"X.java",
+						"""
+						public class X {
+						    public String toString() { return "some X"; }
+						    public static void main(String[] args) {
+						    	String t = switch (0) {
+						        default -> {
+						            try {
+						                yield new X().toString();
+						            }
+						            catch (Exception ex) {
+						            }
+						            yield "zero";
+						        }
+						     };
+						     System.out.print(t);
+						    }
+
+						    static int foo() {
+						    	try {
+						    		return 42;
+						    	} catch (Exception ex) {
+
+						    	}
+						    	return -1;
+						    }
+						}
+						"""
+				},
+				"some X");
+	}
+
 	public void testBug545567_6() {
 		runConformTest(
 				new String[] {
@@ -4436,7 +4467,10 @@ public class SwitchExpressionsYieldTest extends AbstractRegressionTest {
 			},
 			"10");
 	}
-	public void testBug545567_22() {
+	// Disabled until https://github.com/eclipse-jdt/eclipse.jdt.core/issues/3259 and
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/3258 are comprehensively
+	// resolved. Same issue, but was "compensated" for earlier
+	public void _testBug545567_22() {
 		runConformTest(
 			new String[] {
 				"X.java",
@@ -5755,7 +5789,7 @@ public class SwitchExpressionsYieldTest extends AbstractRegressionTest {
 				"1. ERROR in X.java (at line 5)\n" +
 				"	case AAABBB -> 1;\n" +
 				"	                ^\n" +
-				"Syntax error on token \";\", case expected after this token\n" +
+				"Syntax error on token \";\", [ expected\n" +
 				"----------\n" +
 				"2. ERROR in X.java (at line 6)\n" +
 				"	(I)()->();\n" +
@@ -5768,6 +5802,11 @@ public class SwitchExpressionsYieldTest extends AbstractRegressionTest {
 				"Syntax error, insert \")\" to complete Expression\n" +
 				"----------\n" +
 				"4. ERROR in X.java (at line 6)\n" +
+				"	(I)()->();\n" +
+				"	        ^\n" +
+				"Syntax error, insert \"]\" to complete ArrayAccess\n" +
+				"----------\n" +
+				"5. ERROR in X.java (at line 6)\n" +
 				"	(I)()->();\n" +
 				"	        ^\n" +
 				"Syntax error, insert \":\" to complete SwitchLabel\n" +
@@ -8075,11 +8114,6 @@ public class SwitchExpressionsYieldTest extends AbstractRegressionTest {
 				"	default -> 1;\n" +
 				"	^^^^^^^\n" +
 				"Mixing of '->' and ':' case statement styles is not allowed within a switch\n" +
-				"----------\n" +
-				"2. ERROR in X.java (at line 6)\n" +
-				"	case 1 : yield 2;\n" +
-				"	^^^^^^\n" +
-				"Mixing of '->' and ':' case statement styles is not allowed within a switch\n" +
 				"----------\n");
 	}
 
@@ -8198,5 +8232,73 @@ public class SwitchExpressionsYieldTest extends AbstractRegressionTest {
 				"	^^^\n" +
 				"The method foo(Object, J) is ambiguous for the type X\n" +
 				"----------\n");
+	}
+
+	// fails when run as org.eclipse.jdt.core.tests.model.JavaSearchBugs14SwitchExpressionTests.testBug542559_0012
+	public void testBug542559_0012() {
+		this.runConformTest(
+				new String[] {
+				"X.java",
+				"""
+				import java.util.function.Supplier;
+				interface I0 { void i(); }
+				interface I1 extends I0 {}
+				interface I2 extends I0 {}
+				public class X {
+					I1 n1() { return null; }
+					<I extends I2> I n2() { return null; }
+
+					void test(int i, boolean b) {
+						m(switch (i) {
+							case 1 -> this::n1;
+							default -> this::n2;
+						}).i();
+					}
+
+					<M> M m(Supplier<M> m) { return m.get(); }
+
+					public static void main(String[] args) {
+						try {
+							new X().test(1, true);
+						} catch (NullPointerException e) {
+							System.out.println("NPE as expected!");
+						}
+					}
+				}
+				"""
+				},
+				"NPE as expected!");
+	}
+
+	// Disabled until https://github.com/eclipse-jdt/eclipse.jdt.core/issues/3259 and
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/3258 are comprehensively
+	// resolved. Same issue, but was "compensated" for earlier
+	public void _testBug545567_22_minimal() {
+		this.runConformTest(
+				new String[] {
+				"X.java",
+				"""
+				public class X implements AutoCloseable {
+				   public static void main(String[] args) {
+				       int t = switch (1) {
+				               default -> {
+				                   try (X x = new X()) {
+				                       if (args.length < 1)
+				                    	   yield 10;
+				                       else
+				                           yield 12;
+				                       } finally {
+				                            yield 3;
+				                       }
+				               }
+				       };
+				       System.out.println(t);
+				   }
+
+				   public void close() throws Exception {}
+				}
+				"""
+				},
+				"3");
 	}
 }

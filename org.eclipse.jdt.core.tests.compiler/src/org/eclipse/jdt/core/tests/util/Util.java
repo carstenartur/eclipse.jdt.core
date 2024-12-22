@@ -172,13 +172,7 @@ public class Util {
 
         // Computed test run directory name based on current time
         File dateDir = new File(dir, "run."+System.currentTimeMillis());
-        String pathDir = null;
-        try {
-        	pathDir = dateDir.getCanonicalPath();
-		} catch (IOException e) {
-			pathDir = dateDir.getAbsolutePath();
-		}
-		OUTPUT_DIRECTORY = pathDir;
+		OUTPUT_DIRECTORY = dateDir.toPath().normalize().toAbsolutePath().toString();
    }
 
 public static void appendProblem(StringBuilder problems, IProblem problem, char[] source, int problemCount) {
@@ -1257,14 +1251,15 @@ public static void unzip(String zipPath, String destDirPath) throws IOException 
 	}
 }
 
-public static void waitAtLeast(int time) {
-	long start = System.currentTimeMillis();
-	do {
+public static void waitAtLeast(int timeMs) {
+	long timeoutNanos = System.nanoTime() + timeMs * 1_000_000L;
+	long remainingNanos;
+	while ((remainingNanos = timeoutNanos - System.nanoTime()) > 0) {
 		try {
-			Thread.sleep(time);
-		} catch (InterruptedException e) {
+			Thread.sleep(remainingNanos / 1_000_000L);
+		} catch (InterruptedException ignored) {
 		}
-	} while ((System.currentTimeMillis() - start) < time);
+	}
 }
 
 /**

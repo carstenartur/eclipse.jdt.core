@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2021 IBM Corporation and others.
+ * Copyright (c) 2000, 2025 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -56,16 +56,6 @@ public class ASTRewritingStatementsTest extends ASTRewritingTest {
 		}
 	}
 
-	/** @deprecated using deprecated code */
-	private void internalSetExtraDimensions(VariableDeclarationFragment node, int dimensions) {
-		if (this.apiLevel < AST.JLS8) {
-			node.setExtraDimensions(dimensions);
-		} else {
-			while (dimensions > 0) {
-				node.extraDimensions().add(node.getAST().newDimension());
-			}
-		}
-	}
 	public void testInsert1() throws Exception {
 		IPackageFragment pack1= this.sourceFolder.createPackageFragment("test1", false, null);
 		/* foo(): append a return statement */
@@ -5381,7 +5371,6 @@ public class ASTRewritingStatementsTest extends ASTRewritingTest {
 			TryStatement tryStatement = (TryStatement) statement;
 
 			VariableDeclarationFragment fragment = ast.newVariableDeclarationFragment();
-			internalSetExtraDimensions(fragment, 0);
 			fragment.setName(ast.newSimpleName("reader2"));
 			ClassInstanceCreation classInstanceCreation = ast.newClassInstanceCreation();
 			classInstanceCreation.setType(ast.newSimpleType(ast.newSimpleName("FileReader")));
@@ -5456,7 +5445,6 @@ public class ASTRewritingStatementsTest extends ASTRewritingTest {
 			TryStatement tryStatement = (TryStatement) statement;
 
 			VariableDeclarationFragment fragment = ast.newVariableDeclarationFragment();
-			internalSetExtraDimensions(fragment, 0);
 			fragment.setName(ast.newSimpleName("reader2"));
 			ClassInstanceCreation classInstanceCreation = ast.newClassInstanceCreation();
 			classInstanceCreation.setType(ast.newSimpleType(ast.newSimpleName("FileReader")));
@@ -5710,8 +5698,7 @@ public class ASTRewritingStatementsTest extends ASTRewritingTest {
 		}
 	}
 
-	/** @deprecated using deprecated code */
-	public void testTypeDeclarationStatement_only_2() throws Exception {
+	public void testTypeDeclarationStatement() throws Exception {
 		IPackageFragment pack1= this.sourceFolder.createPackageFragment("test1", false, null);
 		StringBuilder buf= new StringBuilder();
 		buf.append("package test1;\n");
@@ -5742,7 +5729,7 @@ public class ASTRewritingStatementsTest extends ASTRewritingTest {
 			newDeclaration.setName(ast.newSimpleName("X"));
 			newDeclaration.setInterface(true);
 
-			rewrite.replace(stmt.getTypeDeclaration(), newDeclaration, null);
+			rewrite.replace(stmt.getDeclaration(), newDeclaration, null);
 		}
 
 		String preview= evaluateRewrite(cu, rewrite);

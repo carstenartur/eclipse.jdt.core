@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2011, 2024 IBM Corporation and others.
+ * Copyright (c) 2011, 2025 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -4995,6 +4995,40 @@ this.runNegativeTest(
 				"The type of foo() from the type X is Zork, this is incompatible with the descriptor\'s return type: int[]\n" +
 				"----------\n");
 }
+// reference to missing type occurs during type inference involving a reference expression:
+public void testGH3501() {
+	runNegativeTest(new String[] {
+			"X.java",
+			"""
+			interface I<T> { void doit(T t); }
+			public class X {
+				void foo(Zork z) { }
+				<U> void acceptI(I<U> i) { }
+				void test() {
+					acceptI(this::foo);
+				}
+			}
+			"""
+		},
+		"""
+		----------
+		1. ERROR in X.java (at line 3)
+			void foo(Zork z) { }
+			         ^^^^
+		Zork cannot be resolved to a type
+		----------
+		2. ERROR in X.java (at line 6)
+			acceptI(this::foo);
+			^^^^^^^
+		Inference for this invocation of method acceptI(I<U>) from the type X refers to the missing type Zork
+		----------
+		3. ERROR in X.java (at line 6)
+			acceptI(this::foo);
+			        ^^^^^^^^^
+		The type X does not define foo(U) that is applicable here
+		----------
+		""");
+}
 // https://bugs.eclipse.org/bugs/show_bug.cgi?id=401610, [1.8][compiler] Allow lambda/reference expressions in non-overloaded method invocation contexts
 public void test401610() {
 this.runConformTest(
@@ -6584,9 +6618,9 @@ public void test406588() {
 				"}\n"
 			},
 			"----------\n" +
-			"1. ERROR in X.java (at line 10)\n" + 
-			"	this(Z::new);\n" + 
-			"	     ^^^^^^\n" + 
+			"1. ERROR in X.java (at line 10)\n" +
+			"	this(Z::new);\n" +
+			"	     ^^^^^^\n" +
 			"No enclosing instance of type X.Y is available due to some intermediate constructor invocation\n" +
 			"----------\n");
 }
@@ -6720,6 +6754,54 @@ public void test406773() {
 			compilerOptions /* custom options */
 		);
 }
+public void test406773_positive() {
+	// demonstrate that access to 'local' works in ctors for Y and Z
+	this.runConformTest(
+		new String[] {
+				"X.java",
+				"interface I {\n" +
+				"	X makeX(int x);\n" +
+				"}\n" +
+				"public class X {\n" +
+				"	void foo() {\n" +
+				"		int local = 10;\n" +
+				"		class Y extends X {\n" +
+				"			class Z extends X {\n" +
+				"				void f() {\n" +
+				"					I i = X::new;\n" +
+				"					i.makeX(123456);\n" +
+				"					i = Y::new;\n" +
+				"					i.makeX(987654);\n" +
+				"					i = Z::new;\n" +
+				"					i.makeX(456789);\n" +
+				"				}\n" +
+				"				private Z(int z) {\n" +
+				"					System.out.print(local);\n" +
+				"				}\n" +
+				"				Z() {}\n" +
+				"			}\n" +
+				"			private Y(int y) {\n" +
+				"				System.out.print(local);\n" +
+				"			}\n" +
+				"			private Y() {\n" +
+				"			}\n" +
+				"		}\n" +
+				"		new Y().new Z().f();\n" +
+				"	}\n" +
+				"	private X(int x) {\n" +
+				"		System.out.print(\"X\");\n" +
+				"	}\n" +
+				"	X() {\n" +
+				"	}\n" +
+				"	public static void main(String[] args) {\n" +
+				"		new X().foo();\n" +
+				"	}\n" +
+				"}\n"
+		},
+		"X1010"
+	);
+}
+
 //https://bugs.eclipse.org/bugs/show_bug.cgi?id=406859,  [1.8][compiler] Bad hint that method could be declared static
 public void test406859a() {
 		Map compilerOptions = getCompilerOptions();

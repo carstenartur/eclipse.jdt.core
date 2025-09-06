@@ -104,7 +104,6 @@ public class ClassFile implements TypeConstants, TypeIds {
 	// that collection contains all the remaining bytes of the .class file
 	public int headerOffset;
 	public Map<TypeBinding, Boolean> innerClassesBindings;
-	public Set<SourceTypeBinding> nestMembers;
 	public List<Object> bootstrapMethods = null;
 	public int methodCount;
 	public int methodCountOffset;
@@ -124,7 +123,6 @@ public class ClassFile implements TypeConstants, TypeIds {
 	public static final int INITIAL_CONTENTS_SIZE = 400;
 	public static final int INITIAL_HEADER_SIZE = 1500;
 	public static final int INNER_CLASSES_SIZE = 5;
-	public static final int NESTED_MEMBER_SIZE = 5;
 
 	// TODO: Move these to an enum?
 	public static final String ALTMETAFACTORY_STRING = new String(ConstantPool.ALTMETAFACTORY);
@@ -402,12 +400,10 @@ public class ClassFile implements TypeConstants, TypeIds {
 		attributesNumber += generateTypeAnnotationAttributeForTypeDeclaration();
 
 		if (this.targetJDK >= ClassFileConstants.JDK11) {
-			// add nestMember and nestHost attributes
-			attributesNumber += generateNestAttributes();
+			attributesNumber += generateNestAttributes(); // add nestMember and nestHost attributes
 		}
-		if (this.targetJDK >= ClassFileConstants.JDK14) {
-			// add record attributes
-			attributesNumber += generateRecordAttributes();
+		if (this.targetJDK >= ClassFileConstants.JDK16) {
+			attributesNumber += generateRecordAttribute();
 		}
 		// update the number of attributes
 		if (attributeOffset + 2 >= this.contents.length) {
@@ -509,7 +505,7 @@ public class ClassFile implements TypeConstants, TypeIds {
 
 		AbstractVariableDeclaration fieldDeclaration = fieldBinding.sourceField();
 		if (fieldDeclaration == null && fieldBinding instanceof SyntheticFieldBinding)
-			fieldDeclaration = getRecordComponent(fieldBinding.declaringClass, fieldBinding.name);
+			fieldDeclaration = fieldBinding.declaringClass.getRecordComponent(fieldBinding.name);
 		if (fieldDeclaration != null) {
 			Annotation[] annotations = fieldDeclaration.annotations;
 			if (annotations != null) {
@@ -538,19 +534,8 @@ public class ClassFile implements TypeConstants, TypeIds {
 		}
 		return attributesNumber;
 	}
-	private RecordComponent getRecordComponent(ReferenceBinding declaringClass, char[] name) {
-		if (declaringClass instanceof SourceTypeBinding) {
-			SourceTypeBinding sourceTypeBinding = (SourceTypeBinding) declaringClass;
-			RecordComponentBinding rcb = sourceTypeBinding.getRecordComponent(name);
-			if (rcb != null) {
-				RecordComponent recordComponent  = rcb.sourceRecordComponent();
-				return recordComponent;
-			}
-		}
-		return null;
-	}
+
 	private int addComponentAttributes(RecordComponentBinding recordComponentBinding, int componetAttributeOffset) {
-		// See JVMS 14 Table 4.7-C - Record Preview for allowed attributes
 		int attributesNumber = 0;
 		// add signature attribute
 		char[] genericSignature = recordComponentBinding.genericSignature();
@@ -574,11 +559,7 @@ public class ClassFile implements TypeConstants, TypeIds {
 					recordComponentType.getAllAnnotationContexts(AnnotationTargetTypeConstants.RECORD_COMPONENT, allTypeAnnotationContexts);
 				}
 				int size = allTypeAnnotationContexts.size();
-				attributesNumber = completeRuntimeTypeAnnotations(attributesNumber,
-																	null,
-																	node -> size > 0,
-																	() -> allTypeAnnotationContexts);
-
+				attributesNumber = completeRuntimeTypeAnnotations(attributesNumber, null, node -> size > 0, () -> allTypeAnnotationContexts);
 			}
 		}
 		if ((recordComponentBinding.tagBits & TagBits.HasMissingType) != 0) {
@@ -588,8 +569,6 @@ public class ClassFile implements TypeConstants, TypeIds {
 	}
 
 	private void addComponentInfo(RecordComponentBinding recordComponentBinding) {
-		// check that there is enough space to write all the bytes for the field info corresponding
-		// to the @fieldBinding sans accessflags for component
 		/* record_component_info {
     	 *	u2 name_index;
     	 *	u2 descriptor_index;
@@ -607,16 +586,15 @@ public class ClassFile implements TypeConstants, TypeIds {
 		int descriptorIndex = this.constantPool.literalIndex(recordComponentBinding.type);
 		this.contents[this.contentsOffset++] = (byte) (descriptorIndex >> 8);
 		this.contents[this.contentsOffset++] = (byte) descriptorIndex;
-		int componentAttributeOffset = this.contentsOffset;
-		int attributeNumber = 0;
-		// leave some space for the number of attributes
+		int attributesCountOffset = this.contentsOffset;
+		// leave some space for the count of attributes
 		this.contentsOffset += 2;
-		attributeNumber += addComponentAttributes(recordComponentBinding, componentAttributeOffset);
-		if (this.contentsOffset + 2 >= this.contents.length) {
+		int attributeCount = addComponentAttributes(recordComponentBinding, attributesCountOffset);
+		if (this.contentsOffset + 2 >= this.contents.length) { // looks unnecessary
 			resizeContents(2);
 		}
-		this.contents[componentAttributeOffset++] = (byte) (attributeNumber >> 8);
-		this.contents[componentAttributeOffset] = (byte) attributeNumber;
+		this.contents[attributesCountOffset++] = (byte) (attributeCount >> 8);
+		this.contents[attributesCountOffset] = (byte) attributeCount;
 	}
 
 	/**
@@ -1002,6 +980,7 @@ public class ClassFile implements TypeConstants, TypeIds {
 				for (int i = emittedSyntheticsCount, max = currentSyntheticsCount; i < max; i++) {
 					SyntheticMethodBinding syntheticMethod = syntheticMethods[i];
 					switch (syntheticMethod.purpose) {
+						case SyntheticMethodBinding.RecordComponentReadAccess :
 						case SyntheticMethodBinding.FieldReadAccess :
 						case SyntheticMethodBinding.SuperFieldReadAccess :
 							// generate a method info to emulate an reading access to
@@ -1115,9 +1094,7 @@ public class ClassFile implements TypeConstants, TypeIds {
 				.referenceCompilationUnit()
 				.compilationResult
 				.getLineSeparatorPositions());
-		// update the number of attributes
-		this.contents[methodAttributeOffset++] = (byte) (attributeNumber >> 8);
-		this.contents[methodAttributeOffset] = (byte) attributeNumber;
+		completeMethodInfo(methodBinding, methodAttributeOffset, attributeNumber);
 	}
 
 	private void addSyntheticRecordOverrideMethods(TypeDeclaration typeDecl, SyntheticMethodBinding methodBinding, int purpose) {
@@ -1136,9 +1113,6 @@ public class ClassFile implements TypeConstants, TypeIds {
 		generateCodeAttributeHeader();
 		this.codeStream.reset(methodBinding, this);
 		switch (purpose) {
-			case SyntheticMethodBinding.RecordCanonicalConstructor:
-				this.codeStream.generateSyntheticBodyForRecordCanonicalConstructor(methodBinding);
-				break;
 			case SyntheticMethodBinding.RecordOverrideEquals:
 				this.codeStream.generateSyntheticBodyForRecordEquals(methodBinding, index);
 				break;
@@ -1620,16 +1594,6 @@ public class ClassFile implements TypeConstants, TypeIds {
 					scope);
 		}
 
-		if ((this.produceAttributes & ClassFileConstants.ATTR_STACK_MAP) != 0) {
-			attributesNumber += generateStackMapAttribute(
-					this.codeStream.methodDeclaration != null ? this.codeStream.methodDeclaration.binding : this.codeStream.lambdaExpression.binding,
-					code_length,
-					codeAttributeOffset,
-					max_locals,
-					false,
-					scope);
-		}
-
 		if ((this.produceAttributes & ClassFileConstants.ATTR_TYPE_ANNOTATION) != 0) {
 			attributesNumber += generateTypeAnnotationsOnCodeAttribute();
 		}
@@ -1653,7 +1617,7 @@ public class ClassFile implements TypeConstants, TypeIds {
 		for (int i = 0, max = this.codeStream.allLocalsCounter; i < max; i++) {
 			LocalVariableBinding localVariable = this.codeStream.locals[i];
 			if (localVariable.isCatchParameter()) continue;
-			LocalDeclaration declaration = localVariable.declaration;
+			AbstractVariableDeclaration declaration = localVariable.declaration;
 			if (declaration == null
 					|| (declaration.isArgument() && ((declaration.bits & ASTNode.IsUnionType) == 0))
 					|| (localVariable.initializationCount == 0)
@@ -1805,16 +1769,6 @@ public class ClassFile implements TypeConstants, TypeIds {
 					scope);
 		}
 
-		if ((this.produceAttributes & ClassFileConstants.ATTR_STACK_MAP) != 0) {
-			attributesNumber += generateStackMapAttribute(
-					null,
-					code_length,
-					codeAttributeOffset,
-					max_locals,
-					true,
-					scope);
-		}
-
 		if ((this.produceAttributes & ClassFileConstants.ATTR_TYPE_ANNOTATION) != 0) {
 			attributesNumber += generateTypeAnnotationsOnCodeAttribute();
 		}
@@ -1922,16 +1876,6 @@ public class ClassFile implements TypeConstants, TypeIds {
 					scope);
 		}
 
-		if ((this.produceAttributes & ClassFileConstants.ATTR_STACK_MAP) != 0) {
-			attributesNumber += generateStackMapAttribute(
-					null,
-					code_length,
-					codeAttributeOffset,
-					max_locals,
-					true,
-					scope);
-		}
-
 		if ((this.produceAttributes & ClassFileConstants.ATTR_TYPE_ANNOTATION) != 0) {
 			attributesNumber += generateTypeAnnotationsOnCodeAttribute();
 		}
@@ -1996,16 +1940,6 @@ public class ClassFile implements TypeConstants, TypeIds {
 
 		if ((this.produceAttributes & ClassFileConstants.ATTR_STACK_MAP_TABLE) != 0) {
 			attributesNumber += generateStackMapTableAttribute(
-					binding,
-					code_length,
-					codeAttributeOffset,
-					max_locals,
-					false,
-					null);
-		}
-
-		if ((this.produceAttributes & ClassFileConstants.ATTR_STACK_MAP) != 0) {
-			attributesNumber += generateStackMapAttribute(
 					binding,
 					code_length,
 					codeAttributeOffset,
@@ -2094,16 +2028,6 @@ public class ClassFile implements TypeConstants, TypeIds {
 
 		if ((this.produceAttributes & ClassFileConstants.ATTR_STACK_MAP_TABLE) != 0) {
 			attributesNumber += generateStackMapTableAttribute(
-					binding,
-					code_length,
-					codeAttributeOffset,
-					max_locals,
-					false,
-					null);
-		}
-
-		if ((this.produceAttributes & ClassFileConstants.ATTR_STACK_MAP) != 0) {
-			attributesNumber += generateStackMapAttribute(
 					binding,
 					code_length,
 					codeAttributeOffset,
@@ -2261,16 +2185,6 @@ public class ClassFile implements TypeConstants, TypeIds {
 			attributesNumber += generateStackMapTableAttribute(binding, code_length, codeAttributeOffset, max_locals, false, scope);
 		}
 
-		if ((this.produceAttributes & ClassFileConstants.ATTR_STACK_MAP) != 0) {
-			attributesNumber += generateStackMapAttribute(
-					binding,
-					code_length,
-					codeAttributeOffset,
-					max_locals,
-					false,
-					scope);
-		}
-
 		// update the number of attributes
 		// ensure first that there is enough space available inside the contents array
 		if (codeAttributeAttributeOffset + 2 >= this.contents.length) {
@@ -2313,9 +2227,9 @@ public class ClassFile implements TypeConstants, TypeIds {
 				((SourceTypeBinding) binding.declaringClass).scope);
 	}
 
-	private void completeArgumentAnnotationInfo(Argument[] arguments, List<AnnotationContext> allAnnotationContexts) {
+	private void completeArgumentAnnotationInfo(AbstractVariableDeclaration[] arguments, List<AnnotationContext> allAnnotationContexts) {
 		for (int i = 0, max = arguments.length; i < max; i++) {
-			Argument argument = arguments[i];
+			AbstractVariableDeclaration argument = arguments[i];
 			if ((argument.bits & ASTNode.HasTypeAnnotations) != 0) {
 				argument.getAllAnnotationContexts(AnnotationTargetTypeConstants.METHOD_FORMAL_PARAMETER, i, allAnnotationContexts);
 			}
@@ -2339,7 +2253,7 @@ public class ClassFile implements TypeConstants, TypeIds {
 			AbstractMethodDeclaration methodDeclaration = binding.sourceMethod();
 			if (methodDeclaration != null) {
 				if ((methodDeclaration.bits & ASTNode.HasTypeAnnotations) != 0) {
-					Argument[] arguments = methodDeclaration.arguments;
+					AbstractVariableDeclaration[] arguments = methodDeclaration.arguments(true);
 					if (arguments != null) {
 						completeArgumentAnnotationInfo(arguments, allTypeAnnotationContexts);
 					}
@@ -2376,6 +2290,9 @@ public class ClassFile implements TypeConstants, TypeIds {
 						}
 					}
 				}
+			} else if (binding instanceof SyntheticMethodBinding syntheticMethod && syntheticMethod.isCanonicalConstructor()) {
+				AbstractVariableDeclaration[] parameters = syntheticMethod.declaringClass.getRecordComponents();
+				completeArgumentAnnotationInfo(parameters, allTypeAnnotationContexts);
 			} else if (binding.sourceLambda() != null) { // SyntheticMethodBinding, purpose : LambdaMethod.
 				LambdaExpression lambda = binding.sourceLambda();
 				if ((lambda.bits & ASTNode.HasTypeAnnotations) != 0) {
@@ -2763,8 +2680,8 @@ public class ClassFile implements TypeConstants, TypeIds {
 		if (nestHost == null)
 			return 0;
 		int localContentsOffset = this.contentsOffset;
-		if (localContentsOffset + 10 >= this.contents.length) {
-			resizeContents(10);
+		if (localContentsOffset + 8 >= this.contents.length) {
+			resizeContents(8);
 		}
 		int nestHostAttributeNameIndex =
 			this.constantPool.literalIndex(AttributeNamesConstants.NestHost);
@@ -2785,12 +2702,19 @@ public class ClassFile implements TypeConstants, TypeIds {
 	}
 	private int generateNestMembersAttribute() {
 
-		int localContentsOffset = this.contentsOffset;
-		List<String> nestedMembers = getNestMembers();
+		Set<SourceTypeBinding> nestMembers = this.referenceBinding.getNestMembers();
+		if (nestMembers == null )
+			return 0;
+		List<String> nestedMembers = nestMembers
+										.stream()
+										.map(s -> new String(s.constantPoolName()))
+										.sorted()
+										.collect(Collectors.toList());
 		int numberOfNestedMembers = nestedMembers != null ? nestedMembers.size() : 0;
-		if (numberOfNestedMembers == 0) // JVMS 11 4.7.29 says "at most one" NestMembers attribute - return if none.
+		if (numberOfNestedMembers == 0)
 			return 0;
 
+		int localContentsOffset = this.contentsOffset;
 		int exSize = 8 + 2 * numberOfNestedMembers;
 		if (exSize + localContentsOffset >= this.contents.length) {
 			resizeContents(exSize);
@@ -2817,7 +2741,7 @@ public class ClassFile implements TypeConstants, TypeIds {
 		return 1;
 	}
 	private int generateNestAttributes() {
-		int nAttrs = generateNestMembersAttribute(); //either member or host will exist 4.7.29
+		int nAttrs = generateNestMembersAttribute(); // either member or host will exist 4.7.29
 		nAttrs += generateNestHostAttribute();
 		return nAttrs;
 	}
@@ -2860,22 +2784,12 @@ public class ClassFile implements TypeConstants, TypeIds {
 		this.contentsOffset = localContentsOffset;
 		return 1;
 	}
-	private int generateRecordAttributes() {
+	private int generateRecordAttribute() {
 		SourceTypeBinding record = this.referenceBinding;
 		if (record == null || !record.isRecord())
 			return 0;
 		int localContentsOffset = this.contentsOffset;
-		RecordComponentBinding[] recordComponents = this.referenceBinding.components();
-		if (recordComponents == null)
-			return 0;
-		// could be an empty record also, account for zero components as well.
 
-		int numberOfRecordComponents = recordComponents.length;
-
-		int exSize = 8 + 2 * numberOfRecordComponents;
-		if (exSize + localContentsOffset >= this.contents.length) {
-			resizeContents(exSize);
-		}
 		/*
 		 * Record_attribute {
     	 *  u2 attribute_name_index;
@@ -2883,6 +2797,10 @@ public class ClassFile implements TypeConstants, TypeIds {
     	 *	u2 components_count;
     	 *	component_info components[components_count];
 		 *	}*/
+		if (8 + localContentsOffset >= this.contents.length) {
+			resizeContents(8);
+		}
+
 		int attributeNameIndex =
 			this.constantPool.literalIndex(AttributeNamesConstants.RecordClass);
 		this.contents[localContentsOffset++] = (byte) (attributeNameIndex >> 8);
@@ -2890,6 +2808,8 @@ public class ClassFile implements TypeConstants, TypeIds {
 		int attrLengthOffset = localContentsOffset;
 		localContentsOffset += 4;
 		int base = localContentsOffset;
+		RecordComponentBinding[] recordComponents = this.referenceBinding.components();
+		int numberOfRecordComponents = recordComponents.length;
 		this.contents[localContentsOffset++] = (byte) (numberOfRecordComponents >> 8);
 		this.contents[localContentsOffset++] = (byte) numberOfRecordComponents;
 		this.contentsOffset = localContentsOffset;
@@ -3722,8 +3642,8 @@ public class ClassFile implements TypeConstants, TypeIds {
 	}
 
 	private int addBootStrapRecordEntry(int localContentsOffset, TypeDeclaration typeDecl, Map<String, Integer> fPtr) {
-		TypeBinding type = typeDecl.binding;
-		assert type.isRecord(); // sanity check
+		SourceTypeBinding sourceType = typeDecl.binding;
+		assert sourceType.isRecord(); // sanity check
 		final int contentsEntries = 10;
 		int indexForObjectMethodBootStrap = fPtr.get(ClassFile.BOOTSTRAP_STRING);
 		if (contentsEntries + localContentsOffset >= this.contents.length) {
@@ -3742,14 +3662,12 @@ public class ClassFile implements TypeConstants, TypeIds {
 		int numArgsLocation = localContentsOffset;
 		localContentsOffset += 2;
 
-		char[] recordName = type.constantPoolName();
+		char[] recordName = sourceType.constantPoolName();
 		int recordIndex = this.constantPool.literalIndexForType(recordName);
 		this.contents[localContentsOffset++] = (byte) (recordIndex >> 8);
 		this.contents[localContentsOffset++] = (byte) recordIndex;
 
-		assert type instanceof SourceTypeBinding;
-		SourceTypeBinding sourceType = (SourceTypeBinding) type;
-		FieldBinding[] recordComponents = sourceType.getImplicitComponentFields();
+		RecordComponentBinding[] recordComponents = sourceType.components();
 
 		int numArgs = 2 + recordComponents.length;
 		this.contents[numArgsLocation++] = (byte) (numArgs >> 8);
@@ -3767,10 +3685,10 @@ public class ClassFile implements TypeConstants, TypeIds {
 		if (recordComponents.length * 2 + localContentsOffset >= this.contents.length) {
 			resizeContents(recordComponents.length * 2);
 		}
-		for (FieldBinding field : recordComponents) {
+		for (RecordComponentBinding component : recordComponents) {
 			int methodHandleIndex = this.constantPool.literalIndexForMethodHandleFieldRef(
 					ClassFileConstants.MethodHandleRefKindGetField,
-					recordName, field.name, field.type.signature());
+					recordName, component.name, component.type.signature());
 
 			this.contents[localContentsOffset++] = (byte) (methodHandleIndex >> 8);
 			this.contents[localContentsOffset++] = (byte) methodHandleIndex;
@@ -4173,7 +4091,7 @@ public class ClassFile implements TypeConstants, TypeIds {
 			LocalVariableBinding localVariable = this.codeStream.locals[i];
 			int initializationCount = localVariable.initializationCount;
 			if (initializationCount == 0) continue;
-			if (localVariable.declaration == null) continue;
+			if (localVariable.declaration == null && !(localVariable.declaringScope != null && localVariable.declaringScope.referenceContext() instanceof ConstructorDeclaration cd && cd.isCompactConstructor())) continue;
 			final TypeBinding localVariableTypeBinding = localVariable.type;
 			boolean isParameterizedType = localVariableTypeBinding.isParameterizedType() || localVariableTypeBinding.isTypeVariable();
 			if (isParameterizedType) {
@@ -4335,30 +4253,30 @@ public class ClassFile implements TypeConstants, TypeIds {
 			attributesNumber += generateSignatureAttribute(genericSignature);
 		}
 		AbstractMethodDeclaration methodDeclaration = methodBinding.sourceMethod();
-		if (methodBinding instanceof SyntheticMethodBinding) {
-			SyntheticMethodBinding syntheticMethod = (SyntheticMethodBinding) methodBinding;
-			if (syntheticMethod.purpose == SyntheticMethodBinding.SuperMethodAccess && CharOperation.equals(syntheticMethod.selector, syntheticMethod.targetMethod.selector))
-				methodDeclaration = ((SyntheticMethodBinding)methodBinding).targetMethod.sourceMethod();
+		if (methodBinding instanceof SyntheticMethodBinding syntheticMethod) {
+			if (syntheticMethod.purpose == SyntheticMethodBinding.BridgeMethod
+					|| (syntheticMethod.purpose == SyntheticMethodBinding.SuperMethodAccess
+							&& CharOperation.equals(syntheticMethod.selector, syntheticMethod.targetMethod.selector))) {
+				methodDeclaration = ((SyntheticMethodBinding) methodBinding).targetMethod.sourceMethod();
+			}
 			if (syntheticMethod.recordComponentBinding != null) {
-				assert methodDeclaration == null;
 				long rcMask = TagBits.AnnotationForMethod | TagBits.AnnotationForTypeUse;
 				// record component (field) accessor method
-				ReferenceBinding declaringClass = methodBinding.declaringClass;
-				RecordComponent comp = getRecordComponent(declaringClass, methodBinding.selector);
-				if (comp != null) {
-					Annotation[] annotations = ASTNode.getRelevantAnnotations(comp.annotations, rcMask, null);
+				RecordComponent component = syntheticMethod.sourceRecordComponent();
+				if (component != null) {
+					Annotation[] annotations = ASTNode.getRelevantAnnotations(component.annotations, rcMask, null);
 					if (annotations != null) {
 						assert !methodBinding.isConstructor();
 						attributesNumber += generateRuntimeAnnotations(annotations, TagBits.AnnotationForMethod);
 					}
 					if ((this.produceAttributes & ClassFileConstants.ATTR_TYPE_ANNOTATION) != 0) {
 						List<AnnotationContext> allTypeAnnotationContexts = new ArrayList<>();
-						if (annotations != null && (comp.bits & ASTNode.HasTypeAnnotations) != 0) {
-							comp.getAllAnnotationContexts(AnnotationTargetTypeConstants.METHOD_RETURN, allTypeAnnotationContexts);
+						if (annotations != null && (component.bits & ASTNode.HasTypeAnnotations) != 0) {
+							component.getAllAnnotationContexts(AnnotationTargetTypeConstants.METHOD_RETURN, allTypeAnnotationContexts);
 						}
-						TypeReference compType = comp.type;
-						if (compType != null && ((compType.bits & ASTNode.HasTypeAnnotations) != 0)) {
-							compType.getAllAnnotationContexts(AnnotationTargetTypeConstants.METHOD_RETURN, allTypeAnnotationContexts);
+						TypeReference componentType = component.type;
+						if (componentType != null && ((componentType.bits & ASTNode.HasTypeAnnotations) != 0)) {
+							componentType.getAllAnnotationContexts(AnnotationTargetTypeConstants.METHOD_RETURN, allTypeAnnotationContexts);
 						}
 						int size = allTypeAnnotationContexts.size();
 						attributesNumber = completeRuntimeTypeAnnotations(attributesNumber,
@@ -4367,6 +4285,9 @@ public class ClassFile implements TypeConstants, TypeIds {
 								() -> allTypeAnnotationContexts);
 					}
 				}
+			} else if (syntheticMethod.isCanonicalConstructor()) {
+				AbstractVariableDeclaration[] parameters = syntheticMethod.declaringClass.getRecordComponents();
+				attributesNumber += generateRuntimeAnnotationsForParameters(parameters);
 			}
 		}
 		if (methodDeclaration != null) {
@@ -4375,9 +4296,8 @@ public class ClassFile implements TypeConstants, TypeIds {
 				attributesNumber += generateRuntimeAnnotations(annotations, methodBinding.isConstructor() ? TagBits.AnnotationForConstructor : TagBits.AnnotationForMethod);
 			}
 			if ((methodBinding.tagBits & TagBits.HasParameterAnnotations) != 0) {
-				Argument[] arguments = methodDeclaration.arguments;
+				AbstractVariableDeclaration[] arguments = methodDeclaration.arguments(true);
 				if (arguments != null) {
-					propagateRecordComponentArguments(methodDeclaration);
 					attributesNumber += generateRuntimeAnnotationsForParameters(arguments);
 				}
 			}
@@ -4430,26 +4350,6 @@ public class ClassFile implements TypeConstants, TypeIds {
 			}
 		}
 		return attributesNumber;
-	}
-	private void propagateRecordComponentArguments(AbstractMethodDeclaration methodDeclaration) {
-		if ((methodDeclaration.bits & ASTNode.IsImplicit) == 0)
-			return;
-		ReferenceBinding declaringClass = methodDeclaration.binding.declaringClass;
-		if (declaringClass instanceof SourceTypeBinding) {
-			assert declaringClass.isRecord();
-			RecordComponentBinding[] rcbs = ((SourceTypeBinding) declaringClass).components();
-			Argument[] arguments = methodDeclaration.arguments;
-			for (int i = 0, length = rcbs.length; i < length; i++) {
-				RecordComponentBinding rcb = rcbs[i];
-				RecordComponent recordComponent = rcb.sourceRecordComponent();
-				if ((recordComponent.bits & ASTNode.HasTypeAnnotations) != 0) {
-					methodDeclaration.bits |= ASTNode.HasTypeAnnotations;
-					arguments[i].bits |= ASTNode.HasTypeAnnotations;
-				}
-				long rcMask = TagBits.AnnotationForParameter | TagBits.AnnotationForTypeUse;
-				arguments[i].annotations = ASTNode.getRelevantAnnotations(recordComponent.annotations, rcMask, null);
-			}
-		}
 	}
 
 	public int generateMethodInfoAttributes(MethodBinding methodBinding, AnnotationMethodDeclaration declaration) {
@@ -4766,7 +4666,7 @@ public class ClassFile implements TypeConstants, TypeIds {
 		return attributesNumber;
 	}
 
-	private int generateRuntimeAnnotationsForParameters(Argument[] arguments) {
+	private int generateRuntimeAnnotationsForParameters(AbstractVariableDeclaration[] arguments) {
 		final int argumentsLength = arguments.length;
 		final int VISIBLE_INDEX = 0;
 		final int INVISIBLE_INDEX = 1;
@@ -4774,7 +4674,7 @@ public class ClassFile implements TypeConstants, TypeIds {
 		int visibleParametersAnnotationsCounter = 0;
 		int[][] annotationsCounters = new int[argumentsLength][2];
 		for (int i = 0; i < argumentsLength; i++) {
-			Argument argument = arguments[i];
+			AbstractVariableDeclaration argument = arguments[i];
 			Annotation[] annotations = argument.annotations;
 			if (annotations != null) {
 				for (Annotation a : annotations) {
@@ -4821,7 +4721,7 @@ public class ClassFile implements TypeConstants, TypeIds {
 					this.contentsOffset += 2;
 					int counter = 0;
 					if (numberOfInvisibleAnnotations != 0) {
-						Argument argument = arguments[i];
+						AbstractVariableDeclaration argument = arguments[i];
 						Annotation[] annotations = argument.annotations;
 						for (Annotation a : annotations) {
 							Annotation annotation;
@@ -4882,7 +4782,7 @@ public class ClassFile implements TypeConstants, TypeIds {
 					this.contentsOffset += 2;
 					int counter = 0;
 					if (numberOfVisibleAnnotations != 0) {
-						Argument argument = arguments[i];
+						AbstractVariableDeclaration argument = arguments[i];
 						Annotation[] annotations = argument.annotations;
 						for (Annotation a : annotations) {
 							Annotation annotation;
@@ -5036,6 +4936,7 @@ public class ClassFile implements TypeConstants, TypeIds {
 		AbstractMethodDeclaration methodDeclaration = binding.sourceMethod();
 
 		boolean isConstructor = binding.isConstructor();
+		boolean isCanonicalConstructor = binding.isCanonicalConstructor();
 		TypeBinding[] targetParameters = binding.parameters;
 		ReferenceBinding declaringClass = binding.declaringClass;
 
@@ -5050,7 +4951,8 @@ public class ClassFile implements TypeConstants, TypeIds {
 			}
 		}
 
-		boolean needSynthetics = isConstructor && declaringClass.isNestedType();
+		boolean needSynthetics = isCanonicalConstructor ? false : // WYSIWYG
+										isConstructor && declaringClass.isNestedType();
 		if (needSynthetics) {
 			// Take into account the synthetic argument names
 			// This tracks JLS8, paragraph 8.8.9
@@ -5078,19 +4980,22 @@ public class ClassFile implements TypeConstants, TypeIds {
 			}
 		}
 		if (targetParameters != Binding.NO_PARAMETERS) {
-			Argument[] arguments = null;
-			if (methodDeclaration != null && methodDeclaration.arguments != null) {
-				arguments = methodDeclaration.arguments;
-			}
-			for (int i = 0, max = targetParameters.length, argumentsLength = arguments != null ? arguments.length : 0; i < max; i++) {
-				if (argumentsLength > i && arguments[i] != null) {
-					Argument argument = arguments[i];
-					int modifiers = argument.binding.modifiers;
-					if (binding.isCompactConstructor())
-						modifiers |= ClassFileConstants.AccMandated;
-					length = writeArgumentName(argument.name, modifiers, length);
-				} else {
-					length = writeArgumentName(null, ClassFileConstants.AccSynthetic, length);
+			if (binding.isCanonicalConstructor() && methodDeclaration == null) { // synthetic
+				for (RecordComponentBinding component : binding.declaringClass.components()) {
+					length = writeArgumentName(component.name, ClassFileConstants.AccDefault, length);
+				}
+			} else {
+				AbstractVariableDeclaration[] arguments = methodDeclaration == null ? null : methodDeclaration.arguments(true);
+				for (int i = 0, max = targetParameters.length, argumentsLength = arguments != null ? arguments.length : 0; i < max; i++) {
+					if (argumentsLength > i && arguments[i] != null) {
+						AbstractVariableDeclaration argument = arguments[i];
+						int modifiers = argument.getBinding() instanceof VariableBinding variable ? variable.modifiers : ClassFileConstants.AccDefault;
+						if (binding.isCompactConstructor())
+							modifiers |= ClassFileConstants.AccMandated;
+						length = writeArgumentName(argument.name, modifiers, length);
+					} else {
+						length = writeArgumentName(null, ClassFileConstants.AccSynthetic, length);
+					}
 				}
 			}
 		}
@@ -5191,183 +5096,6 @@ public class ClassFile implements TypeConstants, TypeIds {
 		this.contents[localContentsOffset++] = (byte) fileNameIndex;
 		this.contentsOffset = localContentsOffset;
 		return 1;
-	}
-	private int generateStackMapAttribute(
-			MethodBinding methodBinding,
-			int code_length,
-			int codeAttributeOffset,
-			int max_locals,
-			boolean isClinit,
-			Scope scope) {
-		int attributesNumber = 0;
-		int localContentsOffset = this.contentsOffset;
-		StackMapFrameCodeStream stackMapFrameCodeStream = (StackMapFrameCodeStream) this.codeStream;
-		stackMapFrameCodeStream.removeFramePosition(code_length);
-		if (stackMapFrameCodeStream.hasFramePositions()) {
-			Map<Integer, StackMapFrame> frames = new HashMap<>();
-			List<StackMapFrame> realFrames = traverse(isClinit ? null : methodBinding, max_locals, this.contents, codeAttributeOffset + 14, code_length, frames, isClinit, scope);
-			int numberOfFrames = realFrames.size();
-			if (numberOfFrames > 1) {
-				int stackMapTableAttributeOffset = localContentsOffset;
-				// add the stack map table attribute
-				if (localContentsOffset + 8 >= this.contents.length) {
-					resizeContents(8);
-				}
-				int stackMapAttributeNameIndex =
-					this.constantPool.literalIndex(AttributeNamesConstants.StackMapName);
-				this.contents[localContentsOffset++] = (byte) (stackMapAttributeNameIndex >> 8);
-				this.contents[localContentsOffset++] = (byte) stackMapAttributeNameIndex;
-
-				int stackMapAttributeLengthOffset = localContentsOffset;
-				// generate the attribute
-				localContentsOffset += 4;
-				if (localContentsOffset + 4 >= this.contents.length) {
-					resizeContents(4);
-				}
-				int numberOfFramesOffset = localContentsOffset;
-				localContentsOffset += 2;
-				if (localContentsOffset + 2 >= this.contents.length) {
-					resizeContents(2);
-				}
-				StackMapFrame currentFrame = realFrames.get(0);
-				for (int j = 1; j < numberOfFrames; j++) {
-					// select next frame
-					currentFrame = realFrames.get(j);
-					// generate current frame
-					// need to find differences between the current frame and the previous frame
-					int frameOffset = currentFrame.pc;
-					// FULL_FRAME
-					if (localContentsOffset + 5 >= this.contents.length) {
-						resizeContents(5);
-					}
-					this.contents[localContentsOffset++] = (byte) (frameOffset >> 8);
-					this.contents[localContentsOffset++] = (byte) frameOffset;
-					int numberOfLocalOffset = localContentsOffset;
-					localContentsOffset += 2; // leave two spots for number of locals
-					int numberOfLocalEntries = 0;
-					int numberOfLocals = currentFrame.getNumberOfLocals();
-					int numberOfEntries = 0;
-					int localsLength = currentFrame.locals == null ? 0 : currentFrame.locals.length;
-					for (int i = 0; i < localsLength && numberOfLocalEntries < numberOfLocals; i++) {
-						if (localContentsOffset + 3 >= this.contents.length) {
-							resizeContents(3);
-						}
-						VerificationTypeInfo info = currentFrame.locals[i];
-						if (info == null) {
-							this.contents[localContentsOffset++] = (byte) VerificationTypeInfo.ITEM_TOP;
-						} else {
-							switch(info.id()) {
-								case T_boolean :
-								case T_byte :
-								case T_char :
-								case T_int :
-								case T_short :
-									this.contents[localContentsOffset++] = (byte) VerificationTypeInfo.ITEM_INTEGER;
-									break;
-								case T_float :
-									this.contents[localContentsOffset++] = (byte) VerificationTypeInfo.ITEM_FLOAT;
-									break;
-								case T_long :
-									this.contents[localContentsOffset++] = (byte) VerificationTypeInfo.ITEM_LONG;
-									i++;
-									break;
-								case T_double :
-									this.contents[localContentsOffset++] = (byte) VerificationTypeInfo.ITEM_DOUBLE;
-									i++;
-									break;
-								case T_null :
-									this.contents[localContentsOffset++] = (byte) VerificationTypeInfo.ITEM_NULL;
-									break;
-								default:
-									this.contents[localContentsOffset++] = (byte) info.tag;
-									switch (info.tag) {
-										case VerificationTypeInfo.ITEM_UNINITIALIZED :
-											int offset = info.offset;
-											this.contents[localContentsOffset++] = (byte) (offset >> 8);
-											this.contents[localContentsOffset++] = (byte) offset;
-											break;
-										case VerificationTypeInfo.ITEM_OBJECT :
-											int indexForType = this.constantPool.literalIndexForType(info.constantPoolName());
-											this.contents[localContentsOffset++] = (byte) (indexForType >> 8);
-											this.contents[localContentsOffset++] = (byte) indexForType;
-									}
-							}
-							numberOfLocalEntries++;
-						}
-						numberOfEntries++;
-					}
-					if (localContentsOffset + 4 >= this.contents.length) {
-						resizeContents(4);
-					}
-					this.contents[numberOfLocalOffset++] = (byte) (numberOfEntries >> 8);
-					this.contents[numberOfLocalOffset] = (byte) numberOfEntries;
-					int numberOfStackItems = currentFrame.numberOfStackItems;
-					this.contents[localContentsOffset++] = (byte) (numberOfStackItems >> 8);
-					this.contents[localContentsOffset++] = (byte) numberOfStackItems;
-					for (int i = 0; i < numberOfStackItems; i++) {
-						if (localContentsOffset + 3 >= this.contents.length) {
-							resizeContents(3);
-						}
-						VerificationTypeInfo info = currentFrame.stackItems[i];
-						if (info == null) {
-							this.contents[localContentsOffset++] = (byte) VerificationTypeInfo.ITEM_TOP;
-						} else {
-							switch(info.id()) {
-								case T_boolean :
-								case T_byte :
-								case T_char :
-								case T_int :
-								case T_short :
-									this.contents[localContentsOffset++] = (byte) VerificationTypeInfo.ITEM_INTEGER;
-									break;
-								case T_float :
-									this.contents[localContentsOffset++] = (byte) VerificationTypeInfo.ITEM_FLOAT;
-									break;
-								case T_long :
-									this.contents[localContentsOffset++] = (byte) VerificationTypeInfo.ITEM_LONG;
-									break;
-								case T_double :
-									this.contents[localContentsOffset++] = (byte) VerificationTypeInfo.ITEM_DOUBLE;
-									break;
-								case T_null :
-									this.contents[localContentsOffset++] = (byte) VerificationTypeInfo.ITEM_NULL;
-									break;
-								default:
-									this.contents[localContentsOffset++] = (byte) info.tag;
-								switch (info.tag) {
-									case VerificationTypeInfo.ITEM_UNINITIALIZED :
-										int offset = info.offset;
-										this.contents[localContentsOffset++] = (byte) (offset >> 8);
-										this.contents[localContentsOffset++] = (byte) offset;
-										break;
-									case VerificationTypeInfo.ITEM_OBJECT :
-										int indexForType = this.constantPool.literalIndexForType(info.constantPoolName());
-										this.contents[localContentsOffset++] = (byte) (indexForType >> 8);
-										this.contents[localContentsOffset++] = (byte) indexForType;
-								}
-							}
-						}
-					}
-				}
-
-				numberOfFrames--;
-				if (numberOfFrames != 0) {
-					this.contents[numberOfFramesOffset++] = (byte) (numberOfFrames >> 8);
-					this.contents[numberOfFramesOffset] = (byte) numberOfFrames;
-
-					int attributeLength = localContentsOffset - stackMapAttributeLengthOffset - 4;
-					this.contents[stackMapAttributeLengthOffset++] = (byte) (attributeLength >> 24);
-					this.contents[stackMapAttributeLengthOffset++] = (byte) (attributeLength >> 16);
-					this.contents[stackMapAttributeLengthOffset++] = (byte) (attributeLength >> 8);
-					this.contents[stackMapAttributeLengthOffset] = (byte) attributeLength;
-					attributesNumber++;
-				} else {
-					localContentsOffset = stackMapTableAttributeOffset;
-				}
-			}
-		}
-		this.contentsOffset = localContentsOffset;
-		return attributesNumber;
 	}
 
 	private int generateStackMapTableAttribute(
@@ -6135,16 +5863,18 @@ public class ClassFile implements TypeConstants, TypeIds {
 					}
 				}
 			} else {
+				if (methodBinding instanceof SyntheticMethodBinding smb && smb.purpose == SyntheticMethodBinding.DeserializeLambda) {
+					// For the branching complexities in the generated $deserializeLambda$ we need the local variable
+					LocalVariableBinding lvb = new LocalVariableBinding(" synthetic0".toCharArray(), this.referenceBinding.scope.getJavaLangInvokeSerializedLambda(), 0, true); //$NON-NLS-1$
+					lvb.resolvedPosition = 0;
+					this.codeStream.record(lvb);
+					lvb.recordInitializationStartPC(0);
+					lvb.recordInitializationEndPC(codeLength);
+				}
 				TypeBinding[] arguments;
 				if ((arguments = methodBinding.parameters) != null) {
 					for (int i = 0, max = arguments.length; i < max; i++) {
 						final TypeBinding typeBinding = arguments[i];
-						// For the branching complexities in the generated $deserializeLambda$ we need the local variable
-						LocalVariableBinding localVariableBinding = new LocalVariableBinding((" synthetic"+i).toCharArray(), typeBinding, 0, true); //$NON-NLS-1$
-						localVariableBinding.resolvedPosition = i;
-						this.codeStream.record(localVariableBinding);
-						localVariableBinding.recordInitializationStartPC(0);
-						localVariableBinding.recordInitializationEndPC(codeLength);
 						frame.putLocal(resolvedPosition,
 								new VerificationTypeInfo(typeBinding));
 						switch (typeBinding.id) {
@@ -6223,25 +5953,6 @@ public class ClassFile implements TypeConstants, TypeIds {
 			this.innerClassesBindings.put(enclosingType.erasure().unannotated(), onBottomForBug445231);
 			enclosingType = enclosingType.enclosingType();
 		}
-	}
-	public void recordNestMember(SourceTypeBinding binding) {
-		SourceTypeBinding nestHost = binding != null ? binding.getNestHost() : null;
-		if (nestHost != null && !binding.equals(nestHost)) {// member
-			if (this.nestMembers == null) {
-				this.nestMembers = new HashSet<>(NESTED_MEMBER_SIZE);
-			}
-			this.nestMembers.add(binding);
-		}
-	}
-	public List<String> getNestMembers() {
-		if (this.nestMembers == null)
-			return null;
-		List<String> list = this.nestMembers
-								.stream()
-								.map(s -> new String(s.constantPoolName()))
-								.sorted()
-								.collect(Collectors.toList());
-		return list;
 	}
 
 	public int recordBootstrapMethod(FunctionalExpression expression) {
@@ -6344,9 +6055,6 @@ public class ClassFile implements TypeConstants, TypeIds {
 		this.methodCountOffset = 0;
 		if (this.innerClassesBindings != null) {
 			this.innerClassesBindings.clear();
-		}
-		if (this.nestMembers != null) {
-			this.nestMembers.clear();
 		}
 		if (this.bootstrapMethods != null) {
 			this.bootstrapMethods.clear();
@@ -6706,6 +6414,7 @@ public class ClassFile implements TypeConstants, TypeIds {
 			if (hasExceptionMarkers && exceptionMarker.pc == currentPC) {
 				frame.numberOfStackItems = 0;
 				frame.addStackItem(new VerificationTypeInfo(exceptionMarker.getBinding()));
+				frame.adoptStackShape = true; // good to go.
 				indexInExceptionMarkers++;
 				if (indexInExceptionMarkers < exceptionsMarkersLength) {
 					exceptionMarker = exceptionMarkers[indexInExceptionMarkers];
@@ -6741,6 +6450,7 @@ public class ClassFile implements TypeConstants, TypeIds {
 			}
 			byte opcode = (byte) u1At(bytecodes, 0, pc);
 			inspectFrame(currentPC, frame);
+			frame.adoptStackShape = true;
 			switch (opcode) {
 				case Opcodes.OPC_nop:
 					pc++;
@@ -7297,6 +7007,7 @@ public class ClassFile implements TypeConstants, TypeIds {
 					addRealJumpTarget(realJumpTarget, jumpPC, frames, createNewFrame(jumpPC, frame, isClinit, methodBinding), scope);
 					pc += 3;
 					addRealJumpTarget(realJumpTarget, pc - codeOffset);
+					frame.adoptStackShape = false;
 					break;
 				case Opcodes.OPC_tableswitch:
 					frame.numberOfStackItems--;
@@ -7319,6 +7030,7 @@ public class ClassFile implements TypeConstants, TypeIds {
 						addRealJumpTarget(realJumpTarget, jumpPC, frames, createNewFrame(jumpPC, frame, isClinit, methodBinding), scope);
 						pc += 4;
 					}
+					frame.adoptStackShape = false;
 					break;
 				case Opcodes.OPC_lookupswitch:
 					frame.numberOfStackItems--;
@@ -7338,6 +7050,7 @@ public class ClassFile implements TypeConstants, TypeIds {
 						addRealJumpTarget(realJumpTarget, jumpPC, frames, createNewFrame(jumpPC, frame, isClinit, methodBinding), scope);
 						pc += 4;
 					}
+					frame.adoptStackShape = false;
 					break;
 				case Opcodes.OPC_ireturn:
 				case Opcodes.OPC_lreturn:
@@ -7347,10 +7060,12 @@ public class ClassFile implements TypeConstants, TypeIds {
 					frame.numberOfStackItems--;
 					pc++;
 					addRealJumpTarget(realJumpTarget, pc - codeOffset);
+					frame.adoptStackShape = false;
 					break;
 				case Opcodes.OPC_return:
 					pc++;
 					addRealJumpTarget(realJumpTarget, pc - codeOffset);
+					frame.adoptStackShape = false;
 					break;
 				case Opcodes.OPC_getstatic:
 					index = u2At(bytecodes, 1, pc);
@@ -7588,6 +7303,7 @@ public class ClassFile implements TypeConstants, TypeIds {
 					frame.numberOfStackItems--;
 					pc++;
 					addRealJumpTarget(realJumpTarget, pc - codeOffset);
+					frame.adoptStackShape = false;
 					break;
 				case Opcodes.OPC_checkcast:
 					index = u2At(bytecodes, 1, pc);
@@ -7692,6 +7408,7 @@ public class ClassFile implements TypeConstants, TypeIds {
 					addRealJumpTarget(realJumpTarget, jumpPC, frames, createNewFrame(jumpPC, frame, isClinit, methodBinding), scope);
 					pc += 5;
 					addRealJumpTarget(realJumpTarget, pc - codeOffset); // handle infinite loop
+					frame.adoptStackShape = false;
 					break;
 				default: // should not occur
 					if (this.codeStream.methodDeclaration != null) {

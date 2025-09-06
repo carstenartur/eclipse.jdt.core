@@ -2000,6 +2000,8 @@ void setSourceStart(int sourceStart);
 	int ConstNonNullFieldComparisonYieldsFalse = Internal + 945;
 	/** @since 3.21 */
 	int InheritedParameterLackingNonNullAnnotation = MethodRelated + 946;
+	/** @since 3.43 */
+	int RecordComponentIncompatibleNullnessVsInheritedAccessor = MethodRelated + 947;
 
 	/** @since 3.10 */
 	int ArrayReferencePotentialNullReference = Internal + 951;
@@ -2356,9 +2358,13 @@ void setSourceStart(int sourceStart);
 	int VarLocalInitializedToVoid = TypeRelated + 1505; // Variable initializer is ''void'' -- cannot infer variable type
 	/** @since 3.14 */
 	int VarLocalCannotBeArrayInitalizers = TypeRelated + 1506; // Array initializer needs an explicit target-type
-	/** @since 3.14 */
+	/** @since 3.14
+	 *  @deprecated no longer issued - will be removed
+	 * */
 	int VarLocalCannotBeLambda = TypeRelated + 1507; // Lambda expression needs an explicit target-type
-	/** @since 3.14 */
+	/** @since 3.14
+	 *  @deprecated no longer issued - will be removed
+	 * */
 	int VarLocalCannotBeMethodReference = TypeRelated + 1508; // Method reference needs an explicit target-type
 	/** @since 3.14 */
 	int VarIsReserved = Syntax + 1509; // ''var'' is not a valid type name
@@ -2490,8 +2496,6 @@ void setSourceStart(int sourceStart);
 	/** @since 3.22 */
 	int SwitchExpressionsReturnWithinSwitchExpression  = Syntax + 1724;
 
-	/* Java 14 errors end */
-	/* Java 15 errors begin */
 	/* records - begin */
 
 	/** @since 3.26 */
@@ -2543,6 +2547,7 @@ void setSourceStart(int sourceStart);
 	 */
 	int RecordCanonicalConstructorShouldNotBeGeneric = TypeRelated + 1746;
 	/** @since 3.26
+	 *  @deprecated problem no longer generated
 	 */
 	int RecordCanonicalConstructorHasReturnStatement = TypeRelated + 1747;
 	/** @since 3.26
@@ -2552,6 +2557,7 @@ void setSourceStart(int sourceStart);
 	 */
 	int RecordCompactConstructorHasExplicitConstructorCall = TypeRelated + 1749;
 	/** @since 3.26
+	 *  @deprecated problem no longer generated
 	 */
 	int RecordNestedRecordInherentlyStatic = TypeRelated + 1750;
 	/** @since 3.26
@@ -2561,6 +2567,7 @@ void setSourceStart(int sourceStart);
 	 */
 	int RecordCannotExtendRecord= TypeRelated + 1752;
 	/** @since 3.26
+	 *  @deprecated problem no longer generated
 	 */
 	int RecordComponentCannotBeVoid= TypeRelated + 1753;
 	/** @since 3.26
@@ -2597,8 +2604,6 @@ void setSourceStart(int sourceStart);
 	 */
 	int SafeVarargsOnSyntheticRecordAccessor = TypeRelated + 1764;
 
-
-	/* records - end */
 	/* Local and Nested Static Declarations - Begin */
 	/** @since 3.28 */
 	int LocalStaticsIllegalVisibilityModifierForInterfaceLocalType = TypeRelated + 1765;
@@ -2610,6 +2615,8 @@ void setSourceStart(int sourceStart);
 	int RecordErasureIncompatibilityInCanonicalConstructor = TypeRelated + 1768;
 	/** @since 3.41 */
 	int CompactConstructorOnlyInRecords = TypeRelated + 1769;
+	/** @since 3.42 */
+	int RecordAccessorMissingOverrideAnnotation = TypeRelated + 1770;
 	/* records - end */
 
 

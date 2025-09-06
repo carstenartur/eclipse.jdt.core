@@ -8432,4 +8432,132 @@ public class SwitchExpressionsYieldTest extends AbstractRegressionTest {
 				"The method state() is undefined for the type X\n" +
 				"----------\n");
 	}
+
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/3920
+	// Java 24 switch expression and type inference generates wrong/unsecure bytecode
+	public void testIssue3920() {
+		this.runConformTest(
+				new String[] {
+				"X.java",
+				"""
+				import java.util.List;
+				import java.util.stream.Collectors;
+
+				public class X {
+					public static void main(String[] args) {
+						var l = List.of("A","B");
+						int i = 12;
+						var t = switch(i) {
+						case 1 -> l.stream().collect(Collectors.joining(" "));
+						default -> "Fixed!";
+						};
+						System.out.println(t);
+					}
+				}
+				"""
+				},
+				"Fixed!");
+	}
+
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/4113
+	// ECJ Internal Error when compiling
+	public void testIssue4113() {
+		this.runConformTest(
+				new String[] {
+				"X.java",
+				"""
+				public class X {
+				    public static void main(String[] args) {
+				        try {
+				            int length = ((Object[]) null).length;
+			            } catch (NullPointerException npe) {
+			                System.out.println("NPE!");
+			            }
+				    }
+				}
+				"""
+				},
+				"NPE!");
+	}
+
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/4165
+	// [LVTI][Switch Expressions] ECJ crashes with NPE compiling faulty program
+	public void testIssue4165() {
+		this.runConformTest(
+				new String[] {
+						"X.java",
+						"""
+						interface I {
+						    int foo(int x);
+						}
+
+						public class X {
+
+						    static int foo(int x) {
+						        return x;
+						    }
+
+							public static void main(String [] args) {
+
+								for (int integer : new Integer[] { 0, 1 }) {
+									I b = switch (integer) {
+										case 0 -> X::foo;
+										default ->  (int i) -> 42;
+									};
+									System.out.println(b.foo(100));
+								}
+							}
+						}
+						"""
+				},
+				"100\n42");
+	}
+
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/4165
+	// [LVTI][Switch Expressions] ECJ crashes with NPE compiling faulty program
+	public void testIssue4165_2() {
+		this.runNegativeTest(
+				new String[] {
+						"X.java",
+						"""
+						interface I {
+						    int foo(int x);
+						}
+
+						public class X {
+
+						    static int foo(int x) {
+						        return x;
+						    }
+
+							public static void main(String [] args) {
+
+								for (int integer : new Integer[] { 0, 1 }) {
+									var b = switch (integer) {
+										case 0 -> X::foo;
+										default ->  (int i) -> 42;
+									};
+									System.out.println(b.foo(100));
+								}
+							}
+						}
+						"""
+				},
+				"----------\n" +
+				"1. ERROR in X.java (at line 15)\r\n" +
+				"	case 0 -> X::foo;\r\n" +
+				"	          ^^^^^^\n" +
+				"The target type of this expression must be a functional interface\n" +
+				"----------\n" +
+				"2. ERROR in X.java (at line 16)\r\n" +
+				"	default ->  (int i) -> 42;\r\n" +
+				"	            ^^^^^^^^^^^^^\n" +
+				"The target type of this expression must be a functional interface\n" +
+				"----------\n" +
+				"3. ERROR in X.java (at line 18)\r\n" +
+				"	System.out.println(b.foo(100));\r\n" +
+				"	                     ^^^\n" +
+				"The method foo(int) is undefined for the type Object\n" +
+				"----------\n");
+	}
 }

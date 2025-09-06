@@ -55,9 +55,6 @@ public interface TagBits {
 
 	long SealingTypeHierarchy = ASTNode.Bit20; // type, Bit20 used for PauseHierarchyCheck can be re-purposed as hierarchy check is complete now
 
-	// test bit to see if default abstract methods were computed
-	long KnowsDefaultAbstractMethods = ASTNode.Bit11; // type
-
 	long IsArgument = ASTNode.Bit11; // local
 	long ClearPrivateModifier = ASTNode.Bit10; // constructor binding
 
@@ -100,6 +97,7 @@ public interface TagBits {
 	long HasUnresolvedSuperinterfaces = ASTNode.Bit27;
 	long HasUnresolvedEnclosingType = ASTNode.Bit28;
 	long HasUnresolvedMemberTypes = ASTNode.Bit29;  // Also in use at STB.
+	long HasUnresolvedComponents = ASTNode.Bit34L;
 
 	long HasTypeVariable = ASTNode.Bit30; // set either for type variables (direct) or parameterized types indirectly referencing type variables
 	long HasDirectWildcard = ASTNode.Bit31; // set for parameterized types directly referencing wildcards
@@ -108,7 +106,7 @@ public interface TagBits {
 	long BeginAnnotationCheck = ASTNode.Bit32L;
 	long EndAnnotationCheck = ASTNode.Bit33L;
 
-	// currently unused: ASTNode.Bit34L, ASTNode.Bit34L
+	// currently unused: ASTNode.Bit35L
 
 	// standard annotations
 	// 9-bits for targets

@@ -17,7 +17,6 @@ import org.eclipse.jdt.internal.compiler.ast.ASTNode;
 
 public interface ExtendedTagBits {
 
-	int AreRecordComponentsComplete = ASTNode.Bit1; // type
 	int HasUnresolvedPermittedSubtypes = ASTNode.Bit2;
 
 	/** From Java 16
@@ -27,7 +26,6 @@ public interface ExtendedTagBits {
 
 	// Java 16 Records
 	int IsCanonicalConstructor = ASTNode.Bit4; // constructor
-	int isImplicit  = ASTNode.Bit5; // constructor and method
 
 	// @Owning / closing
 	int IsClosingMethod = ASTNode.Bit1; // method
@@ -38,4 +36,7 @@ public interface ExtendedTagBits {
 	int DeprecatedAnnotationResolved = ASTNode.Bit7;
 	int NullDefaultAnnotationResolved = ASTNode.Bit8; // package, type, method or variable
 	int AllAnnotationsResolved = ExtendedTagBits.AnnotationResolved | ExtendedTagBits.DeprecatedAnnotationResolved | ExtendedTagBits.NullDefaultAnnotationResolved;
+	static boolean areAllAnnotationsResolved(long extendedTagBits) {
+		return (extendedTagBits & AllAnnotationsResolved) == AllAnnotationsResolved;
+	}
 }

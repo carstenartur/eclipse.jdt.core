@@ -46,8 +46,6 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
-import java.util.function.Consumer;
-import java.util.function.Predicate;
 import java.util.stream.Stream;
 import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.core.compiler.InvalidInputException;
@@ -169,7 +167,6 @@ public class Parser implements ParserBasicInformation, ConflictedParser, Operato
 	protected static final int HALT = 0;     // halt and throw up hands.
 	protected static final int RESTART = 1;  // stacks adjusted, alternate goal from check point.
 	protected static final int RESUME = 2;   // stacks untouched, just continue from where left off.
-	private static final short TYPE_CLASS = 1;
 
 	public Scanner scanner;
 	public TerminalToken currentToken = TokenNameNotAToken;
@@ -922,6 +919,7 @@ protected int valueLambdaNestDepth = -1;
 private int stateStackLengthStack[] = new int[0];
 final protected boolean parsingJava8Plus = true;
 protected boolean parsingJava9Plus;
+protected boolean parsingJava10Plus;
 protected boolean parsingJava14Plus;
 protected boolean parsingJava15Plus;
 protected boolean parsingJava17Plus;
@@ -949,6 +947,7 @@ public Parser(ProblemReporter problemReporter, boolean optimizeStringLiterals) {
 	this.optimizeStringLiterals = optimizeStringLiterals;
 	initializeScanner();
 	this.parsingJava9Plus = this.options.sourceLevel >= ClassFileConstants.JDK9;
+	this.parsingJava10Plus = this.options.sourceLevel >= ClassFileConstants.JDK10;
 	this.parsingJava11Plus = this.options.sourceLevel >= ClassFileConstants.JDK11;
 	this.parsingJava14Plus = this.options.sourceLevel >= ClassFileConstants.JDK14;
 	this.parsingJava15Plus = this.options.sourceLevel >= ClassFileConstants.JDK15;
@@ -2464,17 +2463,16 @@ protected void consumeClassDeclaration() {
 
 	TypeDeclaration typeDecl = (TypeDeclaration) this.astStack[this.astPtr];
 
-	//convert constructor that do not have the type's name into methods
-	boolean hasConstructor = typeDecl.checkConstructors(this);
+	// convert constructors that do not have the type's name into methods
+	boolean needDefaultConstructor = !typeDecl.checkConstructors(this);
+	if (typeDecl.isRecord())
+		needDefaultConstructor = false; // records require canonical constructors, not default no-arg constructors
 
 	// add the default constructor when needed (interface don't have it)
-	// availability of _some_ constructor for a record class does not obviate the need for canonical constructor, we go ahead and generate one weeding out
-	// duplicates later. This is how things have been forever, we retain the behavior for now, but this will change and get cleaned up later.
-	if (!hasConstructor || typeDecl.isRecord()) {
+	if (needDefaultConstructor) {
 		switch(TypeDeclaration.kind(typeDecl.modifiers)) {
 			case TypeDeclaration.CLASS_DECL :
 			case TypeDeclaration.ENUM_DECL :
-			case TypeDeclaration.RECORD_DECL :
 				boolean insideFieldInitializer = false;
 				if (this.diet) {
 					for (int i = this.nestedType; i > 0; i--){
@@ -2487,9 +2485,6 @@ protected void consumeClassDeclaration() {
 				typeDecl.createDefaultConstructor(!(this.diet && this.dietInt == 0) || insideFieldInitializer, true);
 		}
 	}
-
-	if (typeDecl.isRecord())
-		typeDecl.getConstructor(this); // will get cleaned up in due course.
 
 	if (this.scanner.containsAssertKeyword) {
 		typeDecl.bits |= ASTNode.ContainsAssertion;
@@ -2957,15 +2952,7 @@ protected void consumeConstructorHeaderName(boolean isCompact) {
 
 	// ConstructorHeaderName ::=  Modifiersopt 'Identifier' '('
 	// CompactConstructorHeaderName ::= Modifiersopt 'Identifier'
-	ConstructorDeclaration cd = new ConstructorDeclaration(this.compilationUnit.compilationResult) {
-										@Override
-										public boolean isCompactConstructor() {
-											return isCompact;
-										}
-									};
-
-	if (isCompact)
-		cd.bits |= ASTNode.IsCanonicalConstructor;
+	ConstructorDeclaration cd = new ConstructorDeclaration(this.compilationUnit.compilationResult);
 
 	//name -- this is not really revelant but we do .....
 	cd.selector = this.identifierStack[this.identifierPtr];
@@ -2975,8 +2962,7 @@ protected void consumeConstructorHeaderName(boolean isCompact) {
 	//modifiers
 	cd.declarationSourceStart = this.intStack[this.intPtr--];
 	cd.modifiers = this.intStack[this.intPtr--];
-	if (isCompact)
-		cd.modifiers |=  ExtraCompilerModifiers.AccCompactConstructor;
+
 	// consume annotations
 	int length;
 	if ((length = this.expressionLengthStack[this.expressionLengthPtr--]) != 0) {
@@ -2999,6 +2985,22 @@ protected void consumeConstructorHeaderName(boolean isCompact) {
 	cd.bodyStart = isCompact ? cd.sourceStart + cd.selector.length : this.lParenPos+1;
 
 	this.listLength = 0; // initialize this.listLength before reading parameters/throws
+
+	if (isCompact) {
+		cd.modifiers |= ExtraCompilerModifiers.AccCompactConstructor;
+		cd.bits |= ASTNode.IsCanonicalConstructor;
+		for (int i = this.astPtr; i >=0; i--) {
+			if (this.astStack[i] instanceof TypeDeclaration declaringClass) {
+				if (declaringClass.declarationSourceEnd > 0)
+					continue; // skip preceding member types
+				if (declaringClass.isRecord())
+					cd.protoArguments = declaringClass.recordComponents;
+				else
+					problemReporter().compactConstructorsOnlyInRecords(cd);
+				break;
+			}
+		}
+	}
 
 	// recovery
 	if (this.currentElement != null){
@@ -3648,12 +3650,24 @@ protected void consumeEnumConstantNoClassBody() {
 	final FieldDeclaration fieldDeclaration = (FieldDeclaration) this.astStack[this.astPtr];
 	fieldDeclaration.declarationEnd = endOfEnumConstant;
 	fieldDeclaration.declarationSourceEnd = endOfEnumConstant;
+
 	// initialize the starting position of the allocation expression
 	ASTNode initialization = fieldDeclaration.initialization;
 	if (initialization != null) {
 		initialization.sourceEnd = endOfEnumConstant;
 	}
+
+	// conditionally flush comments only if a comment starts inside the enum constant's source range
+	if (this.scanner.commentPtr >= 0) {
+		int startOfEnumConstant = fieldDeclaration.sourceStart;
+
+		int lastCommentStart = Math.abs(this.scanner.commentStarts[this.scanner.commentPtr]);
+		if (lastCommentStart >= startOfEnumConstant && lastCommentStart <= endOfEnumConstant) {
+			this.scanner.commentPtr = -1; // flush, it's a trailing comment inside the enum constant
+		}
+	}
 }
+
 protected void consumeEnumConstants() {
 	concatNodeLists();
 }
@@ -4216,7 +4230,7 @@ protected void consumeSingleVariableDeclarator(boolean isVarArgs) {
 		}
 	} else if (this.parsingRecordComponents) {
 		if (!this.statementRecoveryActivated && extendedDimensions > 0)
-			problemReporter().recordIllegalExtendedDimensionsForRecordComponent(singleVariable);
+			problemReporter().illegalExtendedDimensionsForRecordComponent(singleVariable);
 	}
 }
 protected Annotation[][] getAnnotationsOnDimensions(int dimensionsCount) {
@@ -7005,9 +7019,6 @@ protected void consumeRule(int act) {
     case 336 : if (DEBUG) { System.out.println("RecordComponentHeaderRightParen ::= RPAREN"); }  //$NON-NLS-1$
 		    consumeRecordComponentHeaderRightParen(); 			break;
 
-    case 337 : if (DEBUG) { System.out.println("RecordHeader ::= LPAREN RecordComponentListOpt..."); }  //$NON-NLS-1$
-		    consumeRecordHeader(); 			break;
-
     case 338 : if (DEBUG) { System.out.println("RecordComponentListOpt ::="); }  //$NON-NLS-1$
 		    consumeRecordComponentsopt(); 			break;
 
@@ -8247,13 +8258,8 @@ protected void consumeLambdaHeader() {
 		if (argument.isReceiver()) {
 			problemReporter().illegalThis(argument);
 		}
-		if (this.parsingJava8Plus && !JavaFeature.UNNAMMED_PATTERNS_AND_VARS.isSupported(this.options) && argument.name.length == 1 && argument.name[0] == '_') {
-			if (this.parsingJava22Plus) {
-				problemReporter().validateJavaFeatureSupport(JavaFeature.UNNAMMED_PATTERNS_AND_VARS, argument.sourceStart, argument.sourceEnd);
-			} else {
-				problemReporter().illegalUseOfUnderscoreAsAnIdentifier(argument.sourceStart, argument.sourceEnd, true, false); // true == lambdaParameter
-			}
-		}
+		if (this.parsingJava8Plus && !JavaFeature.UNNAMMED_PATTERNS_AND_VARS.isSupported(this.options) && argument.name.length == 1 && argument.name[0] == '_')
+			problemReporter().illegalUseOfUnderscoreAsAnIdentifier(argument.sourceStart, argument.sourceEnd, true, false); // true == lambdaParameter
 	}
 	LambdaExpression lexp = (LambdaExpression) this.astStack[this.astPtr];
 	lexp.setArguments(arguments);
@@ -8266,31 +8272,6 @@ protected void consumeLambdaHeader() {
 	if (this.currentElement != null) {
 		this.lastCheckPoint = arrowPosition + 1; // we don't want the typed formal parameters to be processed by recovery.
 		this.currentElement.lambdaNestLevel++;
-	}
-}
-private void setArgumentsTypeVar(LambdaExpression lexp) {
-	Argument[] args =  lexp.arguments;
-	if (!this.parsingJava11Plus || args == null || args.length == 0) {
-		lexp.argumentsTypeVar = false;
-		return;
-	}
-
-	boolean isVar = false, mixReported = false;
-	for (int i = 0, l = args.length; i < l; ++i) {
-		Argument arg = args[i];
-		TypeReference type = arg.type;
-		char[][] typeName = type != null ? type.getTypeName() : null;
-		boolean prev = isVar;
-		isVar = typeName != null && typeName.length == 1 &&
-				CharOperation.equals(typeName[0], TypeConstants.VAR);
-		lexp.argumentsTypeVar |= isVar;
-		if (i > 0 && prev != isVar && !mixReported) { // report only once per list
-			this.problemReporter().varCannotBeMixedWithNonVarParams(isVar ? arg : args[i - 1]);
-			mixReported = true;
-		}
-		if (isVar && (type.dimensions() > 0 || type.extraDimensions() > 0)) {
-			this.problemReporter().varLocalCannotBeArray(arg);
-		}
 	}
 }
 protected void consumeLambdaExpression() {
@@ -8318,7 +8299,6 @@ protected void consumeLambdaExpression() {
 	if (body instanceof Expression expression && expression.isTrulyExpression()) {
 		expression.statementEnd = body.sourceEnd;
 	}
-	setArgumentsTypeVar(lexp);
 	pushOnExpressionStack(lexp);
 	if (this.currentElement != null) {
 		this.lastCheckPoint = body.sourceEnd + 1;
@@ -9147,34 +9127,15 @@ protected void consumeStaticOnly() {
 }
 private void consumeTextBlock() {
 	problemReporter().validateJavaFeatureSupport(JavaFeature.TEXT_BLOCKS, this.scanner.startPosition, this.scanner.currentPosition - 1);
-	char[] allchars = this.scanner.getCurrentTextBlock();
-	TextBlock textBlock = createTextBlock(allchars, this.scanner.startPosition, this.scanner.currentPosition - 1);
-	pushOnExpressionStack(textBlock);
-}
-private TextBlock createTextBlock(char[] allchars, int start, int end) {
-	TextBlock textBlock;
-	if (this.recordStringLiterals &&
-			!this.reparsingFunctionalExpression &&
-			this.checkExternalizeStrings &&
-			this.lastPosistion < this.scanner.currentPosition &&
-			!this.statementRecoveryActivated) {
-		textBlock =
-				TextBlock.createTextBlock(
-						allchars,
-						start,
-						end,
-						Util.getLineNumber(this.scanner.startPosition, this.scanner.lineEnds, 0, this.scanner.linePtr),
-						Util.getLineNumber(this.scanner.currentPosition - 1, this.scanner.lineEnds, 0, this.scanner.linePtr));
+	boolean shouldRecordStringLiterals = this.recordStringLiterals && !this.reparsingFunctionalExpression && this.checkExternalizeStrings &&
+											this.lastPosistion < this.scanner.currentPosition && !this.statementRecoveryActivated;
+
+	TextBlock textBlock = new TextBlock(this.scanner.getCurrentTextBlock(), this.scanner.startPosition, this.scanner.currentPosition - 1,
+						                shouldRecordStringLiterals ? Util.getLineNumber(this.scanner.startPosition, this.scanner.lineEnds, 0, this.scanner.linePtr) : 0,
+						                shouldRecordStringLiterals ? Util.getLineNumber(this.scanner.currentPosition - 1, this.scanner.lineEnds, 0, this.scanner.linePtr) : 0);
+	if (shouldRecordStringLiterals)
 		this.compilationUnit.recordStringLiteral(textBlock, this.currentElement != null);
-	} else {
-		textBlock = TextBlock.createTextBlock(
-				allchars,
-			start,
-			end,
-			0,
-			0);
-	}
-	return textBlock;
+	pushOnExpressionStack(textBlock);
 }
 protected void consumeSwitchBlock(boolean hasContents) {
 	// SwitchBlock ::= '{' { SwitchBlockStatements SwitchLabels } '}'
@@ -9911,6 +9872,7 @@ protected void consumeTypePattern() {
 
 	LocalDeclaration local = createLocalDeclaration(identifierName, (int) (namePosition >>> 32), (int) namePosition);
 	local.declarationSourceEnd = local.declarationEnd;
+	local.bits |= ASTNode.IsPatternVariable;
 	this.identifierPtr--;
 	this.identifierLengthPtr--;
 
@@ -9942,6 +9904,7 @@ protected void consumeUnnamedPattern() {
 
 	LocalDeclaration local = createLocalDeclaration(identifierName, (int) (namePosition >>> 32), (int) namePosition);
 	local.declarationSourceEnd = local.declarationEnd;
+	local.bits |= ASTNode.IsPatternVariable;
 	local.declarationSourceStart = (int) (namePosition >>> 32);
 	this.identifierPtr--;
 	this.identifierLengthPtr--;
@@ -10012,7 +9975,6 @@ protected void consumeRecordPattern() {
 	if (modifier != 0) {
 		problemReporter().illegalModifiers(modifierStart, type.sourceStart - 2);
 	}
-	checkForDiamond(recPattern.type);
 	problemReporter().validateJavaFeatureSupport(JavaFeature.RECORD_PATTERNS, type.sourceStart, sourceEnd);
 	pushOnAstStack(recPattern);
 }
@@ -10238,9 +10200,6 @@ protected void consumeWildcardWithBounds() {
 /* Java 16 - records */
 protected void consumeRecordHeaderPart() {
 	// RecordHeaderPart ::= RecordHeaderName RecordHeader ClassHeaderImplementsopt
-	TypeDeclaration typeDecl = (TypeDeclaration) this.astStack[this.astPtr];
-	assert typeDecl.isRecord();
-	// do nothing
 }
 protected void consumeRecordHeaderNameWithTypeParameters() {
 	// RecordHeaderName ::= RecordHeaderName1 TypeParameters
@@ -10270,7 +10229,6 @@ protected void consumeRecordComponentHeaderRightParen() {
 				0,
 				length);
 		typeDecl.recordComponents = recComps;
-		typeDecl.nRecordComponents = recComps.length;
 	} else {
 		typeDecl.recordComponents = ASTNode.NO_RECORD_COMPONENTS;
 	}
@@ -10282,10 +10240,6 @@ protected void consumeRecordComponentHeaderRightParen() {
 		if (this.currentElement.parseTree() == typeDecl) return;
 	}
 	resetModifiers();
-}
-protected void consumeRecordHeader() {
-	//RecordHeader ::= '(' RecordComponentsopt RecordComponentHeaderRightParen
-	//TODO: BETA_JAVA14_RECORD flag TypeDeclaration.RECORD_DECL ?
 }
 protected void consumeRecordComponentsopt() {
 	// RecordComponentsopt ::= $empty
@@ -10336,6 +10290,8 @@ public MethodDeclaration convertToMethodDeclaration(ConstructorDeclaration c, Co
 }
 
 protected TypeReference augmentTypeWithAdditionalDimensions(TypeReference typeReference, int additionalDimensions, Annotation[][] additionalAnnotations, boolean isVarargs) {
+	if (this.parsingJava10Plus && typeReference instanceof SingleTypeReference singleTypeRef && CharOperation.equals(singleTypeRef.token, TypeConstants.VAR))
+		problemReporter().varLocalCannotBeArray(singleTypeRef);
 	return typeReference.augmentTypeWithAdditionalDimensions(additionalDimensions, additionalAnnotations, isVarargs);
 }
 
@@ -10841,10 +10797,18 @@ protected void annotateTypeReference(Wildcard ref) {
 		ref.bits |= (ref.bound.bits & ASTNode.HasTypeAnnotations);
 	}
 }
-protected TypeReference getTypeReference(int dim) {
-	/* build a Reference on a variable that may be qualified or not
-	 This variable is a type reference and dim will be its dimensions*/
-
+protected final TypeReference getTypeReference(int dim) {
+	TypeReference typeRef = constructTypeReference(dim);
+	if (this.parsingJava10Plus && typeRef instanceof ArrayTypeReference singleTypeRef && CharOperation.equals(singleTypeRef.token, TypeConstants.VAR)) {
+		if (singleTypeRef.isParameterizedTypeReference())
+			problemReporter().varCannotBeUsedWithTypeArguments(singleTypeRef);
+		if (singleTypeRef.dimensions() > 0)
+			problemReporter().varLocalCannotBeArray(singleTypeRef);
+	}
+	return typeRef;
+}
+/* Construct a TypeReference that may be qualified or not with dim as its dimensions*/
+protected TypeReference constructTypeReference(int dim) {
 	TypeReference ref;
 	Annotation [][] annotationsOnDimensions = null;
 	int length = this.identifierLengthStack[this.identifierLengthPtr--];
@@ -12173,16 +12137,12 @@ public void parse(MethodDeclaration md, CompilationUnitDeclaration unit) {
 	}
 }
 public ASTNode[] parseClassBodyDeclarations(char[] source, int offset, int length, CompilationUnitDeclaration unit) {
-	/* automaton initialization */
-	initialize();
-	goForClassBodyDeclarations();
-	return parseBodyDeclarations(source, offset, length, unit, TYPE_CLASS);
-}
-
-private ASTNode[] parseBodyDeclarations(char[] source, int offset, int length, CompilationUnitDeclaration unit, short classRecordType) {
 	boolean oldDiet = this.diet;
 	int oldInt = this.dietInt;
 	boolean oldTolerateDefaultClassMethods = this.tolerateDefaultClassMethods;
+	/* automaton initialization */
+	initialize();
+	goForClassBodyDeclarations();
 	/* scanner initialization */
 	this.scanner.setSource(source);
 	this.scanner.resetTo(offset, offset + length - 1);
@@ -12222,24 +12182,19 @@ private ASTNode[] parseBodyDeclarations(char[] source, int offset, int length, C
 		if (!this.options.performMethodsFullRecovery && !this.options.performStatementsRecovery) {
 			return null;
 		}
-		// collect all body declaration inside the compilation unit except the default constructor and implicit  methods and fields for records
+		// collect all body declaration inside the compilation unit except the default constructor
 		final List bodyDeclarations = new ArrayList();
-		unit.ignoreFurtherInvestigation = false;
-		Predicate<MethodDeclaration> methodPred = classRecordType == TYPE_CLASS ?
-				mD -> !mD.isDefaultConstructor() : mD -> (mD.bits & ASTNode.IsImplicit) == 0;
-		Consumer<FieldDeclaration> fieldAction = classRecordType == TYPE_CLASS ?
-				fD -> bodyDeclarations.add(fD) : fD -> { if ((fD.bits & ASTNode.IsImplicit) == 0 ) bodyDeclarations.add(fD);} ;
 		ASTVisitor visitor = new ASTVisitor() {
 			@Override
 			public boolean visit(MethodDeclaration methodDeclaration, ClassScope scope) {
-				if (methodPred.test(methodDeclaration)) {
+				if (!methodDeclaration.isDefaultConstructor()) {
 					bodyDeclarations.add(methodDeclaration);
 				}
 				return false;
 			}
 			@Override
 			public boolean visit(FieldDeclaration fieldDeclaration, MethodScope scope) {
-				fieldAction.accept(fieldDeclaration);
+				bodyDeclarations.add(fieldDeclaration);
 				return false;
 			}
 			@Override
@@ -12248,6 +12203,7 @@ private ASTNode[] parseBodyDeclarations(char[] source, int offset, int length, C
 				return false;
 			}
 		};
+		unit.ignoreFurtherInvestigation = false;
 		unit.traverse(visitor, unit.scope);
 		unit.ignoreFurtherInvestigation = true;
 		result = (ASTNode[]) bodyDeclarations.toArray(new ASTNode[bodyDeclarations.size()]);
@@ -12490,13 +12446,8 @@ protected void pushIdentifier(char [] identifier, long position) {
 			stackLength);
 	}
 	this.identifierLengthStack[this.identifierLengthPtr] = 1;
-	if (this.parsingJava8Plus && !JavaFeature.UNNAMMED_PATTERNS_AND_VARS.isSupported(this.options) && identifier.length == 1 && identifier[0] == '_' && !this.processingLambdaParameterList) {
-		if (this.parsingJava22Plus) {
-			problemReporter().validateJavaFeatureSupport(JavaFeature.UNNAMMED_PATTERNS_AND_VARS, (int) (position >>> 32), (int) position);
-		} else {
-			problemReporter().illegalUseOfUnderscoreAsAnIdentifier((int) (position >>> 32), (int) position, this.parsingJava9Plus, false);
-		}
-	}
+	if (this.parsingJava8Plus && !JavaFeature.UNNAMMED_PATTERNS_AND_VARS.isSupported(this.options) && identifier.length == 1 && identifier[0] == '_' && !this.processingLambdaParameterList)
+		problemReporter().illegalUseOfUnderscoreAsAnIdentifier((int) (position >>> 32), (int) position, this.parsingJava9Plus, false);
 }
 protected void pushIdentifier() {
 	/*push the consumeToken on the identifier stack.

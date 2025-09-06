@@ -187,7 +187,7 @@ public class MethodDeclaration extends AbstractMethodDeclaration {
 			this.scope.checkUnusedParameters(this.binding);
 			// check if the method could have been static
 			if (!this.binding.isStatic() && (this.bits & ASTNode.CanBeStatic) != 0 && !this.isDefaultMethod()) {
-				if(!this.binding.isOverriding() && !this.binding.isImplementing()) {
+				if(!this.binding.isOverriding() && !this.binding.isImplementing() && !this.binding.isSynchronized()) {
 					if (this.binding.isPrivate() || this.binding.isFinal() || this.binding.declaringClass.isFinal()) {
 						this.scope.problemReporter().methodCanBeDeclaredStatic(this);
 					} else {
@@ -234,29 +234,6 @@ public class MethodDeclaration extends AbstractMethodDeclaration {
 	}
 
 	@Override
-	public RecordComponent getRecordComponent() {
-		if (this.arguments != null && this.arguments.length != 0)
-			return null;
-		ClassScope skope = this.scope.classScope();
-		TypeDeclaration typeDecl = skope.referenceContext;
-		if (!typeDecl.isRecord())
-			return null;
-		if (!(skope.referenceContext.isRecord()))
-			return null;
-		RecordComponent[] recComps = typeDecl.recordComponents;
-		if (recComps == null || recComps.length == 0)
-			return null;
-		for (RecordComponent recComp : recComps) {
-			if (recComp == null || recComp.name == null)
-				continue;
-			if (CharOperation.equals(this.selector, recComp.name)) {
-				return recComp;
-			}
-		}
-		return null;
-	}
-
-	@Override
 	public void parseStatements(Parser parser, CompilationUnitDeclaration unit) {
 		//fill up the method body with statement
 		parser.parse(this, unit);
@@ -276,21 +253,25 @@ public class MethodDeclaration extends AbstractMethodDeclaration {
 			this.returnType.resolvedType = this.binding.returnType;
 			// record the return type binding
 		}
-		RecordComponent recordComponent = getRecordComponent();
-		if (recordComponent != null) {
-			/* JLS 14 Records Sec 8.10.3 */
+
+		final ReferenceBinding declaringClass = this.binding != null ? this.binding.declaringClass : null;
+		RecordComponent recordComponent = declaringClass != null && declaringClass.isRecord() && (this.arguments == null || this.arguments.length == 0) ?
+													declaringClass.getRecordComponent(this.selector) : null;
+		if (recordComponent != null) { // this is an accessor - does it pass muster ?
 			if (this.returnType != null && TypeBinding.notEquals(this.returnType.resolvedType, recordComponent.type.resolvedType))
-				this.scope.problemReporter().recordIllegalAccessorReturnType(this.returnType, recordComponent.type.resolvedType);
+				this.scope.problemReporter().componentAccessorReturnTypeMismatch(this.returnType, recordComponent.type.resolvedType);
 			if (this.typeParameters != null)
-				this.scope.problemReporter().recordAccessorMethodShouldNotBeGeneric(this);
+				this.scope.problemReporter().componentAccessorMethodShouldNotBeGeneric(this);
 			if (this.binding != null) {
-				if (!(this.binding.isPublic()))
-					this.scope.problemReporter().recordAccessorMethodShouldBePublic(this);
+				if (!this.binding.isPublic())
+					this.scope.problemReporter().componentAccessorMethodShouldBePublic(this);
 				if (this.binding.isStatic())
-					this.scope.problemReporter().recordAccessorMethodShouldNotBeStatic(this);
+					this.scope.problemReporter().componentAccessorMethodShouldNotBeStatic(this);
+				if ((this.binding.tagBits & TagBits.AnnotationOverride) == 0)
+					this.scope.problemReporter().componentAccessorMissingOverrideAnnotation(this);
 			}
 			if (this.thrownExceptions != null)
-				this.scope.problemReporter().recordAccessorMethodHasThrowsClause(this);
+				this.scope.problemReporter().componentAccessorMethodHasThrowsClause(this);
 		}
 		// check if method with constructor name
 		if (CharOperation.equals(this.scope.enclosingSourceType().sourceName, this.selector)) {
@@ -314,7 +295,7 @@ public class MethodDeclaration extends AbstractMethodDeclaration {
 		// check @Override annotation
 		final CompilerOptions compilerOptions = this.scope.compilerOptions();
 		checkOverride: {
-			// For a record component accessor method, don't bother with checking for override (JLS 15 9.6.4.4)
+			// For a record component accessor method, don't bother with checking for override
 			if (this.binding == null || recordComponent != null) break checkOverride;
 			long complianceLevel = compilerOptions.complianceLevel;
 			int bindingModifiers = this.binding.modifiers;
@@ -333,7 +314,7 @@ public class MethodDeclaration extends AbstractMethodDeclaration {
 			} else {
 				//In case of  a concrete class method, we have to check if it overrides(in 1.5 and above) OR implements a method(1.6 and above).
 				//Also check if the method has a signature that is override-equivalent to that of any public method declared in Object.
-				if (!this.binding.declaringClass.isInterface()){
+				if (!declaringClass.isInterface()){
 						if((bindingModifiers & (ClassFileConstants.AccStatic|ExtraCompilerModifiers.AccOverriding)) == ExtraCompilerModifiers.AccOverriding) {
 							this.scope.problemReporter().missingOverrideAnnotation(this);
 						} else {
@@ -374,7 +355,7 @@ public class MethodDeclaration extends AbstractMethodDeclaration {
 					// the method HAS a body --> abstract native modifiers are forbidden
 					if (((this.modifiers & ClassFileConstants.AccNative) != 0) || ((this.modifiers & ClassFileConstants.AccAbstract) != 0))
 						this.scope.problemReporter().methodNeedingNoBody(this);
-					else if (this.binding == null || this.binding.isStatic() || (this.binding.declaringClass instanceof LocalTypeBinding) || returnsUndeclTypeVar) {
+					else if (this.binding == null || this.binding.isStatic() || (declaringClass instanceof LocalTypeBinding) || returnsUndeclTypeVar) {
 						// Cannot be static for one of the reasons stated above
 						this.bits &= ~ASTNode.CanBeStatic;
 					}

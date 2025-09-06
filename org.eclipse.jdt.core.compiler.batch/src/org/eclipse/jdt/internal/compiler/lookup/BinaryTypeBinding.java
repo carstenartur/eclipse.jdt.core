@@ -592,6 +592,7 @@ private void cachePartsFrom2(IBinaryType binaryType, boolean needFieldsAndMethod
 				iComponents = binaryType.getRecordComponents();
 				if (iComponents != null) {
 					createFields(iComponents, binaryType, sourceLevel, missingTypeNames, RECORD_INITIALIZATION);
+					this.tagBits |= TagBits.HasUnresolvedComponents;
 				}
 			}
 			IBinaryField[] iFields = binaryType.getFields();
@@ -1276,17 +1277,18 @@ public ReferenceBinding enclosingType() {  // should not delegate to prototype.
 }
 @Override
 public RecordComponentBinding[] components() {
+	if (!this.isRecord())
+		return NO_COMPONENTS;
 	if (!isPrototype()) {
-		return this.components = this.prototype.components;
+		return this.components = this.prototype.components();
 	}
-	if ((this.extendedTagBits & ExtendedTagBits.AreRecordComponentsComplete) != 0)
+	if ((this.tagBits & TagBits.HasUnresolvedComponents) == 0)
 		return this.components;
 
-	// Should we sort?
 	for (int i = this.components.length; --i >= 0;) {
 		resolveTypeFor(this.components[i]);
 	}
-	this.extendedTagBits |= ExtendedTagBits.AreRecordComponentsComplete;
+	this.tagBits &= ~TagBits.HasUnresolvedComponents;
 	return this.components;
 }
 // NOTE: the type of each field of a binary type is resolved when needed
@@ -1478,26 +1480,6 @@ public FieldBinding getField(char[] fieldName, boolean needResolve) {
 	}
 	FieldBinding field = ReferenceBinding.binarySearch(fieldName, this.fields);
 	return needResolve && field != null ? resolveTypeFor(field) : field;
-}
-
-@Override
-public RecordComponentBinding getRecordComponent(char[] name) {
-	if (this.components != null) {
-		for (RecordComponentBinding rcb : this.components) {
-			if (CharOperation.equals(name, rcb.name))
-				return rcb;
-		}
-	}
-	return null;
-}
-
-@Override
-public RecordComponentBinding getComponent(char[] componentName, boolean needResolve) {
-	if (!isPrototype())
-		return this.prototype.getComponent(componentName, needResolve);
-	// Note : components not sorted and hence not using binary search
-	RecordComponentBinding component = getRecordComponent(componentName);
-	return needResolve && component != null ? resolveTypeFor(component) : component;
 }
 
 /**
@@ -1846,17 +1828,14 @@ public TypeBinding prototype() {
 private boolean isPrototype() {
 	return this == this.prototype; //$IDENTITY-COMPARISON$
 }
-@Override
-public boolean isRecord() {
-	return (this.modifiers & ExtraCompilerModifiers.AccRecord) != 0;
-}
 
 @Override
 public MethodBinding getRecordComponentAccessor(char[] name) {
 	if (isRecord()) {
 		for (MethodBinding m : this.getMethods(name)) {
 			if (CharOperation.equals(m.selector, name)) {
-				return m;
+				if (m.parameters == null || m.parameters.length == 0)
+					return m;
 			}
 		}
 	}
@@ -2696,14 +2675,6 @@ public FieldBinding[] unResolvedFields() {
 
 	return this.fields;
 }
-
-@Override
-public RecordComponentBinding[] unResolvedComponents() {
-	if (!isPrototype())
-		return this.prototype.unResolvedComponents();
-	return this.components;
-}
-
 
 @Override
 public ModuleBinding module() {

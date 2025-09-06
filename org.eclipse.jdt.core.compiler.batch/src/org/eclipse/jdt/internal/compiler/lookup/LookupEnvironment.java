@@ -159,6 +159,7 @@ public class LookupEnvironment implements ProblemReasons, TypeConstants {
 		CHECK_AND_SET_IMPORTS,
 		CONNECT_TYPE_HIERARCHY,
 		SEAL_TYPE_HIERARCHY,
+		COLLATE_RECORD_COMPONENTS,
 		BUILD_FIELDS_AND_METHODS,
 		INTEGRATE_ANNOTATIONS_IN_HIERARCHY,
 		CHECK_PARAMETERIZED_TYPES;
@@ -188,6 +189,7 @@ public class LookupEnvironment implements ProblemReasons, TypeConstants {
 				case CHECK_AND_SET_IMPORTS -> scope.checkAndSetImports();
 				case CONNECT_TYPE_HIERARCHY -> scope.connectTypeHierarchy();
 				case SEAL_TYPE_HIERARCHY -> scope.sealTypeHierarchy();
+				case COLLATE_RECORD_COMPONENTS -> scope.collateRecordComponents();
 				case BUILD_FIELDS_AND_METHODS -> scope.buildFieldsAndMethods();
 				case INTEGRATE_ANNOTATIONS_IN_HIERARCHY -> scope.integrateAnnotationsInHierarchy();
 				case CHECK_PARAMETERIZED_TYPES -> scope.checkParameterizedTypes();
@@ -1473,6 +1475,7 @@ public RawTypeBinding createRawType(ReferenceBinding genericType, ReferenceBindi
 }
 
 public WildcardBinding createWildcard(ReferenceBinding genericType, int rank, TypeBinding bound, TypeBinding[] otherBounds, int boundKind) {
+	bound = normalizeWildcardBound(bound, boundKind);
 	if (genericType != null) {
 		AnnotationBinding[] annotations = genericType.typeAnnotations;
 		if (annotations != Binding.NO_ANNOTATIONS)
@@ -1482,11 +1485,29 @@ public WildcardBinding createWildcard(ReferenceBinding genericType, int rank, Ty
 }
 
 public CaptureBinding createCapturedWildcard(WildcardBinding wildcard, ReferenceBinding contextType, int start, int end, ASTNode cud, Supplier<Integer> idSupplier) {
+	wildcard = normalizeWildcard(wildcard);
 	return this.typeSystem.getCapturedWildcard(wildcard, contextType, start, end, cud, idSupplier);
 }
 
 public WildcardBinding createWildcard(ReferenceBinding genericType, int rank, TypeBinding bound, TypeBinding[] otherBounds, int boundKind, AnnotationBinding [] annotations) {
+	bound = normalizeWildcardBound(bound, boundKind);
 	return this.typeSystem.getWildcard(genericType, rank, bound, otherBounds, boundKind, annotations);
+}
+
+private TypeBinding normalizeWildcardBound(TypeBinding bound, int boundKind) {
+	if (boundKind == Wildcard.EXTENDS && bound.getClass() == CaptureBinding.class) {
+		CaptureBinding capture = (CaptureBinding) bound;
+		if (capture.firstBound != null && capture.otherUpperBounds() == Binding.NO_TYPES && capture.wildcard.boundKind() == Wildcard.EXTENDS)
+			return capture.firstBound;
+	}
+	return bound;
+}
+private WildcardBinding normalizeWildcard(WildcardBinding wildcard) {
+	if (wildcard.boundKind == Wildcard.EXTENDS
+			&& wildcard.bound instanceof CaptureBinding wildCap
+			&& wildCap.wildcard != null) // null happens for CaptureBinding18
+		return wildCap.wildcard;
+	return wildcard;
 }
 
 /**

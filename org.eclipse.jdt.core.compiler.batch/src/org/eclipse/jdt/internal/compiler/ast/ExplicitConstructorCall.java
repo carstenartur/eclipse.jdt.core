@@ -377,7 +377,7 @@ public class ExplicitConstructorCall extends Statement implements Invocation {
 				}
 				if (!receiverType.isEnum() &&
 						this.accessMode <= ExplicitConstructorCall.Super &&
-						receiverType instanceof LocalTypeBinding local) {
+						receiverType instanceof LocalTypeBinding local) { // local cannot be a record class
 					MethodScope allocationStaticEnclosing = scope.parent.nearestEnclosingStaticScope(); // Constructor scope already has static, start from parent scope
 					MethodScope typesEnclosingStaticScope = local.scope.nearestEnclosingStaticScope();
 					if (allocationStaticEnclosing != null && typesEnclosingStaticScope != null && allocationStaticEnclosing != typesEnclosingStaticScope)
@@ -521,9 +521,9 @@ public class ExplicitConstructorCall extends Statement implements Invocation {
 		boolean isInsideCCD = methodDecl.isCompactConstructor();
 		if (this.accessMode != ExplicitConstructorCall.ImplicitSuper) {
 			if (isInsideCCD)
-				scope.problemReporter().recordCompactConstructorHasExplicitConstructorCall(this);
+				scope.problemReporter().compactConstructorHasExplicitConstructorCall(this);
 			else
-				scope.problemReporter().recordCanonicalConstructorHasExplicitConstructorCall(this);
+				scope.problemReporter().canonicalConstructorHasExplicitConstructorCall(this);
 			return false;
 		}
 		return true;

@@ -265,9 +265,30 @@ public class ReferenceExpression extends FunctionalExpression implements IPolyEx
 		return (this.binding.isVarargs() ||
 				(isConstructorReference() && (this.receiverType.syntheticOuterLocalVariables() != null || this.shouldCaptureInstance)) ||
 				this.requiresBridges() || // bridges.
+				descriptorEncodesIntersectionType() ||
 				!isDirectCodeGenPossible());
 		// To fix: We should opt for direct code generation wherever possible.
 	}
+
+	private boolean descriptorEncodesIntersectionType() {
+		if (this.descriptor == null || this.descriptor.parameters == null || this.descriptor.parameters.length == 0)
+			return false;
+		for (TypeBinding parameter : this.descriptor.parameters) {
+			if (isIntersectionType(parameter))
+				return true;
+		}
+		return false;
+	}
+
+	private boolean isIntersectionType(TypeBinding parameter) {
+		if (parameter.isIntersectionType() || parameter.isIntersectionType18())
+			return true;
+		if (parameter instanceof TypeVariableBinding tvb) {
+			return isIntersectionType(tvb.upperBound());
+		}
+		return false;
+	}
+
 	private boolean isDirectCodeGenPossible() {
 		if (this.binding != null) {
 			if (isMethodReference() && this.syntheticAccessor == null) {
@@ -716,7 +737,7 @@ public class ReferenceExpression extends FunctionalExpression implements IPolyEx
         if (isMethodReference) {
         	someMethod = scope.getMethod(this.receiverType, this.selector, descriptorParameters, this);
         } else {
-        	if (this.receiverType instanceof LocalTypeBinding local) {
+        	if (this.receiverType instanceof LocalTypeBinding local && !local.isRecord()) { // local records are implicitly static and don't have enclosing instance
         		MethodScope enclosingMethodScope = local.scope.enclosingMethodScope();
         		if (enclosingMethodScope != null && !enclosingMethodScope.isStatic && scope.isInStaticContext()) {
         			scope.problemReporter().allocationInStaticContext(this, local);

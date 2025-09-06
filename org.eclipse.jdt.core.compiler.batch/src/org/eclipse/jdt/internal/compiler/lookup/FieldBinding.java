@@ -256,27 +256,6 @@ public Constant constant(Scope scope) {
 	}
 }
 
-public void fillInDefaultNonNullness(FieldDeclaration sourceField, Scope scope) {
-	if (this.type == null || this.type.isBaseType())
-		return;
-	LookupEnvironment environment = scope.environment();
-	if (environment.usesNullTypeAnnotations()) {
-		if (!this.type.acceptsNonNullDefault())
-			return;
-		if ( (this.type.tagBits & TagBits.AnnotationNullMASK) == 0) {
-			this.type = environment.createNonNullAnnotatedType(this.type);
-		} else if ((this.type.tagBits & TagBits.AnnotationNonNull) != 0) {
-			scope.problemReporter().nullAnnotationIsRedundant(sourceField);
-		}
-	} else {
-		if ( (this.tagBits & TagBits.AnnotationNullMASK) == 0 ) {
-			this.tagBits |= TagBits.AnnotationNonNull;
-		} else if ((this.tagBits & TagBits.AnnotationNonNull) != 0) {
-			scope.problemReporter().nullAnnotationIsRedundant(sourceField);
-		}
-	}
-}
-
 /** <pre>{@code
  * X<T> t   -->  LX<TT;>;
  * }</pre>
@@ -332,18 +311,17 @@ public long getAnnotationTagBits() {
 	return originalField.tagBits;
 }
 
-public final boolean isDefault() {
-	return !isPublic() && !isProtected() && !isPrivate();
+@Override
+public ReferenceBinding getDeclaringClass() {
+	return this.declaringClass;
 }
-/* Answer true if the receiver is a deprecated field
-*/
 
 /* Answer true if the receiver has default visibility
 */
-
-public final boolean isDeprecated() {
-	return (this.modifiers & ClassFileConstants.AccDeprecated) != 0;
+public final boolean isDefault() {
+	return !isPublic() && !isProtected() && !isPrivate();
 }
+
 /* Answer true if the receiver has private visibility
 */
 
@@ -364,18 +342,7 @@ public final boolean isOrEnclosedByPrivateType() {
 public final boolean isProtected() {
 	return (this.modifiers & ClassFileConstants.AccProtected) != 0;
 }
-/* Answer true if the receiver has public visibility
-*/
 
-public final boolean isPublic() {
-	return (this.modifiers & ClassFileConstants.AccPublic) != 0;
-}
-/* Answer true if the receiver is a static field
-*/
-
-public final boolean isStatic() {
-	return (this.modifiers & ClassFileConstants.AccStatic) != 0;
-}
 /* Answer true if the receiver is not defined in the source of the declaringClass
 */
 
@@ -419,8 +386,7 @@ public final int kind() {
 	return FIELD;
 }
 public boolean isRecordComponent() {
-	return this.declaringClass != null && this.declaringClass.isRecord() && !this.isStatic()
-			&& (this.modifiers & ExtraCompilerModifiers.AccRecord) != 0;
+	return this.declaringClass != null && this.declaringClass.isRecord() && !this.isStatic() && this instanceof SyntheticFieldBinding;
 }
 /* Answer true if the receiver is visible to the invocationPackage.
 */

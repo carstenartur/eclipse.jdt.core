@@ -2164,9 +2164,12 @@ public final class CompletionEngine
 							contextAccepted = true;
 							buildContext(importReference, null, parsedUnit, null, null);
 							if(!this.requestor.isIgnored(CompletionProposal.KEYWORD)) {
-								setSourceAndTokenRange(importReference.sourceStart, importReference.sourceEnd);
-								CompletionOnKeyword keyword = (CompletionOnKeyword)importReference;
-								findKeywords(keyword.getToken(), keyword.getPossibleKeywords(), false, parsedUnit.currentPackage != null);
+								// do not suggest `import` or `package` keywords if the cursor is before an existing package declaration
+								if (parsedUnit.currentPackage == null || importReference.sourceStart >= parsedUnit.currentPackage.sourceStart) {
+									setSourceAndTokenRange(importReference.sourceStart, importReference.sourceEnd);
+									CompletionOnKeyword keyword = (CompletionOnKeyword)importReference;
+									findKeywords(keyword.getToken(), keyword.getPossibleKeywords(), false, parsedUnit.currentPackage != null);
+								}
 							}
 							debugPrintf();
 							return;
@@ -3884,7 +3887,7 @@ public final class CompletionEngine
 			checkCancel();
 
 			// see if we can find argument type at position in case if we are at a vararg.
-			checkForVarargExpectedTypes(astNodeParent, scope);
+			checkForVarargExpectedTypes(astNodeParent, astNode, scope);
 			findVariablesAndMethods(this.completionToken, scope, singleNameReference, scope, insideTypeAnnotation,
 					singleNameReference.isInsideAnnotationAttribute, true, new ObjectVector());
 
@@ -3920,8 +3923,11 @@ public final class CompletionEngine
 		}
 	}
 
-	private void checkForVarargExpectedTypes(ASTNode astNodeParent, Scope scope) {
-		if (astNodeParent instanceof MessageSend m && this.expectedTypesPtr == -1) {
+	private void checkForVarargExpectedTypes(ASTNode astNodeParent, ASTNode astNode, Scope scope) {
+		if (astNodeParent instanceof MessageSend m
+				&& m.arguments() != null
+				&& Stream.of(m.arguments()).anyMatch(astNode::equals)
+				&& this.expectedTypesPtr == -1) {
 			final ObjectVector methodsToSearchOn = new ObjectVector();
 			final CompletionRequestor actual = this.requestor;
 			this.requestor = new CompletionRequestor(true) {
@@ -6337,6 +6343,16 @@ public final class CompletionEngine
 		}
 	}
 
+	private boolean argumentMismatch(AbstractVariableDeclaration[] arguments, char[][] parameterTypes) {
+		int argumentsLength = arguments == null ? 0 : arguments.length;
+		if (parameterTypes.length != argumentsLength)
+			return true;
+		for (int j = 0; j < argumentsLength; j++)
+			if (!CharOperation.equals(getTypeName(arguments[j].type), parameterTypes[j]))
+				return true;
+		return false;
+	}
+
 	private char[] getResolvedSignature(char[][] parameterTypes, char[] fullyQualifiedTypeName, int parameterCount, Scope scope) {
 		char[][] cn = CharOperation.splitOn('.', fullyQualifiedTypeName);
 
@@ -6374,25 +6390,23 @@ public final class CompletionEngine
 					TypeDeclaration typeDeclaration = refBinding.scope.referenceContext;
 					AbstractMethodDeclaration[] methods = typeDeclaration.methods;
 
+					if (methods == null)
+						return null;
+
 					next : for (AbstractMethodDeclaration method : methods) {
-						if (!method.isConstructor()) continue next;
-
-						Argument[] arguments = method.arguments;
-						int argumentsLength = arguments == null ? 0 : arguments.length;
-
-						if (parameterCount != argumentsLength) continue next;
-
-						for (int j = 0; j < argumentsLength; j++) {
-							char[] argumentTypeName = getTypeName(arguments[j].type);
-
-							if (!CharOperation.equals(argumentTypeName, parameterTypes[j])) {
-								continue next;
-							}
-						}
-
+						if (!method.isConstructor() || argumentMismatch(method.arguments(true), parameterTypes))
+							continue next;
 						refBinding.resolveTypesFor(method.binding); // force resolution
 						if (method.binding == null) continue next;
 						return getSignature(method.binding);
+					}
+					if (typeDeclaration.isRecord() && !argumentMismatch(typeDeclaration.recordComponents, parameterTypes)) {
+						MethodBinding [] constructors = refBinding.getMethods(TypeConstants.INIT, parameterTypes.length);
+						if (constructors != null) {
+							for (MethodBinding constructor : constructors)
+								if (constructor instanceof SyntheticMethodBinding)
+									return getSignature(constructor);
+						}
 					}
 				}
 			}
@@ -9584,6 +9598,30 @@ public final class CompletionEngine
 				// Standard proposal
 				if(!this.isIgnored(CompletionProposal.METHOD_REF, missingElements != null) && (this.assistNodeInJavadoc & CompletionOnJavadoc.ONLY_INLINE_TAG) == 0) {
 					InternalCompletionProposal proposal =  createProposal(completionOnReferenceExpressionName ? CompletionProposal.METHOD_NAME_REFERENCE : CompletionProposal.METHOD_REF, this.actualCompletionPosition);
+
+					if (method.declaringClass.isRecord() && method instanceof SyntheticMethodBinding smb) {
+						MethodBinding[] overridden = null;
+						switch(smb.purpose) {
+							case SyntheticMethodBinding.RecordOverrideToString:
+								overridden = scope.getJavaLangObject().getMethods(TypeConstants.TOSTRING);
+								break;
+							case SyntheticMethodBinding.RecordOverrideHashCode:
+								overridden = scope.getJavaLangObject().getMethods(TypeConstants.HASHCODE);
+								break;
+							case SyntheticMethodBinding.RecordOverrideEquals:
+								overridden = scope.getJavaLangObject().getMethods(TypeConstants.EQUALS);
+								break;
+							case SyntheticMethodBinding.RecordComponentReadAccess:
+								proposal.flagRecordComponentAccessor();
+								break;
+							default:
+								break;
+						}
+						if (overridden != null && overridden.length > 0) {
+							method = overridden[0];
+						}
+					}
+
 					proposal.setBinding(method);
 					proposal.setDeclarationSignature(getSignature(method.declaringClass));
 					proposal.setSignature(getSignature(method));
@@ -10895,6 +10933,9 @@ public final class CompletionEngine
 		TypeBinding erasure =  method.declaringClass.erasure();
 		if(!(erasure instanceof ReferenceBinding)) return null;
 
+		if (method.isCanonicalConstructor() && method instanceof SyntheticMethodBinding synthesizedCCtor)
+			return synthesizedCCtor.parameterNames;
+
 		char[][] parameterNames = null;
 
 		int length = parameterTypeNames.length;
@@ -10913,7 +10954,7 @@ public final class CompletionEngine
 					AbstractMethodDeclaration methodDecl = parsedType.declarationOf(method.original());
 
 					if (methodDecl != null){
-						Argument[] arguments = methodDecl.arguments;
+						AbstractVariableDeclaration[] arguments = methodDecl.arguments(true);
 						parameterNames = new char[length][];
 
 						for(int i = 0 ; i < length ; i++){

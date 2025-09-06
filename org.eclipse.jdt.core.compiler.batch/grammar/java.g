@@ -656,7 +656,7 @@ TypeDeclaration ::= ';'
 -----------------------------------------------
 TypeDeclaration -> EnumDeclaration
 TypeDeclaration -> AnnotationTypeDeclaration
--- Java 14 feature
+-- Java 16 feature
 TypeDeclaration -> RecordDeclaration
 /:$readableName TypeDeclaration:/
 
@@ -774,7 +774,7 @@ ClassMemberDeclaration -> InterfaceDeclaration
 -- 1.5 feature
 ClassMemberDeclaration -> EnumDeclaration
 ClassMemberDeclaration -> AnnotationTypeDeclaration
--- Java 14 feature
+-- Java 16 feature
 ClassMemberDeclaration -> RecordDeclaration
 /:$readableName ClassMemberDeclaration:/
 
@@ -1172,10 +1172,7 @@ RecordComponentHeaderRightParen ::= ')'
 /:$recovery_template ):/
 /:$compliance 16:/
 
-RecordHeader ::= '(' RecordComponentListOpt RecordComponentHeaderRightParen
-/.$putCase consumeRecordHeader(); $break ./
-/:$readableName RecordHeader:/
-/:$compliance 16:/
+RecordHeader -> '(' RecordComponentListOpt RecordComponentHeaderRightParen
 
 RecordComponentListOpt ::= $empty
 /.$putCase consumeRecordComponentsopt(); $break ./
@@ -3122,5 +3119,3 @@ UNDERSCORE ::= '_'
 
 $end
 -- need a carriage return after the $end
-
-

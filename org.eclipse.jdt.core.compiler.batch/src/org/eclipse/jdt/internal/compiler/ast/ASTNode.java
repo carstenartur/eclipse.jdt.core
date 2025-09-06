@@ -76,7 +76,7 @@ public abstract class ASTNode implements TypeConstants, TypeIds {
 	public final static int Bit7 = 0x40;					// depth (name ref, msg) | need runtime checkcast (cast expression) | label used (labelStatement) | needFreeReturn (AbstractMethodDeclaration) | Used in Pattern Guard expression (NameReference)
 	public final static int Bit8 = 0x80;					// depth (name ref, msg) | unsafe cast (cast expression) | is default constructor (constructor declaration) | isElseStatementUnreachable (if statement)
 	public final static int Bit9 = 0x100;				// depth (name ref, msg) | operator (operator) | is local type (type decl) | isThenStatementUnreachable (if statement) | can be static
-	public final static int Bit10= 0x200;				// depth (name ref, msg) | operator (operator) | is anonymous type (type decl) | is implicit constructor (constructor)
+	public final static int Bit10= 0x200;				// depth (name ref, msg) | operator (operator) | is anonymous type (type decl)
 	public final static int Bit11 = 0x400;				// depth (name ref, msg) | operator (operator) | is member type (type decl)
 	public final static int Bit12 = 0x800;				// depth (name ref, msg) | operator (operator) | has abstract methods (type decl)
 	public final static int Bit13 = 0x1000;			// depth (name ref, msg) | operator (operator) | is secondary type (type decl)
@@ -159,6 +159,7 @@ public abstract class ASTNode implements TypeConstants, TypeIds {
 	public static final int IsForeachElementVariable = Bit5;
 	public static final int ShadowsOuterLocal = Bit22;
 	public static final int IsAdditionalDeclarator = Bit23;
+	public static final int IsPatternVariable = Bit24;
 
 	// for name refs or local decls
 	public static final int FirstAssignmentToLocal = Bit4;
@@ -177,7 +178,6 @@ public abstract class ASTNode implements TypeConstants, TypeIds {
 	public static final int IsSecretYieldValueUsage = Bit5;
 
 	// for statements
-//	public static final int IsImplicit = Bit11; // record declaration
 	public static final int IsReachable = Bit32;
 	public static final int LabelUsed = Bit7;
 	public static final int DocumentedFallthrough = Bit30; // switch statement
@@ -200,6 +200,9 @@ public abstract class ASTNode implements TypeConstants, TypeIds {
 	// for type, method and field declarations
 	public static final int HasLocalType = Bit2; // cannot conflict with AddAssertionMASK
 	public static final int HasBeenResolved = Bit5; // field decl only (to handle forward references)
+
+	// for lambda expressions
+	public static final int ArgumentsTypeElided = Bit2; // A lambda with var typed arguments is considered to be type elided, but the Arguments themselves are considered var typed.
 
 	// for expression
 	public static final int ParenthesizedSHIFT = 21; // Bit22 -> Bit29
@@ -237,7 +240,6 @@ public abstract class ASTNode implements TypeConstants, TypeIds {
 	// for constructor declaration
 	public static final int IsDefaultConstructor = Bit8;
 	public static final int IsCanonicalConstructor = Bit10; // record declaration
-	public static final int IsImplicit = Bit11; // record declaration / generated statements in compact constructor
 
 	// for compilation unit
 	public static final int HasAllMethodBodies = Bit5;
@@ -311,7 +313,6 @@ public abstract class ASTNode implements TypeConstants, TypeIds {
 	public static final int InsideExpressionStatement = Bit21;
 
 	// for annotation reference, signal if annotation was created from a default:
-	// also used for implicit method creation of records Java 14
 	public static final int IsSynthetic = ASTNode.Bit7;
 
 	// for all reference context entries.
@@ -322,6 +323,7 @@ public abstract class ASTNode implements TypeConstants, TypeIds {
 	public static final RecordComponent [] NO_RECORD_COMPONENTS = new RecordComponent [0];
 	public static final TypePattern[] NO_TYPE_PATTERNS = new TypePattern[0];
 	public static final LocalVariableBinding[] NO_VARIABLES = new LocalVariableBinding[0];
+	public static final Annotation[] NO_ANNOTATIONS = new Annotation[0];
 
 	public ASTNode() {
 
@@ -808,7 +810,7 @@ public abstract class ASTNode implements TypeConstants, TypeIds {
 				case Binding.FIELD :
 				case Binding.RECORD_COMPONENT :
 				case Binding.LOCAL :
-					if ((recipient.extendedTagBits & ExtendedTagBits.AnnotationResolved) != 0) return annotations;
+					if (ExtendedTagBits.areAllAnnotationsResolved(recipient.extendedTagBits)) return annotations;
 					recipient.extendedTagBits |= ExtendedTagBits.AllAnnotationsResolved;
 					if (length > 0) {
 						annotations = new AnnotationBinding[length];
@@ -847,7 +849,7 @@ public abstract class ASTNode implements TypeConstants, TypeIds {
 								annotations[j] = annot.getCompilerAnnotation();
 							}
 						}
-						break;
+						return annotations;
 					case Binding.LOCAL :
 						LocalVariableBinding local = (LocalVariableBinding) recipient;
 						// Note for JDK>=14, this could be LVB or RCB, hence typecasting to VB
@@ -865,7 +867,7 @@ public abstract class ASTNode implements TypeConstants, TypeIds {
 							}
 						} else if (annotations != null) {
 							// One of the annotations at least is a SuppressWarnings annotation
-							LocalDeclaration localDeclaration = local.declaration;
+							AbstractVariableDeclaration localDeclaration = local.declaration;
 							int declarationSourceEnd = localDeclaration.declarationSourceEnd;
 							int declarationSourceStart = localDeclaration.declarationSourceStart;
 							for (int j = 0; j < length; j++) {
@@ -888,9 +890,10 @@ public abstract class ASTNode implements TypeConstants, TypeIds {
 						// copy the se8 annotations.
 						if (annotationRecipient instanceof RecordComponentBinding && copySE8AnnotationsToType)
 							copySE8AnnotationsToType(scope, recipient, sourceAnnotations, false);
-						break;
+						return annotations;
+					default:
+						annotations[i] = annotation.compilerAnnotation;
 				}
-				return annotations;
 			} else {
 				annotation.recipient = recipient;
 				annotation.resolveType(scope);
@@ -1153,8 +1156,8 @@ public abstract class ASTNode implements TypeConstants, TypeIds {
 						recordComponent.bits |= HasTypeAnnotations;
 						recordComponent.type.bits |= HasTypeAnnotations;
 						recordComponentBinding.type = mergeAnnotationsIntoType(scope, se8Annotations, se8nullBits, se8NullAnnotation, recordComponent.type,
-								Binding.DefaultLocationField, recordComponentBinding.type);
-						if(scope.environment().usesNullTypeAnnotations()) { //TODO Bug 562478
+								Binding.DefaultLocationRecordComponent, recordComponentBinding.type);
+						if (scope.environment().usesNullTypeAnnotations()) { //TODO Bug 562478
 							recordComponentBinding.tagBits &= ~(se8nullBits);
 						}
 					}
@@ -1285,8 +1288,9 @@ public abstract class ASTNode implements TypeConstants, TypeIds {
 			}
 			oldLeafType = oldLeafType.withoutToplevelNullAnnotation();
 		} else if (se8nullBits == TagBits.AnnotationNonNull
-					&& location != Binding.DefaultLocationReturnType // normal return type cases are handled in MethodBinding.fillInDefaultNonNullness18()
-					&& location != Binding.DefaultLocationField      // normal field type cases are handled in FieldBinding.fillInDefaultNonNullness()
+					&& location != Binding.DefaultLocationReturnType      // normal return type cases are handled in MethodBinding.fillInDefaultNonNullness18()
+					&& location != Binding.DefaultLocationField           // normal field type cases are handled in VariableBinding.fillInDefaultNonNullness()
+					&& location != Binding.DefaultLocationRecordComponent // record component type cases are handled in VariableBinding.fillInDefaultNonNullness()
 					&& scope.hasDefaultNullnessForType(typeRef.resolvedType, location, typeRef.sourceStart)) {
 			scope.problemReporter().nullAnnotationIsRedundant(typeRef, new Annotation[] { se8NullAnnotation });
 		}
@@ -1334,6 +1338,8 @@ public abstract class ASTNode implements TypeConstants, TypeIds {
 										break;
 									}
 								}
+								annotations[i].recipient = recipient;
+								annotations[i].resolveType(scope); // allow downstream access to since & forRemoval
 							}
 							recipient.tagBits |= deprecationTagBits;
 						}
@@ -1351,7 +1357,7 @@ public abstract class ASTNode implements TypeConstants, TypeIds {
 			if (annotations != null) {
 				int length;
 				if ((length = annotations.length) >= 0) {
-					if ((recipient.tagBits & ExtendedTagBits.NullDefaultAnnotationResolved) != 0) return;
+					if ((recipient.extendedTagBits & ExtendedTagBits.NullDefaultAnnotationResolved) != 0) return;
 					for (int i = 0; i < length; i++) {
 						TypeReference annotationTypeRef = annotations[i].type;
 						// only resolve type name if 'NonNullByDefault' last token (or corresponding configured annotation name)

@@ -1477,6 +1477,112 @@ public void testGH4308() {
 		},
 		"replay");
 }
+public void testGH4392() {
+	runConformTest(new String[] {
+			"AFactory.java",
+			"""
+			public abstract class AFactory<T> {
+
+			    public <U extends T> U getProcess(Object object) {
+			        return getProcess(object.getClass()); // Type mismatch: cannot convert from T to U
+			    }
+
+			    public abstract <U extends T> U getProcess(Class<?> classeObject);
+
+			}
+			"""});
+}
+public void testGH4402() {
+	runConformTest(new String[] {
+			"Main.java",
+			"""
+			import java.util.Collection;
+
+			public class Main {
+
+				void test() {
+					ArrayNode results = new ArrayNode();
+
+					// those first two compile fine
+					assertThat(results, jsonArray(empty()));
+					assertThat(results, jsonArray(contains(jsonObject().where("Id", jsonText("dataset-a")),
+							jsonObject().where("Id", jsonText("dataset-b")))));
+					/*
+					 * this one fails compilation:
+					 * The method jsonArray(Main.Matcher<? super Collection<? extends Main.JsonNode>>) in the type Main is not applicable for the arguments (Main.Matcher<Iterable<? extends capture#3-of ? extends Main.JsonNode>>)
+					 *
+					 * However it will compile fine if I comment out lines 12-13
+					 */
+					assertThat(results, jsonArray(contains(jsonObject().where("Id", jsonText("dataset-c")))));
+					/*
+					 * this one fails compilation:
+					 * The method jsonArray(Main.Matcher<? super Collection<? extends Main.JsonNode>>) in the type Main is not applicable for the arguments (Main.Matcher<Iterable<? extends capture#3-of ? extends Main.JsonNode>>)
+					 *
+					 * However it will compile fine if I comment out lines 12-13 AND 20
+					 */
+					assertThat(results, jsonArray(contains(jsonObject().where("Id", jsonText("dataset-@1")),
+							jsonObject().where("Id", jsonText("dataset-@2")))));
+				}
+
+				public static abstract class JsonNode { }
+				public static class ArrayNode extends ContainerNode<ArrayNode> { }
+				public static abstract class ContainerNode<T extends ContainerNode<T>> extends JsonNode { }
+				public class ObjectNode extends ContainerNode<ObjectNode> { }
+				public class TextNode extends JsonNode { }
+				public interface Matcher<T> { }
+
+				public static <E> Matcher<java.util.Collection<? extends E>> empty() { return null; }
+
+				public static <T> void assertThat(T actual, Matcher<? super T> matcher) { }
+
+				@SafeVarargs
+				public static <E> Matcher<java.lang.Iterable<? extends E>> contains(Matcher<? super E>... itemMatchers) { return null; }
+
+				public static Matcher<JsonNode> jsonArray(Matcher<? super Collection<? extends JsonNode>> elementsMatcher) { return null; }
+
+				public static IsJsonObject jsonObject() { return null; }
+
+				public static Matcher<JsonNode> jsonText(String text) { return null; }
+
+				public static class IsJsonArray extends AbstractJsonNodeMatcher<ArrayNode> { }
+
+				public static class IsJsonObject extends AbstractJsonNodeMatcher<ObjectNode> {
+					public IsJsonObject where(String key, Matcher<? super JsonNode> valueMatcher) {
+						return null;
+					}
+				}
+
+				public static class IsJsonText extends AbstractJsonNodeMatcher<TextNode> { }
+				public static abstract class AbstractJsonNodeMatcher<A extends JsonNode> implements Matcher<JsonNode> { }
+			}
+			"""
+		},
+		"");
+}
+public void testGH4346() {
+	if (this.complianceLevel < ClassFileConstants.JDK16)
+		return; // uses records
+	runConformTest(new String[] {
+			"X.java",
+			"""
+			import java.util.function.Function;
+			public class X {
+				public static <T> W1<W2<T>> main(String[] args) {
+					return m(m2(), W2::t, W2::new);
+				}
+
+				public static <T1, T2> W1<T1> m(W1<T2> w1, Function<T1, T2> f1, Function<T2, T1> f2) {
+					return null;
+				}
+				private static <T> W1<W1<T>> m2() {
+					return null;
+				}
+				private record W1<T>(T t) {}
+				private record W2<T>(W1<T> t) {}
+			}
+			"""
+	});
+}
 public static Class<GenericsRegressionTest_9> testClass() {
 	return GenericsRegressionTest_9.class;
 }

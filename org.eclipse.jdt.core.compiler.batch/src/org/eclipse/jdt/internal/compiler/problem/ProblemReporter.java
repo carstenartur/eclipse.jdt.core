@@ -443,6 +443,7 @@ public static int getIrritant(int problemID) {
 			return CompilerOptions.AutoBoxing;
 
 		case IProblem.MissingEnumConstantCase :
+		case IProblem.SwitchExpressionMissingEnumConstantCaseDespiteDefault :
 		case IProblem.MissingEnumConstantCaseDespiteDefault :	// this one is further protected by CompilerOptions.reportMissingEnumCaseDespiteDefault
 			return CompilerOptions.MissingEnumConstantCase;
 
@@ -6625,7 +6626,7 @@ public void missingEnumConstantCase(SwitchExpression switchExpression, FieldBind
 }
 private void missingSwitchExpressionEnumConstantCase(CaseStatement defaultCase, FieldBinding enumConstant, ASTNode expression) {
 	this.handle(
-			IProblem.SwitchExpressionsYieldMissingEnumConstantCase,
+			defaultCase == null ? IProblem.SwitchExpressionsYieldMissingEnumConstantCase : IProblem.SwitchExpressionMissingEnumConstantCaseDespiteDefault,
 			new String[] {new String(enumConstant.declaringClass.readableName()), new String(enumConstant.name) },
 			new String[] {new String(enumConstant.declaringClass.shortReadableName()), new String(enumConstant.name) },
 			expression.sourceStart,
@@ -11481,17 +11482,12 @@ public void invalidServiceRef(int problem, TypeReference type) {
 		NoArgument, new String[] { CharOperation.charToString(type.resolvedType.readableName()) },
 		type.sourceStart, type.sourceEnd);
 }
-public void modifierRequiresJavaBase(RequiresStatement stat, JavaFeature moduleImports) {
-	if (moduleImports != null) {
-		// don't use validateJavaFeatureSupport() as we want to give a more specific message if not enabled
-		if (moduleImports.isSupported(this.options)) {
-			previewFeatureUsed(stat.sourceStart, stat.sourceEnd);
-			return;
-		}
-		if (moduleImports.matchesCompliance(this.options)) {
-			this.handle(IProblem.ModifierOnRequiresJavaBasePreview, NoArgument, NoArgument, stat.modifiersSourceStart, stat.sourceEnd);
-			return;
-		}
+public void modifierRequiresJavaBase(RequiresStatement stat, JavaFeature moduleImportsFeature) {
+	// don't use validateJavaFeatureSupport() as we want to give a more specific message if not enabled
+	if (moduleImportsFeature != null) {
+		if (!moduleImportsFeature.isSupported(this.options))
+			this.handle(IProblem.ModifierTransitiveOnRequiresJavaBaseBelow25, NoArgument, NoArgument, stat.modifiersSourceStart, stat.sourceEnd);
+		return;
 	}
 	this.handle(IProblem.ModifierOnRequiresJavaBase, NoArgument, NoArgument, stat.modifiersSourceStart, stat.sourceEnd);
 }
@@ -11933,7 +11929,7 @@ public void illegalExplicitAssignmentInCompactConstructor(FieldBinding field, Fi
 		fieldRef.sourceStart,
 		fieldRef.sourceEnd);
 }
-public void missingExplicitConstructorCallInNonCanonicalConstructor(ASTNode location) {
+public void missingThisCallInNonCanonicalConstructor(ASTNode location) {
 	this.handle(
 		IProblem.RecordMissingExplicitConstructorCallInNonCanonicalConstructor,
 		NoArgument,
@@ -12038,7 +12034,7 @@ public void duplicatePermittedType(TypeReference reference, ReferenceBinding sup
 		reference.sourceEnd);
 }
 
-public void sealedClassNotDirectSuperClassOf(ReferenceBinding type, TypeReference reference, SourceTypeBinding superType) {
+public void sealedClassNotDirectSuperClassOf(TypeBinding type, TypeReference reference, SourceTypeBinding superType) {
 	if ((type.tagBits & TagBits.HierarchyHasProblems) == 0 && (superType.tagBits & TagBits.HierarchyHasProblems) == 0) {
 		this.handle(IProblem.SealedNotDirectSuperClass,
 				new String[] { new String(type.sourceName()), new String(superType.readableName()) },
@@ -12078,7 +12074,7 @@ public void missingPermitsClause(SourceTypeBinding type, ASTNode node) {
 			node.sourceEnd);
 }
 
-public void sealedInterfaceNotDirectSuperInterfaceOf(ReferenceBinding type, TypeReference reference, SourceTypeBinding superType) {
+public void sealedInterfaceNotDirectSuperInterfaceOf(TypeBinding type, TypeReference reference, SourceTypeBinding superType) {
 	if ((type.tagBits & TagBits.HierarchyHasProblems) == 0 && (superType.tagBits & TagBits.HierarchyHasProblems) == 0) {
 		this.handle(IProblem.SealedNotDirectSuperInterface,
 				new String[] { new String(type.sourceName()), new String(superType.readableName()) },

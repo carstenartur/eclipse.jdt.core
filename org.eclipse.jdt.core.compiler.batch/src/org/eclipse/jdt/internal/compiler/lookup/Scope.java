@@ -464,8 +464,10 @@ public abstract class Scope {
 		TypeVariableBinding tv1 = getTypeVariable(iv1 != null ? iv1.typeParameter : t1);
 		TypeVariableBinding tv2 = getTypeVariable(iv2 != null ? iv2.typeParameter : t2);
 		if (tv1 != null) {
-			if (tv2 != null)
-				return iv1 == null && iv2 == null; // two real type variables
+			if (tv2 != null && iv1 == null && iv2 == null) { // two real type variables
+				// OK only if one is a true subtype of the other:
+				return !tv1.isSubtypeOf(tv2, false) && !tv2.isSubtypeOf(tv1, false);
+			}
 			return isTypeVariableClassConflict(tv1, iv1 != null, t2);
 		} else if (tv2 != null) {
 			return isTypeVariableClassConflict(tv2, iv2 != null, t1);
@@ -2100,11 +2102,8 @@ public abstract class Scope {
 									if (fieldBinding.isValidBinding()) {
 										if (!fieldBinding.isStatic()) {
 											if (insideConstructorCall) {
-												if (invocationSite instanceof ASTNode node
-														&& (node.bits & ASTNode.IsStrictlyAssigned) != 0
-														&& JavaFeature.FLEXIBLE_CONSTRUCTOR_BODIES.matchesCompliance(compilerOptions())) {
-													// enablement check for assignment deferred to Reference.checkFieldAccessInEarlyConstructionContext()
-												} else if (!JavaFeature.FLEXIBLE_CONSTRUCTOR_BODIES.isSupported(compilerOptions())) {
+												// in 25+ check for assignment legality is deferred to Reference.checkFieldAccessInEarlyConstructionContext()
+												if (!JavaFeature.FLEXIBLE_CONSTRUCTOR_BODIES.isSupported(compilerOptions())) {
 													insideProblem =
 														new ProblemFieldBinding(
 															fieldBinding, // closest match

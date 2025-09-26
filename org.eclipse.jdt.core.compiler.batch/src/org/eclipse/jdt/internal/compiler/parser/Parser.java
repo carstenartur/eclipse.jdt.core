@@ -4655,7 +4655,7 @@ protected void consumeInternalCompilationUnitWithPotentialImplicitlyDeclaredClas
 			}
 		}
 		if (!methods.isEmpty() || !fields.isEmpty()) {
-			problemReporter().validateJavaFeatureSupport(JavaFeature.IMPLICIT_CLASSES_AND_INSTANCE_MAIN_METHODS, 0, 0);
+			problemReporter().validateJavaFeatureSupport(JavaFeature.COMPACT_SOURCE_AND_INSTANCE_MAIN_METHODS, 0, 0);
 			ImplicitTypeDeclaration implicitClass = new ImplicitTypeDeclaration(this.compilationUnit.compilationResult);
 			implicitClass.methods = methods.toArray(AbstractMethodDeclaration[]::new);
 			implicitClass.createDefaultConstructor(false, true);
@@ -11605,6 +11605,11 @@ protected void parse() {
 try {
 	this.scanner.setActiveParser(this);
 	ProcessTerminals : for (;;) {
+		if (Thread.currentThread().isInterrupted()) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("[" + Thread.currentThread().getName() + "] Task interrupted", new InterruptedException()); //$NON-NLS-1$ //$NON-NLS-2$
+        }
+
 		int stackLength = this.stack.length;
 		if (++this.stateStackTop >= stackLength) {
 			System.arraycopy(

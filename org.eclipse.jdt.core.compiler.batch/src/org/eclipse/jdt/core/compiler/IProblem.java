@@ -2186,11 +2186,8 @@ void setSourceStart(int sourceStart);
 	int ExportingForeignPackage = ModuleRelated + 1320;
 	/** @since 3.42*/
 	int ModifierOnRequiresJavaBase = ModuleRelated + 1321;
-	/**
-	 * @since 3.42
-	 * @noreference related to preview feature module imports
-	 */
-	int ModifierOnRequiresJavaBasePreview = ModuleRelated + 1322;
+	/** @since 3.44 */
+	int ModifierTransitiveOnRequiresJavaBaseBelow25 = ModuleRelated + 1322;
 
 
 	/** @since 3.14 */
@@ -2495,6 +2492,8 @@ void setSourceStart(int sourceStart);
 	int SwitchExpressionsContinueOutOfSwitchExpression  = Syntax + 1723;
 	/** @since 3.22 */
 	int SwitchExpressionsReturnWithinSwitchExpression  = Syntax + 1724;
+	/** @since 3.44 */
+	int SwitchExpressionMissingEnumConstantCaseDespiteDefault = FieldRelated + 1725;
 
 	/* records - begin */
 

@@ -54,7 +54,7 @@ public class ClassScope extends Scope {
 	java.util.ArrayList<TypeReference> deferredBoundChecks;
 	public boolean resolvingPolyExpressionArguments = false;
 	/**
-	 * This is the primary flag for detection of early construction contexts (JEP 482).
+	 * This is the primary flag for detection of early construction contexts (JEP 513).
 	 * It is temporarily set on the scope of a class while processing statements of this class's
 	 * early construction context (during resolveType(), analyseCode() and generateCode())
 	 * <p>Main access is via {@link Scope#enterEarlyConstructionContext()}, {@link Scope#leaveEarlyConstructionContext()}
@@ -63,7 +63,7 @@ public class ClassScope extends Scope {
 	 * into {@code scopesInEarlyConstruction}, for use during generateCode(), which doesn't have the
 	 * context of the lambda declaration.
 	 * </p>
-	 * <p>All this is always active at compliance 23, see {@link JavaFeature#FLEXIBLE_CONSTRUCTOR_BODIES}
+	 * <p>All this is always active at compliance 23+, see {@link JavaFeature#FLEXIBLE_CONSTRUCTOR_BODIES}
 	 * for details on where enablement is actually checked.</p>
 	 */
 	public boolean insideEarlyConstructionContext = false;
@@ -1215,27 +1215,6 @@ public class ClassScope extends Scope {
 					ReferenceBinding permittedType = findPermittedtype(permittedTypeRef);
 					if (permittedType == null || !permittedType.isValidBinding()) {
 						continue nextPermittedType;
-					}
-
-					if (sourceType.isClass()) {
-						ReferenceBinding superClass = permittedType.superclass();
-						superClass = superClass == null ? null : superClass.actualType();
-						if (!TypeBinding.equalsEquals(sourceType, superClass))
-							problemReporter().sealedClassNotDirectSuperClassOf(permittedType, permittedTypeRef, sourceType);
-					} else if (sourceType.isInterface()) {
-						ReferenceBinding[] superInterfaces = permittedType.superInterfaces();
-						boolean hierarchyOK = false;
-						if (superInterfaces != null) {
-							for (ReferenceBinding superInterface : superInterfaces) {
-								superInterface = superInterface == null ? null : superInterface.actualType();
-								if (TypeBinding.equalsEquals(sourceType, superInterface)) {
-									hierarchyOK = true;
-									break;
-								}
-							}
-							if (!hierarchyOK)
-								problemReporter().sealedInterfaceNotDirectSuperInterfaceOf(permittedType, permittedTypeRef, sourceType);
-						}
 					}
 
 					checkSealingProximity(permittedType, permittedTypeRef, sourceType);

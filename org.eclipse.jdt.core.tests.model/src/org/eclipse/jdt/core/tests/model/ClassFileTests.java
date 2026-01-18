@@ -1686,4 +1686,61 @@ public void testGenericFieldGetTypeSignature() throws JavaModelException {
 		}
 	}
 
+	/*
+	 * Ensures that stale buffers from deleted/recreated jars are properly detected and replaced.
+	 * This test simulates the race condition where a jar file is deleted and recreated with the same path,
+	 * and verifies that stale cached buffers are not reused.
+	 * See https://github.com/eclipse-jdt/eclipse.jdt.ui/issues/736
+	 */
+	public void testStaleBufferAfterJarRecreation() throws CoreException, IOException {
+		IJavaProject project = null;
+		try {
+			// Create a test project
+			project = createJavaProject("TestStaleBuffer", new String[0], new String[] {"JCL18_LIB"}, "", JavaCore.VERSION_1_8);
+			
+			// Create initial jar with source
+			String[] pathAndContents = new String[] {
+				"pack/age/X.java",
+				"package pack.age;\n" +
+				"public interface X {\n" +
+				"  String test();\n" +
+				"}"
+			};
+			addLibrary(project, "testlib.jar", "testlibsrc.zip", pathAndContents, JavaCore.VERSION_1_8);
+			
+			// Get the class file and trigger buffer creation
+			IPackageFragmentRoot root = project.getPackageFragmentRoot(project.getProject().getFile("testlib.jar"));
+			IOrdinaryClassFile classFile1 = root.getPackageFragment("pack.age").getOrdinaryClassFile("X.class");
+			String source1 = classFile1.getSource();
+			assertNotNull("Source should be available for first jar", source1);
+			assertTrue("Source should contain 'test()' method", source1.contains("test()"));
+			
+			// Delete and recreate the jar with different content
+			removeLibrary(project, "testlib.jar", "testlibsrc.zip");
+			String[] newPathAndContents = new String[] {
+				"pack/age/X.java",
+				"package pack.age;\n" +
+				"public interface X {\n" +
+				"  String newMethod();\n" +
+				"}"
+			};
+			addLibrary(project, "testlib.jar", "testlibsrc.zip", newPathAndContents, JavaCore.VERSION_1_8);
+			
+			// Get the class file again (same path, but new jar)
+			root = project.getPackageFragmentRoot(project.getProject().getFile("testlib.jar"));
+			IOrdinaryClassFile classFile2 = root.getPackageFragment("pack.age").getOrdinaryClassFile("X.class");
+			String source2 = classFile2.getSource();
+			
+			// Verify that we get the new content, not stale buffer
+			assertNotNull("Source should be available for recreated jar", source2);
+			assertFalse("Source should not contain old 'test()' method", source2.contains("test()"));
+			assertTrue("Source should contain new 'newMethod()'", source2.contains("newMethod()"));
+			
+		} finally {
+			if (project != null) {
+				deleteProject(project);
+			}
+		}
+	}
+
 }

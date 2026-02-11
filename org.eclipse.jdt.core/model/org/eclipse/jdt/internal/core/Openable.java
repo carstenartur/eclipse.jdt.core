@@ -279,6 +279,11 @@ public IBuffer getBuffer() throws JavaModelException {
 		// ensure element is open
 		IElementInfo info = getElementInfo();
 		IBuffer buffer = getBufferManager().getBuffer(this);
+		if (buffer != null && !(buffer instanceof NullBuffer) && buffer.isClosed()) {
+			// stale buffer from deleted/recreated jar - evict and recreate
+			getBufferManager().removeBuffer(buffer);
+			buffer = null;
+		}
 		if (buffer == null) {
 			// try to (re)open a buffer
 			buffer = openBuffer(null, info);

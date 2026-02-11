@@ -1711,6 +1711,7 @@ public void testGenericFieldGetTypeSignature() throws JavaModelException {
 			String source1 = classFile1.getSource();
 			assertNotNull("Source should be available for first jar", source1);
 			assertTrue("Source should contain 'test()' method", source1.contains("test()"));
+			assertFalse("Source should not contain 'newMethod()'", source1.contains("newMethod()"));
 
 			removeLibrary(project, "testlib.jar", "testlibsrc.zip");
 			String[] newPathAndContents = new String[] {
@@ -1728,6 +1729,7 @@ public void testGenericFieldGetTypeSignature() throws JavaModelException {
 
 			assertNotNull("Source should be available for recreated jar", source2);
 			assertTrue("Source should contain new 'newMethod()'", source2.contains("newMethod()"));
+			assertFalse("Source should not contain old 'test()' method", source2.contains("test()"));
 		} finally {
 			if (project != null) {
 				deleteProject(project);

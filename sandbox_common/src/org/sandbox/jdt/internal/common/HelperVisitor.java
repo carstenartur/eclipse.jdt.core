@@ -21,7 +21,6 @@ package org.sandbox.jdt.internal.common;
  */
 
 
-import java.util.AbstractMap;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -42,57 +41,6 @@ import org.eclipse.jdt.core.dom.*;
  * @since 1.15
  */
 public class HelperVisitor<E extends HelperVisitorProvider<V, T, E>,V,T> {
-
-	/**
-	 *
-	 */
-	public static final String TYPEOF = "typeof"; //$NON-NLS-1$
-
-	/**
-	 * Key used to match type by fully qualified class name (as String) instead of Class object.
-	 * This avoids deprecation warnings when the type being matched is deprecated.
-	 * @since 1.2.5
-	 */
-	public static final String TYPEOF_BYNAME = "typeof_byname"; //$NON-NLS-1$
-
-	/**
-	 *
-	 */
-	public static final String METHODNAME = "methodname"; //$NON-NLS-1$
-	/**
-	 * 
-	 */
-	public static final String ANNOTATIONNAME = "annotationname"; //$NON-NLS-1$
-	
-	/**
-	 * 
-	 */
-	public static final String IMPORT = "import";  //$NON-NLS-1$
-	/**
-	 * 
-	 */
-	public static final String SUPERCLASSNAME = "superclassname";  //$NON-NLS-1$
-	/**
-	 *
-	 */
-	public static final String PARAMTYPENAMES = "paramtypenames"; //$NON-NLS-1$
-	/**
-	 * Key used for matching the operator of expressions (for example,
-	 * {@link Assignment} and {@link InfixExpression}) when filtering nodes by
-	 * operator type.
-	 */
-	public static final String OPERATOR = "operator"; //$NON-NLS-1$
-	/**
-	 * Key used for matching the (fully qualified) name of a type associated with
-	 * a node when building or evaluating visitor predicates.
-	 */
-	public static final String TYPENAME = "typename"; //$NON-NLS-1$
-	/**
-	 * Key used for matching the type of an exception in constructs such as
-	 * {@code throws} declarations or {@link CatchClause} nodes.
-	 */
-	public static final String EXCEPTIONTYPE = "exceptiontype"; //$NON-NLS-1$
-
 
 	ASTVisitor astvisitor;
 

@@ -39,8 +39,6 @@ jobs:
           mkdir -p /tmp/fork-specific
           
           # Identify fork-specific workflow files (files that don't exist in upstream)
-          git fetch upstream master
-          
           # Get list of workflow files in fork
           FORK_WORKFLOWS=$(git ls-tree -r HEAD --name-only .github/workflows/ 2>/dev/null || echo "")
           
@@ -179,8 +177,6 @@ jobs:
           mkdir -p /tmp/fork-specific
           
           # Identify fork-specific workflow files (files that don't exist in upstream)
-          git fetch upstream master
-          
           # Get list of workflow files in fork
           FORK_WORKFLOWS=$(git ls-tree -r HEAD --name-only .github/workflows/ 2>/dev/null || echo "")
           

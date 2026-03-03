@@ -454,6 +454,11 @@ protected IBuffer openBuffer(IProgressMonitor pm, IElementInfo info) throws Java
 	// Check the cache for the top-level type first
 	IType outerMostEnclosingType = getOuterMostEnclosingType();
 	IBuffer buffer = getBufferManager().getBuffer(outerMostEnclosingType.getClassFile());
+	// Validate the cached buffer is still valid (not stale from a deleted/recreated jar)
+	if (buffer != null && !(buffer instanceof NullBuffer) && buffer.isClosed()) {
+		getBufferManager().removeBuffer(buffer);
+		buffer = null;
+	}
 	if (buffer == null) {
 		SourceMapper mapper = getSourceMapper();
 		IBinaryType typeInfo = info instanceof IBinaryType ? (IBinaryType) info : null;

@@ -33,10 +33,13 @@ import org.eclipse.jdt.core.IJavaProject;
 import org.eclipse.jdt.core.IPackageFragment;
 import org.eclipse.jdt.core.IPackageFragmentRoot;
 import org.eclipse.jdt.core.JavaCore;
+import org.eclipse.jdt.internal.core.JavaModelManager;
 /**
  * Tests IJavaModel API.
  */
 public class JavaModelTests extends ModifyingResourceTests {
+
+private static final IResourceChangeListener LOG_RESOURCE_DELTA = AbstractJavaModelTests::logDeltaEvent;
 
 public static Test suite() {
 	return buildModelTestSuite(JavaModelTests.class);
@@ -49,6 +52,23 @@ static {
 //	TESTS_NAMES = new String[] { "testFindLineSeparator04" };
 //	TESTS_NUMBERS = new int[] { 100772 };
 //	TESTS_RANGE = new int[] { 83304, -1 };
+}
+
+private boolean wasVerbose;
+
+@Override
+protected void setUp() throws Exception {
+	JavaCore.addPreProcessingResourceChangedListener(LOG_RESOURCE_DELTA, 255 /* all types */);
+	this.wasVerbose = JavaModelManager.VERBOSE;
+	JavaModelManager.VERBOSE = true;
+	super.setUp();
+}
+
+@Override
+protected void tearDown() throws Exception {
+	super.tearDown();
+	JavaModelManager.VERBOSE = this.wasVerbose;
+	JavaCore.removePreProcessingResourceChangedListener(LOG_RESOURCE_DELTA);
 }
 
 public JavaModelTests(String name) {

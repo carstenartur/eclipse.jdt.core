@@ -13,7 +13,7 @@ jobs:
       matrix:
         arm: [base, pr]
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,40 +33,42 @@ jobs:
           echo "1a81564c817ba6016557f6b75e3c3a31e3d4532f42e8ab8883b74ebcc68ddbce  $RUNNER_TEMP/completion5364/sdk.tar.gz" | sha256sum -c -
           echo "c0d56a10ac060f5dc4d917fe7836aa09143ac559bc445e3b987b5f9e2ad8bd0d  $RUNNER_TEMP/completion5364/tests.zip" | sha256sum -c -
           python3 diagnostics/completion5364/prepare.py '${{ matrix.arm }}' 2>&1 | tee evidence/preparation.txt
-      - name: Run original test pair, complete class and preceding completion class
+      - name: Compare fresh processes, complete class, index fallback and ordered predecessor suites
         run: |
           sdk="$RUNNER_TEMP/completion5364/eclipse"
           launcher=$(find "$sdk/plugins" -maxdepth 1 -name 'org.eclipse.equinox.launcher_*.jar' -print -quit)
-          for mode in normal full predecessor; do
-            repeats=8
-            if [ "$mode" = full ]; then repeats=1; fi
-            if [ "$mode" = predecessor ]; then repeats=2; fi
+          for scenario in normal-1 normal-2 normal-3 full predecessor fallback chain; do
+            mode=${scenario%%-*}
+            disabled=false
+            if [ "$mode" = fallback ]; then mode=normal; disabled=true; fi
             set +e
-            timeout 300 java -ea -Xmx1g -Djdt.default.test.compliance=1.8 -DDetectVMInstallationsJob.disabled=true \
-              -Dprobe.mode="$mode" -Dprobe.repeats="$repeats" -Dprobe.debug=true \
+            timeout 900 java -ea -Xmx1g -Djdt.default.test.compliance=1.8 -DDetectVMInstallationsJob.disabled=true \
+              -Dprobe.mode="$mode" -Dprobe.disableIndex="$disabled" \
               -jar "$launcher" -configuration "$sdk/configuration" -clean -nosplash -consolelog \
-              -application completion5364.probe.run -data "$PWD/evidence/workspace-$mode" \
-              > "evidence/$mode.txt" 2>&1
+              -application completion5364.probe.run -data "$PWD/evidence/workspace-$scenario" \
+              > "evidence/$scenario.txt" 2>&1
             status=$?
-            echo "$status" > "evidence/$mode.exit"
-            grep -E 'PROBE_|Exception|Error|RUNTIME' "evidence/$mode.txt" | tail -80 || true
+            echo "$status" > "evidence/$scenario.exit"
+            grep -E 'PROBE_(RESULT|LAYER|FAILURE|PENDING)|Exception caught|RUNTIME' "evidence/$scenario.txt" | tail -60 || true
           done
-      - name: Require completed JUnit runs
+      - name: Require completed JUnit runs and retain exact outcomes
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import re,os
           lines=['# Completion comparison: ${{ matrix.arm }}','']
-          for mode in ['normal','full','predecessor']:
-              p=Path('evidence')/(mode+'.txt');t=p.read_text(errors='replace')
+          incomplete=[]
+          for scenario in ['normal-1','normal-2','normal-3','full','predecessor','fallback','chain']:
+              p=Path('evidence')/(scenario+'.txt');t=p.read_text(errors='replace')
               summaries=re.findall(r'^PROBE_RESULT .+$',t,re.M)
-              if len(summaries)!=1: raise SystemExit('Incomplete '+mode+'; inspect logs')
-              lines+=summaries
-              lines += re.findall(r'^PROBE_(?:LAYER|FAILURE) .+$',t,re.M)
+              if len(summaries)!=1: incomplete.append(scenario)
+              lines+=['## '+scenario]+summaries
+              lines += re.findall(r'^PROBE_(?:LAYER|FAILURE|PENDING_INDEX_JOBS) .+$',t,re.M)
           text='\n'.join(lines)+'\n'
           Path('evidence/SUMMARY.md').write_text(text)
           print(text)
           with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as f:f.write(text)
+          if incomplete:raise SystemExit('Incomplete scenarios: '+str(incomplete))
           PY
       - uses: actions/upload-artifact@v4
         if: always()

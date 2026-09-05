@@ -9,6 +9,11 @@ root = Path(sys.argv[1]).resolve()
 here = Path(__file__).resolve().parent
 manager = root / 'org.eclipse.jdt.core/model/org/eclipse/jdt/internal/core/JavaModelManager.java'
 source = manager.read_text()
+for p in (root / 'org.eclipse.jdt.core').rglob('*.java'):
+    if p != manager and 'optionsCache' in p.read_text():
+        for number, line in enumerate(p.read_text().splitlines(), 1):
+            if 'optionsCache' in line:
+                print('OTHER_CACHE_REFERENCE', p.relative_to(root), number, line.strip(), flush=True)
 
 def replace(old, new):
     global source
@@ -16,7 +21,7 @@ def replace(old, new):
         raise SystemExit('Non-unique or missing patch anchor: ' + repr(old))
     source = source.replace(old, new)
 
-replace('private volatile Hashtable<String, String> optionsCache;', '''private volatile Hashtable<String, String> optionsCache;
+replace('\tvolatile Hashtable<String, String> optionsCache;', '''	volatile Hashtable<String, String> optionsCache;
 
 	// Only cache publication and invalidation hold this lock. In particular,
 	// preference access and callbacks must remain outside it.
@@ -51,13 +56,11 @@ replace('public Hashtable<String, String> getOptions() {', '''/**
 replace('this.optionsCache = defaults;', 'cacheOptions(defaults, generation);')
 replace('this.optionsCache = new Hashtable<>(options);', 'cacheOptions(new Hashtable<>(options), generation);')
 replace('this.optionsCache = cachedValue;', 'setOptionsCache(cachedValue);')
-# Cover every existing invalidation site, including default-node and encoding listeners.
 count = len(re.findall(r'(?:JavaModelManager\.)?this\.optionsCache = null;', source))
 if count < 4:
     raise SystemExit('Unexpected invalidation-site count: ' + str(count))
 source = source.replace('JavaModelManager.this.optionsCache = null;', 'JavaModelManager.this.setOptionsCache(null);')
 source = source.replace('this.optionsCache = null;', 'setOptionsCache(null);')
-# Inspect the complete reset branch, rather than depending on comment spelling.
 pattern = r'if \(cachedValue == null\) \{(?P<body>.*?)\n\s*\} else \{\s*Util\.fixTaskTags\(cachedValue\);'
 matches = list(re.finditer(pattern, source, re.S))
 if len(matches) != 1:

@@ -18,11 +18,20 @@ build = base.rstrip('/').rsplit('/', 1)[1]
 filename = f'eclipse-SDK-{build}-linux-gtk-x86_64.tar.gz'
 url = f'{base}/eclipse-{build}-checksums'
 with urlopen(url, timeout=60) as response:
-    manifest = response.read().decode('utf-8')
-(evidence/'sdk-published-checksums.txt').write_text(manifest)
+    raw = response.read()
+encoding = 'utf-16' if raw.startswith((b'\xff\xfe', b'\xfe\xff')) else 'utf-8-sig'
+manifest = raw.decode(encoding)
+(evidence/'sdk-published-checksums.txt').write_text(manifest, encoding='utf-8')
+print('CHECKSUM_MANIFEST_ENCODING', encoding, flush=True)
 records = []
 for line in manifest.splitlines():
+    if filename in line:
+        print('PUBLISHED_CHECKSUM_RECORD', repr(line), flush=True)
     match = re.fullmatch(r'([0-9a-fA-F]{128})\s+\*?(?:\./)?' + re.escape(filename), line.strip())
+    if match:
+        records.append(match.group(1).lower())
+        continue
+    match = re.fullmatch(r'SHA512\s*\((?:\./)?' + re.escape(filename) + r'\)\s*=\s*([0-9a-fA-F]{128})', line.strip(), re.I)
     if match:
         records.append(match.group(1).lower())
 if len(records) != 1:

@@ -5,6 +5,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+concurrency:
+  group: options-cache-validation
+  cancel-in-progress: false
 jobs:
   validate:
     if: github.repository == 'carstenartur/eclipse.jdt.core'
@@ -20,11 +23,61 @@ jobs:
           distribution: temurin
           java-version: '25'
       - name: Compile candidate and run exact baseline/fixed regression assertions
-        run: bash diagnostics/options-cache/validate.sh
+        id: validate
+        run: |
+          mkdir -p evidence
+          set +e
+          bash diagnostics/options-cache/validate.sh > evidence/execution.log 2>&1
+          status=$?
+          echo "$status" > evidence/execution.exit
+          tail -60 evidence/execution.log
+          exit "$status"
       - name: Commit tested production files on the clean upstream-based branch
+        id: publish
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash diagnostics/options-cache/publish.sh
+        run: |
+          set +e
+          bash diagnostics/options-cache/publish.sh > evidence/publication.log 2>&1
+          status=$?
+          tail -30 evidence/publication.log
+          exit "$status"
+      - name: Retain concise evidence on the helper branch
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VALIDATE_OUTCOME: ${{ steps.validate.outcome }}
+          PUBLISH_OUTCOME: ${{ steps.publish.outcome }}
+        run: |
+          python3 - <<'PY'
+          import os, pathlib, re
+          root=pathlib.Path('evidence')
+          lines=['# Latest options-cache validation', '',
+            'Revision: '+os.environ['GITHUB_SHA'],
+            'Run: https://github.com/'+os.environ['GITHUB_REPOSITORY']+'/actions/runs/'+os.environ['GITHUB_RUN_ID'],
+            'Validation: '+os.environ['VALIDATE_OUTCOME'],
+            'Publication: '+os.environ['PUBLISH_OUTCOME'], '']
+          for name in ['VALIDATION.md','validation-success.json','history-origin.json','sdk-provenance.json','method-provenance.json','published-commit.txt']:
+              p=root/name
+              if p.exists():
+                  lines += ['## '+name, '```',p.read_text(errors='replace')[:14000],'```']
+          for p in sorted(root.glob('*.txt')):
+              if re.fullmatch(r'(stock|fixed)-(native|headless|ui)\.txt',p.name):
+                  text=p.read_text(errors='replace')
+                  selected=[line for line in text.splitlines() if any(k in line for k in ['_RESULT ','_FAILURE ','ComparisonFailure:', 'AssertionError:', 'AssertionFailedError:', 'SAVE_BEFORE ', 'SAVE_AFTER '])]
+                  lines += ['## '+p.name,'```','\n'.join(selected[:35]),'```']
+          for name in ['execution.log','publication.log']:
+              p=root/name
+              if p.exists():
+                  lines += ['## Last lines of '+name,'```','\n'.join(p.read_text(errors='replace').splitlines()[-60:]),'```']
+          pathlib.Path('diagnostics/options-cache/LATEST_RUN.md').write_text('\n'.join(lines)+'\n')
+          PY
+          git config user.name "$(git show -s --format=%an HEAD)"
+          git config user.email "$(git show -s --format=%ae HEAD)"
+          git add diagnostics/options-cache/LATEST_RUN.md
+          git commit -m 'Record options-cache validation outcome [skip ci]'
+          gh auth setup-git
+          git push origin HEAD:refs/heads/diagnostic/options-cache-1445-validation
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -32,6 +85,7 @@ jobs:
           path: |
             evidence/*.txt
             evidence/*.exit
+            evidence/*.log
             evidence/*.md
             evidence/*.json
             evidence/*.patch

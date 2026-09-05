@@ -1,7 +1,7 @@
 # Latest options-cache validation
 
-Revision: b45f26001068b76d79451287c8b5b8cf69f36fc8
-Run: https://github.com/carstenartur/eclipse.jdt.core/actions/runs/33954892515
+Revision: f578a14fd39eac648084107ba05ec047743f9c1e
+Run: https://github.com/carstenartur/eclipse.jdt.core/actions/runs/33955226328
 Validation: failure
 Publication: skipped
 
@@ -60,7 +60,11 @@ NATIVE_RESULT tests=8 failures=0 ignored=0
 ```
 ## fixed-ui.txt
 ```
-
+SAVE_BEFORE race=false persisted=insert cache=insert project=insert bufferType=org.eclipse.jdt.internal.ui.javaeditor.DocumentAdapter length=107 stamp=12
+SAVE_AFTER race=false length=105 stamp=14 text=package test1;\npublic class E1 {\n    public void foo( Object o ) {\n        String s = (String) o;\n    }\n}
+SAVE_BEFORE race=true persisted=insert cache=insert project=insert bufferType=org.eclipse.jdt.internal.ui.javaeditor.DocumentAdapter length=107 stamp=20
+SAVE_AFTER race=true length=105 stamp=22 text=package test1;\npublic class E1 {\n    public void foo( Object o ) {\n        String s = (String) o;\n    }\n}
+UI_DIAGNOSTIC_RESULT tests=2 failures=0 ignored=0
 ```
 ## stock-headless.txt
 ```
@@ -93,10 +97,58 @@ NATIVE_RESULT tests=8 failures=4 ignored=0
 ```
 ## stock-ui.txt
 ```
-
+SAVE_BEFORE race=false persisted=insert cache=insert project=insert bufferType=org.eclipse.jdt.internal.ui.javaeditor.DocumentAdapter length=107 stamp=12
+SAVE_AFTER race=false length=105 stamp=14 text=package test1;\npublic class E1 {\n    public void foo( Object o ) {\n        String s = (String) o;\n    }\n}
+SAVE_BEFORE race=true persisted=insert cache=do not insert project=do not insert bufferType=org.eclipse.jdt.internal.ui.javaeditor.DocumentAdapter length=107 stamp=20
+SAVE_AFTER race=true length=104 stamp=21 text=package test1;\npublic class E1 {\n    public void foo( Object o ) {\n        String s = (String)o;\n    }\n}
+org.junit.ComparisonFailure: Real editor save action must use the completed option update expected:<... String s = (String)[ ]o;
+UI_DIAGNOSTIC_FAILURE saveMustUseCompletedOptionUpdate(diagnostics.SaveParticipantIntegrationTest)
+org.junit.ComparisonFailure: Real editor save action must use the completed option update expected:<... String s = (String)[ ]o;
+UI_DIAGNOSTIC_RESULT tests=2 failures=1 ignored=0
 ```
 ## Last lines of execution.log
 ```
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:63)
+	at org.junit.runners.ParentRunner$4.run(ParentRunner.java:331)
+	at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:79)
+	at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:329)
+	at org.junit.runners.ParentRunner.access$100(ParentRunner.java:66)
+	at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:293)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.junit.runners.ParentRunner.run(ParentRunner.java:413)
+	at org.junit.runners.Suite.runChild(Suite.java:128)
+	at org.junit.runners.Suite.runChild(Suite.java:27)
+	at org.junit.runners.ParentRunner$4.run(ParentRunner.java:331)
+	at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:79)
+	at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:329)
+	at org.junit.runners.ParentRunner.access$100(ParentRunner.java:66)
+	at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:293)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.junit.runners.ParentRunner.run(ParentRunner.java:413)
+	at org.junit.runner.JUnitCore.run(JUnitCore.java:137)
+	at org.junit.runner.JUnitCore.run(JUnitCore.java:115)
+	at org.junit.runner.JUnitCore.run(JUnitCore.java:105)
+	at org.junit.runner.JUnitCore.run(JUnitCore.java:94)
+	at diagnostics.UIApp.runTests(UIApp.java:107)
+	at org.eclipse.swt.widgets.RunnableLock.run(RunnableLock.java:40)
+	at org.eclipse.swt.widgets.Synchronizer.runAsyncMessages(Synchronizer.java:131)
+	at org.eclipse.swt.widgets.Display.runAsyncMessages(Display.java:5078)
+	at org.eclipse.swt.widgets.Display.readAndDispatch(Display.java:4534)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine$5.run(PartRenderingEngine.java:1160)
+	at org.eclipse.core.databinding.observable.Realm.runWithDefault(Realm.java:339)
+	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine.run(PartRenderingEngine.java:1051)
+	at org.eclipse.e4.ui.internal.workbench.E4Workbench.createAndRunUI(E4Workbench.java:153)
+	at org.eclipse.ui.internal.Workbench.lambda$3(Workbench.java:680)
+	at org.eclipse.core.databinding.observable.Realm.runWithDefault(Realm.java:339)
+	at org.eclipse.ui.internal.Workbench.createAndRunWorkbench(Workbench.java:583)
+	at org.eclipse.ui.PlatformUI.createAndRunWorkbench(PlatformUI.java:173)
+	at diagnostics.UIApp.start(UIApp.java:49)
+	at org.eclipse.equinox.internal.app.EclipseAppHandle.run(EclipseAppHandle.java:219)
+	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.runApplication(EclipseAppLauncher.java:149)
 	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.start(EclipseAppLauncher.java:115)
 	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:467)
 	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:298)
@@ -106,55 +158,14 @@ NATIVE_RESULT tests=8 failures=4 ignored=0
 	at org.eclipse.equinox.launcher.Main.basicRun(Main.java:563)
 	at org.eclipse.equinox.launcher.Main.run(Main.java:1415)
 	at org.eclipse.equinox.launcher.Main.main(Main.java:1387)
+OPTIONS_RACE writer=JavaCore.setOptions overlapping=do not insert persisted=insert subsequentCached=insert
+SAVE_BEFORE race=true persisted=insert cache=insert project=insert bufferType=org.eclipse.jdt.internal.ui.javaeditor.DocumentAdapter length=107 stamp=20
+SAVE_AFTER race=true length=105 stamp=22 text=package test1;\npublic class E1 {\n    public void foo( Object o ) {\n        String s = (String) o;\n    }\n}
 
-!ENTRY org.eclipse.equinox.event 4 0 2026-09-05 08:19:56.537
-!MESSAGE Exception while dispatching event org.osgi.service.event.Event [topic=org/eclipse/e4/ui/LifeCycle/appStartupComplete] {org.eclipse.e4.data=org.eclipse.e4.legacy.ide.application=org.eclipse.e4.ui.model.application.impl.ApplicationImpl@51ab1ee3 (tags: [activeSchemeId:org.eclipse.ui.defaultAcceleratorConfiguration], contributorURI: platform:/plugin/org.eclipse.platform) (widget: null, toBeRendered: true, visible: true) (context: WorkbenchContext, variables: null)} to handler org.eclipse.ui.internal.monitoring.MonitoringStartup@3c41614
-!STACK 0
-org.eclipse.swt.SWTException: Device is disposed
-	at org.eclipse.swt.SWT.error(SWT.java:4934)
-	at org.eclipse.swt.SWT.error(SWT.java:4849)
-	at org.eclipse.swt.SWT.error(SWT.java:4820)
-	at org.eclipse.swt.widgets.Display.error(Display.java:1581)
-	at org.eclipse.swt.widgets.Display.asyncExec(Display.java:924)
-	at org.eclipse.ui.internal.monitoring.MonitoringStartup.createAndStartMonitorThread(MonitoringStartup.java:70)
-	at org.eclipse.ui.internal.monitoring.MonitoringStartup.handleEvent(MonitoringStartup.java:47)
-	at org.eclipse.equinox.internal.event.EventHandlerWrapper.handleEvent(EventHandlerWrapper.java:206)
-	at org.eclipse.equinox.internal.event.EventHandlerTracker.dispatchEvent(EventHandlerTracker.java:201)
-	at org.eclipse.equinox.internal.event.EventHandlerTracker.dispatchEvent(EventHandlerTracker.java:1)
-	at org.eclipse.osgi.framework.eventmgr.EventManager.dispatchEvent(EventManager.java:230)
-	at org.eclipse.osgi.framework.eventmgr.EventManager$EventThread.run(EventManager.java:341)
+Time: 1.407
 
-!ENTRY org.eclipse.e4.ui.workbench 4 0 2026-09-05 08:19:56.555
-!MESSAGE FrameworkEvent ERROR
-!STACK 0
-org.eclipse.swt.SWTException: Device is disposed
-	at org.eclipse.swt.SWT.error(SWT.java:4934)
-	at org.eclipse.swt.SWT.error(SWT.java:4849)
-	at org.eclipse.swt.SWT.error(SWT.java:4820)
-	at org.eclipse.swt.widgets.Display.error(Display.java:1581)
-	at org.eclipse.swt.widgets.Display.asyncExec(Display.java:924)
-	at org.eclipse.ui.internal.WorkbenchWindow$3.changed(WorkbenchWindow.java:883)
-	at org.eclipse.e4.core.internal.contexts.TrackableComputationExt.update(TrackableComputationExt.java:109)
-	at org.eclipse.e4.core.internal.contexts.EclipseContext.processScheduled(EclipseContext.java:371)
-	at org.eclipse.e4.core.internal.contexts.EclipseContext.dispose(EclipseContext.java:189)
-	at org.eclipse.e4.core.internal.contexts.EclipseContext.dispose(EclipseContext.java:172)
-	at org.eclipse.e4.core.internal.contexts.EclipseContext.dispose(EclipseContext.java:172)
-	at org.eclipse.e4.core.internal.contexts.EclipseContext.dispose(EclipseContext.java:172)
-	at org.eclipse.e4.core.internal.contexts.EclipseContext.dispose(EclipseContext.java:172)
-	at org.eclipse.e4.core.internal.contexts.osgi.EclipseContextOSGi.dispose(EclipseContextOSGi.java:106)
-	at org.eclipse.e4.core.internal.contexts.osgi.EclipseContextOSGi.bundleChanged(EclipseContextOSGi.java:149)
-	at org.eclipse.osgi.internal.framework.BundleContextImpl.dispatchEvent(BundleContextImpl.java:987)
-	at org.eclipse.osgi.framework.eventmgr.EventManager.dispatchEvent(EventManager.java:230)
-	at org.eclipse.osgi.framework.eventmgr.ListenerQueue.dispatchEventSynchronous(ListenerQueue.java:151)
-	at org.eclipse.osgi.internal.framework.EquinoxEventPublisher.publishBundleEventPrivileged(EquinoxEventPublisher.java:237)
-	at org.eclipse.osgi.internal.framework.EquinoxEventPublisher.publishBundleEvent(EquinoxEventPublisher.java:136)
-	at org.eclipse.osgi.internal.framework.EquinoxEventPublisher.publishBundleEvent(EquinoxEventPublisher.java:128)
-	at org.eclipse.osgi.internal.framework.EquinoxContainerAdaptor.publishModuleEvent(EquinoxContainerAdaptor.java:232)
-	at org.eclipse.osgi.container.Module.publishEvent(Module.java:534)
-	at org.eclipse.osgi.container.Module.doStop(Module.java:697)
-	at org.eclipse.osgi.container.Module.stop(Module.java:557)
-	at org.eclipse.osgi.container.SystemModule.stop(SystemModule.java:212)
-	at org.eclipse.osgi.internal.framework.EquinoxBundle$SystemBundle$EquinoxSystemModule$1.run(EquinoxBundle.java:244)
-	at java.base/java.lang.Thread.run(Thread.java:1474)
-Unexpected stock/ui completion: []
+OK (2 tests)
+
+UI_DIAGNOSTIC_RESULT tests=2 failures=0 ignored=0
+Logged Eclipse errors in stock/ui: 2; inspect before publication
 ```

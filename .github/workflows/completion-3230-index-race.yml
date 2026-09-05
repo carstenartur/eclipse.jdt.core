@@ -1,0 +1,53 @@
+name: Completion 3230 acquired-index race
+on:
+  push:
+    branches: [diagnostic/completion-3230-index-race]
+    paths: ['diagnostics/completion3230-index-race/**', '.github/workflows/completion-3230-index-race.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        arm: [base, pr]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: diagnostics-repo
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: carstenartur/eclipse.jdt.core
+          ref: ${{ matrix.arm == 'base' && '8c40c7d2ae12c0a32ab3cca1ab31b53956c65d51' || 'd55a8c72e96ba601562fda02e5698da6323d37e7' }}
+          path: source
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: |
+            8
+            17
+            21
+            25
+          mvn-toolchain-id: |
+            JavaSE-1.8
+            JavaSE-17
+            JavaSE-21
+            JavaSE-25
+      - name: Compare original behavior, real index removal, and existing model fallback
+        run: >-
+          python3 diagnostics-repo/diagnostics/completion3230-index-race/probe.py
+          source diagnostics-repo/diagnostics/completion5364-maven
+          diagnostics-repo/diagnostics/completion3230-index-race evidence '${{ matrix.arm }}'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: completion3230-index-race-${{ matrix.arm }}
+          path: evidence/
+          include-hidden-files: true
+          retention-days: 14
+          if-no-files-found: error

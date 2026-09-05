@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   diagnose:
-    uses: carstenartur/eclipse.jdt.debug/.github/workflows/jenkins-parity.yml@e1d2134f5cca5e88bfa8cd8b0ee6c947ee10fd1b
+    uses: carstenartur/eclipse.jdt.debug/.github/workflows/jenkins-parity.yml@6f7d2f7a2ff51651a2146360f5e9b29cad9f0319
     with:
       diagnostics: true
-      harness_ref: e1d2134f5cca5e88bfa8cd8b0ee6c947ee10fd1b
+      harness_ref: 6f7d2f7a2ff51651a2146360f5e9b29cad9f0319

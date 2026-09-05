@@ -1,10 +1,44 @@
 # Latest options-cache validation
 
-Revision: f578a14fd39eac648084107ba05ec047743f9c1e
-Run: https://github.com/carstenartur/eclipse.jdt.core/actions/runs/33955226328
-Validation: failure
-Publication: skipped
+Revision: b6378ff2141ba4b945e97d7c8b754c7848f509e4
+Run: https://github.com/carstenartur/eclipse.jdt.core/actions/runs/33955492150
+Validation: success
+Publication: success
 
+## VALIDATION.md
+```
+# Options-cache publication fix: executed validation
+
+| Arm | Test layer | Executed | Failed | Ignored | Logged Eclipse errors |
+| --- | --- | ---: | ---: | ---: | ---: |
+| stock | native | 8 | 4 | 0 | 0 |
+| stock | headless | 6 | 3 | 0 | 0 |
+| stock | ui | 2 | 1 | 0 | 0 |
+| fixed | native | 8 | 0 | 0 | 0 |
+| fixed | headless | 6 | 0 | 0 | 0 |
+| fixed | ui | 2 | 0 | 0 | 0 |
+
+Stock fails exactly the four native cache assertions, three original headless assertions and one original editor-save assertion. Fixed passes all 16 tests. No tests were ignored.
+
+Native test source is copied byte-for-byte from the proposed upstream test file. Only JavaModelManager and its nested classes are replaced in the disposable fixed SDK. Other SDK bundles are hash-checked unchanged.
+
+The UI harness registers the standard IDE workspace adapters in both arms. The formatter and editor test assertions are unchanged. This is targeted testing, not a full Tycho/JDT suite run.
+
+The extra space before assignment and historical malformed-edit exceptions of jdt.ui#1445 have not been reproduced or claimed fixed.
+
+```
+## validation-success.json
+```
+{
+  "native": 8,
+  "headless": 6,
+  "ui": 2,
+  "stock_failures": 8,
+  "fixed_failures": 0,
+  "ignored": 0
+}
+
+```
 ## history-origin.json
 ```
 {
@@ -50,6 +84,75 @@ Publication: skipped
 ]
 
 ```
+## published-commit.txt
+```
+commit db389f7e72f88da5ded1debd337956b960fc3711
+Author:     Carsten Hammer <carsten.hammer@t-online.de>
+AuthorDate: Sat Sep 5 08:33:22 2026 +0000
+Commit:     Carsten Hammer <carsten.hammer@t-online.de>
+CommitDate: Sat Sep 5 08:33:22 2026 +0000
+
+    Prevent stale Java options cache publication after concurrent updates
+    
+    A cold JavaModelManager.getOptions() can read old preference values, then
+    publish its map after a concurrent JavaCore.setOptions() has completed or
+    a preference event has invalidated the cache. Subsequent non-overlapping
+    getOptions() calls then disagree with getOption(). Defensive Hashtable
+    copies and the existing volatile reference do not prevent this lost
+    invalidation / late-publication race.
+    
+    Track a cache generation and publish a reader's snapshot only if no
+    writer or invalidation has advanced that generation. Coordinate the
+    comparison/publication and generation changes under a short private lock.
+    Keep all preference reads, writes, listeners, copying and tracing outside
+    that lock; retain the cached fast path and defensive-copy semantics.
+    An overlapping read may return its snapshot but may not cache it after
+    an intervening update. Invalidation advances the generation even when
+    the cache is already null, avoiding null-to-null / ABA invalidations.
+    
+    Route all cache invalidations through the same protocol. End an options
+    reset with a generation-advancing invalidation before rebuilding, so a
+    partially computed reset snapshot cannot become the post-reset cache.
+    
+    Add OptionCacheTests to the model suite. Real preference reads are paused
+    using bounded CountDownLatch barriers; delegating proxies retain actual
+    values and release preference locks before pausing. Cover completed
+    setter/reset races, direct and repeated invalidations, cache reuse,
+    returned-copy isolation, sequential writes and reentrant preference
+    callbacks. Restore settings, lookup nodes and worker threads after tests.
+    
+    Validation: all eight new native tests, six established headless Core /
+    formatter tests and two real JavaEditor.doSave integration tests execute
+    against the same pinned Eclipse SDK. Baseline fails exactly eight race
+    assertions; the fixed version passes all 16, with no ignored tests or
+    logged Eclipse errors. Compile the actual patched upstream
+    JavaModelManager source into the disposable SDK; verify that other SDK
+    bundles are unchanged. In both arms the minimal UI harness registers IDE
+    workspace adapters and excludes the unrelated optional Tips add-on to
+    avoid its startup UI racing test-workbench shutdown. No UI product code
+    or test assertions are modified. This is targeted validation, not a full
+    Tycho or complete JDT regression-suite run.
+    Evidence: https://github.com/carstenartur/eclipse.jdt.core/actions/runs/33955492150
+    Upstream base: 8c40c7d2ae12c0a32ab3cca1ab31b53956c65d51
+    SDK: I20260826-2300; JDK 25; Linux GTK x86_64
+    SDK SHA-256: 1a81564c817ba6016557f6b75e3c3a31e3d4532f42e8ab8883b74ebcc68ddbce
+    The archive matches Eclipse's official HTTPS SHA-512 checksum manifest.
+    
+    History: the options cache was introduced in
+    75e4065d4db8d1c67a280c4b46e8853fada67561 (2005-04-19, "91716 (fix improvement)").
+    The audit follows both JavaCore.java (the former location) and
+    JavaModelManager.java (to which the cache moved in 2005), comparing the
+    historical commit with its parent. This is source-history evidence, not
+    a claim that a historical runtime or every intervening release was tested.
+    
+    Related: https://github.com/eclipse-jdt/eclipse.jdt.ui/issues/1445
+    The tests demonstrate stale formatter options and the missing cast space
+    through an actual editor save. They do not reproduce or claim to fix the
+    extra space before assignment or the historical MalformedTreeException.
+    No UI workaround, diagnostic workflow or generated evidence is included
+    in this commit. No upstream pull request is opened.
+
+```
 ## fixed-headless.txt
 ```
 DIAGNOSTIC_RESULT tests=6 failures=0 ignored=0
@@ -60,7 +163,7 @@ NATIVE_RESULT tests=8 failures=0 ignored=0
 ```
 ## fixed-ui.txt
 ```
-SAVE_BEFORE race=false persisted=insert cache=insert project=insert bufferType=org.eclipse.jdt.internal.ui.javaeditor.DocumentAdapter length=107 stamp=12
+.SAVE_BEFORE race=false persisted=insert cache=insert project=insert bufferType=org.eclipse.jdt.internal.ui.javaeditor.DocumentAdapter length=107 stamp=12
 SAVE_AFTER race=false length=105 stamp=14 text=package test1;\npublic class E1 {\n    public void foo( Object o ) {\n        String s = (String) o;\n    }\n}
 SAVE_BEFORE race=true persisted=insert cache=insert project=insert bufferType=org.eclipse.jdt.internal.ui.javaeditor.DocumentAdapter length=107 stamp=20
 SAVE_AFTER race=true length=105 stamp=22 text=package test1;\npublic class E1 {\n    public void foo( Object o ) {\n        String s = (String) o;\n    }\n}
@@ -97,7 +200,7 @@ NATIVE_RESULT tests=8 failures=4 ignored=0
 ```
 ## stock-ui.txt
 ```
-SAVE_BEFORE race=false persisted=insert cache=insert project=insert bufferType=org.eclipse.jdt.internal.ui.javaeditor.DocumentAdapter length=107 stamp=12
+.SAVE_BEFORE race=false persisted=insert cache=insert project=insert bufferType=org.eclipse.jdt.internal.ui.javaeditor.DocumentAdapter length=107 stamp=12
 SAVE_AFTER race=false length=105 stamp=14 text=package test1;\npublic class E1 {\n    public void foo( Object o ) {\n        String s = (String) o;\n    }\n}
 SAVE_BEFORE race=true persisted=insert cache=do not insert project=do not insert bufferType=org.eclipse.jdt.internal.ui.javaeditor.DocumentAdapter length=107 stamp=20
 SAVE_AFTER race=true length=104 stamp=21 text=package test1;\npublic class E1 {\n    public void foo( Object o ) {\n        String s = (String)o;\n    }\n}
@@ -108,64 +211,127 @@ UI_DIAGNOSTIC_RESULT tests=2 failures=1 ignored=0
 ```
 ## Last lines of execution.log
 ```
-	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
-	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
-	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
-	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
-	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:63)
-	at org.junit.runners.ParentRunner$4.run(ParentRunner.java:331)
-	at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:79)
-	at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:329)
-	at org.junit.runners.ParentRunner.access$100(ParentRunner.java:66)
-	at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:293)
-	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
-	at org.junit.runners.ParentRunner.run(ParentRunner.java:413)
-	at org.junit.runners.Suite.runChild(Suite.java:128)
-	at org.junit.runners.Suite.runChild(Suite.java:27)
-	at org.junit.runners.ParentRunner$4.run(ParentRunner.java:331)
-	at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:79)
-	at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:329)
-	at org.junit.runners.ParentRunner.access$100(ParentRunner.java:66)
-	at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:293)
-	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
-	at org.junit.runners.ParentRunner.run(ParentRunner.java:413)
-	at org.junit.runner.JUnitCore.run(JUnitCore.java:137)
-	at org.junit.runner.JUnitCore.run(JUnitCore.java:115)
-	at org.junit.runner.JUnitCore.run(JUnitCore.java:105)
-	at org.junit.runner.JUnitCore.run(JUnitCore.java:94)
-	at diagnostics.UIApp.runTests(UIApp.java:107)
-	at org.eclipse.swt.widgets.RunnableLock.run(RunnableLock.java:40)
-	at org.eclipse.swt.widgets.Synchronizer.runAsyncMessages(Synchronizer.java:131)
-	at org.eclipse.swt.widgets.Display.runAsyncMessages(Display.java:5078)
-	at org.eclipse.swt.widgets.Display.readAndDispatch(Display.java:4534)
-	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine$5.run(PartRenderingEngine.java:1160)
-	at org.eclipse.core.databinding.observable.Realm.runWithDefault(Realm.java:339)
-	at org.eclipse.e4.ui.internal.workbench.swt.PartRenderingEngine.run(PartRenderingEngine.java:1051)
-	at org.eclipse.e4.ui.internal.workbench.E4Workbench.createAndRunUI(E4Workbench.java:153)
-	at org.eclipse.ui.internal.Workbench.lambda$3(Workbench.java:680)
-	at org.eclipse.core.databinding.observable.Realm.runWithDefault(Realm.java:339)
-	at org.eclipse.ui.internal.Workbench.createAndRunWorkbench(Workbench.java:583)
-	at org.eclipse.ui.PlatformUI.createAndRunWorkbench(PlatformUI.java:173)
-	at diagnostics.UIApp.start(UIApp.java:49)
-	at org.eclipse.equinox.internal.app.EclipseAppHandle.run(EclipseAppHandle.java:219)
-	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.runApplication(EclipseAppLauncher.java:149)
-	at org.eclipse.core.runtime.internal.adaptor.EclipseAppLauncher.start(EclipseAppLauncher.java:115)
-	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:467)
-	at org.eclipse.core.runtime.adaptor.EclipseStarter.run(EclipseStarter.java:298)
-	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
-	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
-	at org.eclipse.equinox.launcher.Main.invokeFramework(Main.java:615)
-	at org.eclipse.equinox.launcher.Main.basicRun(Main.java:563)
-	at org.eclipse.equinox.launcher.Main.run(Main.java:1415)
-	at org.eclipse.equinox.launcher.Main.main(Main.java:1387)
-OPTIONS_RACE writer=JavaCore.setOptions overlapping=do not insert persisted=insert subsequentCached=insert
+
+UI_DIAGNOSTIC_RESULT tests=2 failures=1 ignored=0
+Sep 05, 2026 8:33:00 AM org.apache.aries.spifly.BaseActivator log
+INFO: Registered provider org.slf4j.simple.SimpleServiceProvider of service org.slf4j.spi.SLF4JServiceProvider in bundle slf4j.simple
+........
+Time: 0.233
+
+OK (8 tests)
+
+NATIVE_RESULT tests=8 failures=0 ignored=0
+Sep 05, 2026 8:33:07 AM org.apache.aries.spifly.BaseActivator log
+INFO: Registered provider org.slf4j.simple.SimpleServiceProvider of service org.slf4j.spi.SLF4JServiceProvider in bundle slf4j.simple
+BUNDLE org.eclipse.jdt.core 3.47.0.v20260813-2102
+BUNDLE org.eclipse.text 3.14.800.v20260815-0849
+BUNDLE org.eclipse.core.runtime 3.35.0.v20260623-1631
+.OPTIONS_RACE writer=JavaCore.setOptions overlapping=do not insert persisted=insert subsequentCached=insert
+..FORMATTER_CONTROL: 200 invocations, four workers, fixed source/options
+.OPTIONS_RACE writer=preferences.put overlapping=do not insert persisted=insert subsequentCached=insert
+..OPTIONS_RACE writer=JavaCore.setOptions overlapping=do not insert persisted=insert subsequentCached=insert
+
+Time: 0.627
+
+OK (6 tests)
+
+DIAGNOSTIC_RESULT tests=6 failures=0 ignored=0
+Sep 05, 2026 8:33:14 AM org.apache.aries.spifly.BaseActivator log
+INFO: Registered provider org.slf4j.simple.SimpleServiceProvider of service org.slf4j.spi.SLF4JServiceProvider in bundle slf4j.simple
+
+(java:2994): dbind-WARNING **: 08:33:16.902: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+UI_HARNESS_STARTUP_DISPATCH_COMPLETE
+.SAVE_BEFORE race=false persisted=insert cache=insert project=insert bufferType=org.eclipse.jdt.internal.ui.javaeditor.DocumentAdapter length=107 stamp=12
+SAVE_AFTER race=false length=105 stamp=14 text=package test1;\npublic class E1 {\n    public void foo( Object o ) {\n        String s = (String) o;\n    }\n}
+.OPTIONS_RACE writer=JavaCore.setOptions overlapping=do not insert persisted=insert subsequentCached=insert
 SAVE_BEFORE race=true persisted=insert cache=insert project=insert bufferType=org.eclipse.jdt.internal.ui.javaeditor.DocumentAdapter length=107 stamp=20
 SAVE_AFTER race=true length=105 stamp=22 text=package test1;\npublic class E1 {\n    public void foo( Object o ) {\n        String s = (String) o;\n    }\n}
 
-Time: 1.407
+Time: 1.076
 
 OK (2 tests)
 
 UI_DIAGNOSTIC_RESULT tests=2 failures=0 ignored=0
-Logged Eclipse errors in stock/ui: 2; inspect before publication
+# Options-cache publication fix: executed validation
+
+| Arm | Test layer | Executed | Failed | Ignored | Logged Eclipse errors |
+| --- | --- | ---: | ---: | ---: | ---: |
+| stock | native | 8 | 4 | 0 | 0 |
+| stock | headless | 6 | 3 | 0 | 0 |
+| stock | ui | 2 | 1 | 0 | 0 |
+| fixed | native | 8 | 0 | 0 | 0 |
+| fixed | headless | 6 | 0 | 0 | 0 |
+| fixed | ui | 2 | 0 | 0 | 0 |
+
+Stock fails exactly the four native cache assertions, three original headless assertions and one original editor-save assertion. Fixed passes all 16 tests. No tests were ignored.
+
+Native test source is copied byte-for-byte from the proposed upstream test file. Only JavaModelManager and its nested classes are replaced in the disposable fixed SDK. Other SDK bundles are hash-checked unchanged.
+
+The UI harness registers the standard IDE workspace adapters in both arms. The formatter and editor test assertions are unchanged. This is targeted testing, not a full Tycho/JDT suite run.
+
+The extra space before assignment and historical malformed-edit exceptions of jdt.ui#1445 have not been reproduced or claimed fixed.
+
+```
+## Last lines of publication.log
+```
+
+    Prevent stale Java options cache publication after concurrent updates
+    
+    A cold JavaModelManager.getOptions() can read old preference values, then
+    publish its map after a concurrent JavaCore.setOptions() has completed or
+    a preference event has invalidated the cache. Subsequent non-overlapping
+    getOptions() calls then disagree with getOption(). Defensive Hashtable
+    copies and the existing volatile reference do not prevent this lost
+    invalidation / late-publication race.
+    
+    Track a cache generation and publish a reader's snapshot only if no
+    writer or invalidation has advanced that generation. Coordinate the
+    comparison/publication and generation changes under a short private lock.
+    Keep all preference reads, writes, listeners, copying and tracing outside
+    that lock; retain the cached fast path and defensive-copy semantics.
+    An overlapping read may return its snapshot but may not cache it after
+    an intervening update. Invalidation advances the generation even when
+    the cache is already null, avoiding null-to-null / ABA invalidations.
+    
+    Route all cache invalidations through the same protocol. End an options
+    reset with a generation-advancing invalidation before rebuilding, so a
+    partially computed reset snapshot cannot become the post-reset cache.
+    
+    Add OptionCacheTests to the model suite. Real preference reads are paused
+    using bounded CountDownLatch barriers; delegating proxies retain actual
+    values and release preference locks before pausing. Cover completed
+    setter/reset races, direct and repeated invalidations, cache reuse,
+    returned-copy isolation, sequential writes and reentrant preference
+    callbacks. Restore settings, lookup nodes and worker threads after tests.
+    
+    Validation: all eight new native tests, six established headless Core /
+    formatter tests and two real JavaEditor.doSave integration tests execute
+    against the same pinned Eclipse SDK. Baseline fails exactly eight race
+    assertions; the fixed version passes all 16, with no ignored tests or
+    logged Eclipse errors. Compile the actual patched upstream
+    JavaModelManager source into the disposable SDK; verify that other SDK
+    bundles are unchanged. In both arms the minimal UI harness registers IDE
+    workspace adapters and excludes the unrelated optional Tips add-on to
+    avoid its startup UI racing test-workbench shutdown. No UI product code
+    or test assertions are modified. This is targeted validation, not a full
+    Tycho or complete JDT regression-suite run.
+    Evidence: https://github.com/carstenartur/eclipse.jdt.core/actions/runs/33955492150
+    Upstream base: 8c40c7d2ae12c0a32ab3cca1ab31b53956c65d51
+    SDK: I20260826-2300; JDK 25; Linux GTK x86_64
+    SDK SHA-256: 1a81564c817ba6016557f6b75e3c3a31e3d4532f42e8ab8883b74ebcc68ddbce
+    The archive matches Eclipse's official HTTPS SHA-512 checksum manifest.
+    
+    History: the options cache was introduced in
+    75e4065d4db8d1c67a280c4b46e8853fada67561 (2005-04-19, "91716 (fix improvement)").
+    The audit follows both JavaCore.java (the former location) and
+    JavaModelManager.java (to which the cache moved in 2005), comparing the
+    historical commit with its parent. This is source-history evidence, not
+    a claim that a historical runtime or every intervening release was tested.
+    
+    Related: https://github.com/eclipse-jdt/eclipse.jdt.ui/issues/1445
+    The tests demonstrate stale formatter options and the missing cast space
+    through an actual editor save. They do not reproduce or claim to fix the
+    extra space before assignment or the historical MalformedTreeException.
+    No UI workaround, diagnostic workflow or generated evidence is included
+    in this commit. No upstream pull request is opened.
 ```

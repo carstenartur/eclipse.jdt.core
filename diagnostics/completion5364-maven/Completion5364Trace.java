@@ -30,20 +30,23 @@ public final class Completion5364Trace {
             events.add(events.size() == LIMIT ? "TRUNCATED" : phase + " " + String.valueOf(value));
         }
     }
+    private static String characters(char[] value) {
+        return value == null ? "null" : new String(value);
+    }
     public static void name(String phase, char[] name) {
-        if (active()) event(phase, name == null ? "null" : new String(name));
+        if (active()) event(phase, characters(name));
     }
     public static void type(String phase, char[] pkg, char[] name, int flags) {
         if (active()) event(phase, (pkg == null ? "" : new String(pkg)) + "."
-                + (name == null ? "null" : new String(name)) + " flags=" + flags);
+                + characters(name) + " flags=" + flags);
     }
     public static void options(Map settings) {
         if (active()) event("ENGINE_SETTINGS", new TreeMap(settings));
     }
     public static void deliver(CompletionRequestor requestor, CompletionProposal proposal) {
         if (active()) event("DELIVER", "kind=" + proposal.getKind()
-                + " completion=" + String.valueOf(proposal.getCompletion())
-                + " signature=" + String.valueOf(proposal.getSignature())
+                + " completion=" + characters(proposal.getCompletion())
+                + " signature=" + characters(proposal.getSignature())
                 + " relevance=" + proposal.getRelevance());
         requestor.accept(proposal);
     }

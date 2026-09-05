@@ -46,8 +46,7 @@ BASE_URL=https://download.eclipse.org/eclipse/downloads/drops4/I20260826-2300
 curl --fail --location --retry 2 "$BASE_URL/eclipse-SDK-I20260826-2300-linux-gtk-x86_64.tar.gz" -o "$RUNNER_TEMP/eclipse-sdk.tar.gz"
 python3 "$HERE/verify_sdk.py" "$BASE_URL" "$RUNNER_TEMP/eclipse-sdk.tar.gz" "$EVIDENCE"
 tar xzf "$RUNNER_TEMP/eclipse-sdk.tar.gz" -C "$RUNNER_TEMP"
-# This tiny test workbench does not exercise the optional Tips add-on. Exclude
-# its bundles in BOTH arms, avoiding its startup popup racing workbench shutdown.
+# Keep the same documented optional-bundle exclusions in both arms.
 python3 - "$RUNNER_TEMP/eclipse" "$EVIDENCE" <<'PY'
 import json,pathlib,sys
 sdk,evidence=map(pathlib.Path,sys.argv[1:])
@@ -55,7 +54,7 @@ p=sdk/'configuration/org.eclipse.equinox.simpleconfigurator/bundles.info'
 lines=p.read_text().splitlines()
 removed=[line.split(',')[0] for line in lines if line.startswith('org.eclipse.tips.')]
 p.write_text('\n'.join(line for line in lines if not line.startswith('org.eclipse.tips.'))+'\n')
-(evidence/'ui-harness.json').write_text(json.dumps({'excluded_optional_bundles':removed,'applies_to':'both stock and fixed','reason':'do not launch unrelated Tips startup UI during the minimal test workbench'},indent=2)+'\n')
+(evidence/'ui-harness.json').write_text(json.dumps({'excluded_optional_bundles':removed,'applies_to':'both stock and fixed','startup':'queued EventAdmin marker after APP_STARTUP_COMPLETE dispatch','reason':'minimal editor-test workbench without the unrelated Tips popup'},indent=2)+'\n')
 print('UI_HARNESS_OPTIONAL_TIPS_EXCLUDED',removed,flush=True)
 PY
 cp -a "$RUNNER_TEMP/eclipse" "$RUNNER_TEMP/eclipse-fixed"
@@ -63,7 +62,7 @@ cp -a "$RUNNER_TEMP/eclipse" "$RUNNER_TEMP/eclipse-fixed"
 DIAG="$RUNNER_TEMP/jdt1445"
 mkdir -p "$DIAG/src/diagnostics" "$DIAG/META-INF"
 URL=https://raw.githubusercontent.com/carstenartur/eclipse.jdt.ui/9cea8a527e4810e8c60d18215f1de122bac17120/diagnostics/jdt1445
-for f in src/diagnostics/OptionsCacheConsistencyTest.java src/diagnostics/SaveParticipantIntegrationTest.java src/diagnostics/Application.java src/diagnostics/UIApp.java META-INF/MANIFEST.MF plugin.xml run.sh; do
+for f in src/diagnostics/OptionsCacheConsistencyTest.java src/diagnostics/SaveParticipantIntegrationTest.java src/diagnostics/Application.java META-INF/MANIFEST.MF plugin.xml run.sh; do
   curl --fail --silent --show-error --location --retry 2 "$URL/$f" -o "$DIAG/$f"
 done
 mkdir -p "$DIAG/src/org/eclipse/jdt/core/tests/model"
@@ -79,11 +78,8 @@ plugin.write_text(plugin.read_text().replace('</plugin>', '''  <extension point=
     </application>
   </extension>
 </plugin>'''))
-ui=p/'src/diagnostics/UIApp.java'
-text=ui.read_text(); needle='super.initialize(configurer);'
-assert text.count(needle)==1
-ui.write_text(text.replace(needle,needle+'\n                    org.eclipse.ui.ide.IDE.registerAdapters();'))
 PY
+python3 "$HERE/prepare_ui.py" "$DIAG"
 sha256sum "$CANDIDATE/org.eclipse.jdt.core.tests.model/src/org/eclipse/jdt/core/tests/model/OptionCacheTests.java" "$DIAG/src/org/eclipse/jdt/core/tests/model/OptionCacheTests.java" | tee "$EVIDENCE/native-source-hashes.txt"
 python3 "$HERE/rebuild_core.py" "$RUNNER_TEMP/eclipse-fixed" "$CANDIDATE/$FILE" "$EVIDENCE"
 

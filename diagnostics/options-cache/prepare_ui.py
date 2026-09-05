@@ -27,6 +27,7 @@ import org.junit.internal.TextListener;
 import org.junit.runner.JUnitCore;
 import org.junit.runner.Result;
 import org.junit.runner.notification.Failure;
+import org.osgi.framework.Bundle;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.FrameworkUtil;
 import org.osgi.framework.ServiceReference;
@@ -49,9 +50,14 @@ public class UIApp implements IApplication {
     private ServiceRegistration<EventHandler> registration;
 
     @Override
-    public Object start(IApplicationContext context) {
+    public Object start(IApplicationContext context) throws Exception {
+        Bundle ownBundle = FrameworkUtil.getBundle(UIApp.class);
+        ownBundle.start(Bundle.START_TRANSIENT);
+        this.bundleContext = ownBundle.getBundleContext();
+        if (this.bundleContext == null) {
+            throw new IllegalStateException("Diagnostic bundle has no active context");
+        }
         this.display = PlatformUI.createDisplay();
-        this.bundleContext = FrameworkUtil.getBundle(UIApp.class).getBundleContext();
         try {
             PlatformUI.createAndRunWorkbench(this.display, new WorkbenchAdvisor() {
                 @Override

@@ -1,0 +1,202 @@
+name: Options cache node removal validation
+on:
+  push:
+    branches: [diagnostic/options-cache-node-removal]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  validate:
+    if: github.repository == 'carstenartur/eclipse.jdt.core'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Prepare two identical SDKs and a two-file candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/before evidence/after
+          base=db389f7e72f88da5ded1debd337956b960fc3711
+          file=org.eclipse.jdt.core/model/org/eclipse/jdt/internal/core/JavaModelManager.java
+          git worktree add --detach "$RUNNER_TEMP/before" "$base"
+          git worktree add --detach "$RUNNER_TEMP/candidate" "$base"
+          sdk_url=https://download.eclipse.org/eclipse/downloads/drops4/I20260826-2300
+          curl -fL --retry 2 "$sdk_url/eclipse-SDK-I20260826-2300-linux-gtk-x86_64.tar.gz" -o "$RUNNER_TEMP/sdk.tar.gz"
+          echo "1a81564c817ba6016557f6b75e3c3a31e3d4532f42e8ab8883b74ebcc68ddbce  $RUNNER_TEMP/sdk.tar.gz" | sha256sum -c -
+          tar xzf "$RUNNER_TEMP/sdk.tar.gz" -C "$RUNNER_TEMP"
+          sed -i '/^org.eclipse.tips\./d' "$RUNNER_TEMP/eclipse/configuration/org.eclipse.equinox.simpleconfigurator/bundles.info"
+          cp -a "$RUNNER_TEMP/eclipse" "$RUNNER_TEMP/eclipse-fixed"
+          diag="$RUNNER_TEMP/jdt1445"
+          mkdir -p "$diag/src/diagnostics" "$diag/META-INF"
+          url=https://raw.githubusercontent.com/carstenartur/eclipse.jdt.ui/9cea8a527e4810e8c60d18215f1de122bac17120/diagnostics/jdt1445
+          for f in src/diagnostics/OptionsCacheConsistencyTest.java src/diagnostics/SaveParticipantIntegrationTest.java src/diagnostics/Application.java src/diagnostics/UIApp.java META-INF/MANIFEST.MF plugin.xml run.sh; do
+            curl -fsSL --retry 2 "$url/$f" -o "$diag/$f"
+          done
+          helper=https://raw.githubusercontent.com/carstenartur/eclipse.jdt.core/b6378ff2141ba4b945e97d7c8b754c7848f509e4/diagnostics/options-cache
+          for f in rebuild_core.py prepare_ui.py; do
+            curl -fsSL --retry 2 "$helper/$f" -o "$RUNNER_TEMP/$f"
+          done
+          python3 diagnostics/node-removal/prepare.py "$RUNNER_TEMP/candidate" "$diag"
+          python3 "$RUNNER_TEMP/prepare_ui.py" "$diag"
+          for arm in before after; do
+            git show "8c40c7d2ae12c0a32ab3cca1ab31b53956c65d51:$file" > "evidence/$arm/JavaModelManager.baseline.java"
+          done
+          python3 "$RUNNER_TEMP/rebuild_core.py" "$RUNNER_TEMP/eclipse" "$RUNNER_TEMP/before/$file" evidence/before
+          python3 "$RUNNER_TEMP/rebuild_core.py" "$RUNNER_TEMP/eclipse-fixed" "$RUNNER_TEMP/candidate/$file" evidence/after
+          git -C "$RUNNER_TEMP/candidate" diff --check
+          git -C "$RUNNER_TEMP/candidate" diff > evidence/follow-up.patch
+          cp "$RUNNER_TEMP/candidate/$file" evidence/JavaModelManager.java
+          cp "$RUNNER_TEMP/candidate/org.eclipse.jdt.core.tests.model/src/org/eclipse/jdt/core/tests/model/OptionCacheTests.java" evidence/OptionCacheTests.java
+      - name: Execute the unmodified race tests before and after node removal
+        shell: bash
+        run: |
+          set -euo pipefail
+          diag="$RUNNER_TEMP/jdt1445"
+          run_tests() {
+            local label=$1 sdk=$2 mode=$3 remove=$4 repeats=$5 app=$6
+            set +e
+            if [ "$app" = jdt1445.diagnostics.ui ]; then
+              NATIVE_MODE="$mode" REMOVE_NODE="$remove" NATIVE_REPEATS="$repeats" timeout 300 xvfb-run -a bash "$diag/run.sh" "$sdk" "$app" > "evidence/$label.txt" 2>&1
+            else
+              NATIVE_MODE="$mode" REMOVE_NODE="$remove" NATIVE_REPEATS="$repeats" timeout 300 bash "$diag/run.sh" "$sdk" "$app" > "evidence/$label.txt" 2>&1
+            fi
+            status=$?
+            set -e
+            echo "$status" > "evidence/$label.exit"
+            grep -E 'NATIVE_RESULT|NATIVE_FAILURE|DIAGNOSTIC_RESULT|REPLAYED|SAVE_BEFORE|SAVE_AFTER|UI_HARNESS' "evidence/$label.txt" || true
+            if [ -d "$diag/out" ]; then mv "$diag/out" "evidence/workspace-$label"; fi
+          }
+          run_tests old-fresh "$RUNNER_TEMP/eclipse" original false 1 jdt1445.diagnostics.native
+          run_tests old-removed "$RUNNER_TEMP/eclipse" original true 1 jdt1445.diagnostics.native
+          run_tests old-lifecycle "$RUNNER_TEMP/eclipse" lifecycle false 1 jdt1445.diagnostics.native
+          run_tests fixed-fresh "$RUNNER_TEMP/eclipse-fixed" all false 1 jdt1445.diagnostics.native
+          run_tests fixed-removed "$RUNNER_TEMP/eclipse-fixed" all true 5 jdt1445.diagnostics.native
+          run_tests fixed-headless "$RUNNER_TEMP/eclipse-fixed" all false 1 jdt1445.diagnostics.run
+          run_tests fixed-ui "$RUNNER_TEMP/eclipse-fixed" all false 1 jdt1445.diagnostics.ui
+      - name: Check exact failure signatures, repetitions and error logs
+        run: |
+          python3 - <<'PY'
+          import pathlib, re
+          root=pathlib.Path('evidence')
+          expected={
+            'old-fresh': (8,0,1,'NATIVE'),
+            'old-removed': (8,5,1,'NATIVE'),
+            'old-lifecycle': (2,2,1,'NATIVE'),
+            'fixed-fresh': (10,0,1,'NATIVE'),
+            'fixed-removed': (10,0,5,'NATIVE'),
+            'fixed-headless': (6,0,1,'DIAGNOSTIC'),
+            'fixed-ui': (2,0,1,'UI_DIAGNOSTIC'),
+          }
+          failure_names={
+            'old-removed': {'testRepeatedInvalidationCannotBeUndone','testCompletedSetOptionsCannotBeOverwritten','testPreferenceInvalidationCannotBeUndone','testCompletedResetCannotBeOverwritten','testCacheIsReused'},
+            'old-lifecycle': {'testInstanceNodeRemovalInvalidatesCache','testInstanceNodeReplacementKeepsInvalidatingCache'},
+          }
+          lines=['# PR 5364: node-removal reproduction and follow-up validation', '',
+                 '| Scenario | Tests per repetition | Repetitions | Failures per repetition | Eclipse errors |',
+                 '| --- | ---: | ---: | ---: | ---: |']
+          for name,(tests,failures,repeats,prefix) in expected.items():
+            text=(root/(name+'.txt')).read_text(errors='replace')
+            totals=re.findall(rf'^{prefix}_RESULT tests=(\d+) failures=(\d+) ignored=(\d+)$',text,re.M)
+            assert totals==[(str(tests),str(failures),'0')]*repeats,(name,totals)
+            assert int((root/(name+'.exit')).read_text())==(1 if failures else 0),name
+            observed=set(re.findall(rf'^{prefix}_FAILURE (\w+)\(',text,re.M))
+            assert observed==failure_names.get(name,set()),(name,observed)
+            assert not re.search(r'^[.EF]*!ENTRY \S+ 4 ',text,re.M),name+' has Eclipse errors'
+            if name=='old-removed':
+              assert text.count('Reader did not capture the old preference')>=4
+              assert 'The cold read must access the real preferences' in text
+            lines.append(f'| {name} | {tests} | {repeats} | {failures} | 0 |')
+          lines += ['', 'Before = PR commit db389f7e72f88da5ded1debd337956b960fc3711, not unpatched upstream.',
+                    'Removing/recreating the instance preference node reproduces exactly the five Jenkins failures. The existing eight tests and their 30-second timeouts are unchanged.',
+                    'After = the two-file listener lifecycle repair. Ten native tests pass both fresh and after node removal (five repetitions), plus six separate headless and two real-editor diagnostics.',
+                    'This is targeted validation, not a rerun of all 117548 upstream tests.']
+          report='\n'.join(lines)+'\n'
+          (root/'VALIDATION.md').write_text(report)
+          (root/'validation-success.txt').write_text('passed\n')
+          print(report)
+          PY
+      - name: Commit only validated product and test changes to the existing PR branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [ -f evidence/validation-success.txt ]
+          branch=fix/options-cache-publication-race
+          base=db389f7e72f88da5ded1debd337956b960fc3711
+          [ "$(git ls-remote origin "refs/heads/$branch" | cut -f1)" = "$base" ] || { echo 'PR branch moved; refusing to overwrite'; exit 1; }
+          candidate="$RUNNER_TEMP/candidate"
+          git -C "$candidate" add org.eclipse.jdt.core/model/org/eclipse/jdt/internal/core/JavaModelManager.java org.eclipse.jdt.core.tests.model/src/org/eclipse/jdt/core/tests/model/OptionCacheTests.java
+          [ "$(git -C "$candidate" diff --cached --name-only | wc -l)" = 2 ]
+          git -C "$candidate" diff --cached --check
+          git -C "$candidate" config user.name "$(git show -s --format=%an "$base")"
+          git -C "$candidate" config user.email "$(git show -s --format=%ae "$base")"
+          cat > evidence/commit-message.txt <<'EOF'
+          Restore options-cache invalidation after preference node replacement
+
+          The first upstream Jenkins run of PR 5364 passes 117543 tests but
+          fails five new OptionCacheTests. All five fail to establish a cold
+          cache: four readers never reach the preference-read barrier, and the
+          cache-reuse test observes no preference reads at all.
+
+          OptionTests.testBug72214(), which precedes OptionCacheTests in the
+          model suite, removes the Java Core instance preferences node.
+          initializePreferences() recreates the node and its classpath listener,
+          but does not transfer the propertyListener installed in startup().
+          Further preference writes therefore stop invalidating optionsCache.
+          A previously cached value can also survive removal of its source node.
+          The focused tests originally ran with a fresh node and missed this
+          existing lifecycle defect; the generation-checked publication alone
+          cannot compensate for an invalidation event that is never received.
+
+          Register propertyListener on each replacement instance node and
+          invalidate via the generation-aware protocol after replacement.
+          Also retain the replacement instancePreferencesListener in its field
+          so normal shutdown removes the listener actually in use. Keep
+          preference callbacks outside the options-cache lock.
+
+          Add tests for immediate cache invalidation on node removal and for
+          subsequent writes after two successive replacements. Preserve raw
+          preferences (including non-option keys) around the destructive tests.
+          Do not weaken or reorder the existing eight tests, alter their
+          assertions, bypass the cache or increase their 30-second timeouts.
+
+          Validation: replaying the preference-node operations of testBug72214
+          reproduces exactly all five reported failures on the previous PR
+          commit. Both new lifecycle tests also fail there. With this follow-up,
+          all ten native tests pass fresh and in five repetitions after node
+          removal; the six independent Core/formatter and two real Java-editor
+          diagnostics also pass. No ignored tests or Eclipse ERROR log entries
+          occur in these checks. This is targeted validation, not a complete
+          upstream suite rerun. The original multi-symptom UI issue remains
+          outside the demonstrated scope.
+          EOF
+          printf '\nEvidence: https://github.com/%s/actions/runs/%s\nRelated: https://github.com/eclipse-jdt/eclipse.jdt.core/pull/5364\n' "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" >> evidence/commit-message.txt
+          git -C "$candidate" commit -F "$GITHUB_WORKSPACE/evidence/commit-message.txt"
+          gh auth setup-git
+          git -C "$candidate" push origin "HEAD:refs/heads/$branch"
+          git -C "$candidate" rev-parse HEAD | tee evidence/published-commit.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: options-cache-node-removal-evidence
+          path: |
+            evidence/*.txt
+            evidence/*.exit
+            evidence/*.md
+            evidence/*.patch
+            evidence/*.java
+            evidence/before/*.json
+            evidence/before/*.txt
+            evidence/after/*.json
+            evidence/after/*.txt
+            evidence/workspace-*/workspace*/.metadata/.log
+          include-hidden-files: true
+          if-no-files-found: warn

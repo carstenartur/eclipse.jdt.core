@@ -11,18 +11,23 @@ assert text.count(needle) == 1
 manifest.write_text(text.replace(needle, needle + ',\n org.osgi.service.event,\n org.osgi.framework'))
 (root / 'src/diagnostics/UIApp.java').write_text('''package diagnostics;
 
+import java.net.URL;
 import java.util.Hashtable;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.eclipse.core.resources.ResourcesPlugin;
+import org.eclipse.core.runtime.FileLocator;
+import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.equinox.app.IApplication;
 import org.eclipse.equinox.app.IApplicationContext;
+import org.eclipse.jface.resource.ImageDescriptor;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.PlatformUI;
 import org.eclipse.ui.application.IWorkbenchConfigurer;
 import org.eclipse.ui.application.WorkbenchAdvisor;
+import org.eclipse.ui.ide.IDE;
 import org.junit.internal.TextListener;
 import org.junit.runner.JUnitCore;
 import org.junit.runner.Result;
@@ -65,7 +70,9 @@ public class UIApp implements IApplication {
                 @Override
                 public void initialize(IWorkbenchConfigurer configurer) {
                     super.initialize(configurer);
-                    org.eclipse.ui.ide.IDE.registerAdapters();
+                    IDE.registerAdapters();
+                    declareProjectImage(configurer, IDE.SharedImages.IMG_OBJ_PROJECT, "prj_obj.svg");
+                    declareProjectImage(configurer, IDE.SharedImages.IMG_OBJ_PROJECT_CLOSED, "cprj_obj.svg");
                     configurer.setSaveAndRestore(false);
                 }
                 @Override
@@ -110,6 +117,15 @@ public class UIApp implements IApplication {
         }
     }
 
+    private static void declareProjectImage(IWorkbenchConfigurer configurer, String key, String name) {
+        URL url = FileLocator.find(FrameworkUtil.getBundle(IDE.class),
+                IPath.fromOSString("$nl$/icons/full/obj16/" + name), null);
+        if (url == null) {
+            throw new IllegalStateException("Missing SDK project image: " + name);
+        }
+        configurer.declareImage(key, ImageDescriptor.createFromURL(url), true);
+    }
+
     private void runTests() {
         System.out.println("UI_HARNESS_STARTUP_DISPATCH_COMPLETE");
         try {
@@ -145,4 +161,4 @@ public class UIApp implements IApplication {
     }
 }
 ''')
-print('UI_HARNESS waits for queued workbench-startup delivery; assertions unchanged', flush=True)
+print('UI_HARNESS uses real IDE project images and queued startup delivery; assertions unchanged', flush=True)

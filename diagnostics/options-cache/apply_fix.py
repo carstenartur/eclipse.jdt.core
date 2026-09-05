@@ -57,10 +57,25 @@ if count < 4:
     raise SystemExit('Unexpected invalidation-site count: ' + str(count))
 source = source.replace('JavaModelManager.this.optionsCache = null;', 'JavaModelManager.this.setOptionsCache(null);')
 source = source.replace('this.optionsCache = null;', 'setOptionsCache(null);')
-replace('// reset all options, optionsCache & fixTaskTags will be updated there\n\t\t\tgetOptions();', '''// Discard a cache built while the individual preferences were being
+# Inspect the complete reset branch, rather than depending on comment spelling.
+pattern = r'if \(cachedValue == null\) \{(?P<body>.*?)\n\s*\} else \{\s*Util\.fixTaskTags\(cachedValue\);'
+matches = list(re.finditer(pattern, source, re.S))
+if len(matches) != 1:
+    raise SystemExit('Expected one setOptions reset branch, found ' + str(len(matches)))
+match = matches[0]
+body = match.group('body')
+print('RESET_BRANCH_BEFORE', repr(body), flush=True)
+statements = re.sub(r'//[^\n]*', '', body)
+statements = re.sub(r'/\*.*?\*/', '', statements, flags=re.S)
+statements = re.sub(r'\s+', '', statements)
+if statements not in ('getOptions();', 'setOptionsCache(null);getOptions();'):
+    raise SystemExit('Unexpected reset statements: ' + repr(statements))
+replacement = '''
+			// Discard a cache built while the individual preferences were being
 			// cleared, and prevent an in-flight reader from publishing one later.
 			setOptionsCache(null);
-			getOptions();''')
+			getOptions();'''
+source = source[:match.start('body')] + replacement + source[match.end('body'):]
 assignments = re.findall(r'this\.optionsCache = ([^;]+);', source)
 if assignments != ['newCache', 'options']:
     raise SystemExit('Cache assignment outside the publication helpers: ' + repr(assignments))

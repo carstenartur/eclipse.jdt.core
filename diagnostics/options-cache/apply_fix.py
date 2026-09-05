@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply the small candidate patch to a checkout of the pinned upstream revision."""
+"""Apply and audit the candidate against the exact pinned upstream source."""
 from pathlib import Path
 import re
 import shutil
@@ -9,6 +9,9 @@ root = Path(sys.argv[1]).resolve()
 here = Path(__file__).resolve().parent
 manager = root / 'org.eclipse.jdt.core/model/org/eclipse/jdt/internal/core/JavaModelManager.java'
 source = manager.read_text()
+for number, line in enumerate(source.splitlines(), 1):
+    if 'optionsCache' in line:
+        print('ORIGINAL_CACHE_REFERENCE', number, line.strip(), flush=True)
 for p in (root / 'org.eclipse.jdt.core').rglob('*.java'):
     if p != manager and 'optionsCache' in p.read_text():
         for number, line in enumerate(p.read_text().splitlines(), 1):
@@ -56,11 +59,11 @@ replace('public Hashtable<String, String> getOptions() {', '''/**
 replace('this.optionsCache = defaults;', 'cacheOptions(defaults, generation);')
 replace('this.optionsCache = new Hashtable<>(options);', 'cacheOptions(new Hashtable<>(options), generation);')
 replace('this.optionsCache = cachedValue;', 'setOptionsCache(cachedValue);')
-count = len(re.findall(r'(?:JavaModelManager\.)?this\.optionsCache = null;', source))
-if count < 4:
+# Preserve the receiver for inner listeners, and include unqualified assignments.
+pattern = r'(?P<receiver>(?:JavaModelManager\.)?this\.)?\boptionsCache\s*=\s*null;'
+source, count = re.subn(pattern, lambda m: (m.group('receiver') or '') + 'setOptionsCache(null);', source)
+if count < 2:
     raise SystemExit('Unexpected invalidation-site count: ' + str(count))
-source = source.replace('JavaModelManager.this.optionsCache = null;', 'JavaModelManager.this.setOptionsCache(null);')
-source = source.replace('this.optionsCache = null;', 'setOptionsCache(null);')
 pattern = r'if \(cachedValue == null\) \{(?P<body>.*?)\n\s*\} else \{\s*Util\.fixTaskTags\(cachedValue\);'
 matches = list(re.finditer(pattern, source, re.S))
 if len(matches) != 1:
@@ -70,7 +73,7 @@ body = match.group('body')
 print('RESET_BRANCH_BEFORE', repr(body), flush=True)
 statements = re.sub(r'//[^\n]*', '', body)
 statements = re.sub(r'/\*.*?\*/', '', statements, flags=re.S)
-statements = re.sub(r'\s+', '', statements)
+statements = re.sub(r'\s+', '', statements).replace('this.setOptionsCache(', 'setOptionsCache(')
 if statements not in ('getOptions();', 'setOptionsCache(null);getOptions();'):
     raise SystemExit('Unexpected reset statements: ' + repr(statements))
 replacement = '''
@@ -79,7 +82,7 @@ replacement = '''
 			setOptionsCache(null);
 			getOptions();'''
 source = source[:match.start('body')] + replacement + source[match.end('body'):]
-assignments = re.findall(r'this\.optionsCache = ([^;]+);', source)
+assignments = re.findall(r'\boptionsCache\s*=\s*([^;]+);', source)
 if assignments != ['newCache', 'options']:
     raise SystemExit('Cache assignment outside the publication helpers: ' + repr(assignments))
 manager.write_text(source)

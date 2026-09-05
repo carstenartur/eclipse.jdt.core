@@ -9,8 +9,8 @@ permissions:
   contents: read
 jobs:
   build:
-    uses: carstenartur/eclipse.jdt.debug/.github/workflows/jenkins-parity.yml@f37414a3c96111d32821162102bec1f447146427
+    uses: carstenartur/eclipse.jdt.debug/.github/workflows/jenkins-parity.yml@e1d2134f5cca5e88bfa8cd8b0ee6c947ee10fd1b
     with:
       diagnostics: false
       source_ref: ${{ github.sha }}
-      harness_ref: f37414a3c96111d32821162102bec1f447146427
+      harness_ref: e1d2134f5cca5e88bfa8cd8b0ee6c947ee10fd1b

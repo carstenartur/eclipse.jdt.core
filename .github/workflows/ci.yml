@@ -1,11 +1,11 @@
 name: Continuous Integration
-concurrency: 
+concurrency:
     group: ${{ github.workflow }}-${{ github.ref }}
     cancel-in-progress: true
 
 on:
   push:
-    branches: '**'
+    branches-ignore: [diagnostic/completion-5364-maven]
 
 jobs:
   event_file:

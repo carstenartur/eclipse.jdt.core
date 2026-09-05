@@ -1,0 +1,62 @@
+name: Completion 5364 Maven tracing
+on:
+  push:
+    branches: [diagnostic/completion-5364-maven]
+    paths: ['diagnostics/completion5364-maven/**', '.github/workflows/completion-5364-maven.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: completion5364-maven-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  compare:
+    strategy:
+      fail-fast: false
+      matrix:
+        arm: [base, generation, lifecycle]
+        java: ['21', '25']
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: diagnostics-repo
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: carstenartur/eclipse.jdt.core
+          ref: ${{ matrix.arm == 'base' && '8c40c7d2ae12c0a32ab3cca1ab31b53956c65d51' || matrix.arm == 'generation' && 'db389f7e72f88da5ded1debd337956b960fc3711' || 'd55a8c72e96ba601562fda02e5698da6323d37e7' }}
+          path: source
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: |
+            8
+            17
+            21
+            25
+          mvn-toolchain-id: |
+            JavaSE-1.8
+            JavaSE-17
+            JavaSE-21
+            JavaSE-25
+      - name: Inject identical diagnostic hooks and select the actual test JVM
+        run: |
+          python3 diagnostics-repo/diagnostics/completion5364-maven/instrument.py source diagnostics-repo/diagnostics/completion5364-maven evidence '${{ matrix.java }}'
+          git -C source diff --check
+          java -version 2> evidence/maven-java.txt
+          mvn --version >> evidence/maven-java.txt
+          git -C source diff > evidence/complete-generated.patch
+      - name: Build all required sources with Maven and run separate test processes
+        run: python3 diagnostics-repo/diagnostics/completion5364-maven/run.py source evidence '${{ matrix.arm }}' '${{ matrix.java }}'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: completion5364-maven-${{ matrix.arm }}-jdk${{ matrix.java }}
+          path: evidence/
+          include-hidden-files: true
+          retention-days: 14
+          if-no-files-found: error

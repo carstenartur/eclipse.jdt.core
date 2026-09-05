@@ -1,0 +1,14 @@
+name: Controlled Jenkins diagnosis
+on:
+  workflow_dispatch:
+  push:
+    branches: [ci/jenkins-parity-diagnostics]
+    paths: [.github/workflows/jenkins-diagnosis.yml]
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    uses: carstenartur/eclipse.jdt.debug/.github/workflows/jenkins-parity.yml@f37414a3c96111d32821162102bec1f447146427
+    with:
+      diagnostics: true
+      harness_ref: f37414a3c96111d32821162102bec1f447146427

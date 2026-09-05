@@ -15,6 +15,7 @@ git -C "$CANDIDATE" diff --cached --binary > "$EVIDENCE/fix.patch"
 
 # Audit only ancestors of the actual upstream base, not unrelated helper branches.
 FILE=org.eclipse.jdt.core/model/org/eclipse/jdt/internal/core/JavaModelManager.java
+git show "$BASE:$FILE" > "$EVIDENCE/JavaModelManager.baseline.java"
 git log "$BASE" --reverse --format='%H %as %s' -G 'optionsCache' -- "$FILE" > "$EVIDENCE/history.txt"
 FIRST=$(head -1 "$EVIDENCE/history.txt" | cut -d ' ' -f 1)
 git merge-base --is-ancestor "$FIRST" "$BASE"
@@ -31,7 +32,7 @@ PY
 
 BASE_URL=https://download.eclipse.org/eclipse/downloads/drops4/I20260826-2300
 curl --fail --location --retry 2 "$BASE_URL/eclipse-SDK-I20260826-2300-linux-gtk-x86_64.tar.gz" -o "$RUNNER_TEMP/eclipse-sdk.tar.gz"
-echo "1a81564c817ba6016557f6b75e3c3a31e3d4532f42e8ab8883b74ebcc68ddbce  $RUNNER_TEMP/eclipse-sdk.tar.gz" | sha256sum -c -
+python3 "$HERE/verify_sdk.py" "$BASE_URL" "$RUNNER_TEMP/eclipse-sdk.tar.gz" "$EVIDENCE"
 tar xzf "$RUNNER_TEMP/eclipse-sdk.tar.gz" -C "$RUNNER_TEMP"
 cp -a "$RUNNER_TEMP/eclipse" "$RUNNER_TEMP/eclipse-fixed"
 
@@ -72,7 +73,6 @@ run_tests() {
   local arm=$1 app=$2 id=$3
   local sdk="$RUNNER_TEMP/eclipse"
   if [ "$arm" = fixed ]; then sdk="$RUNNER_TEMP/eclipse-fixed"; fi
-  # Every application and arm starts with its own disposable workspace.
   if [ -d "$DIAG/out" ]; then mv "$DIAG/out" "$EVIDENCE/workspace-$arm-$app-previous"; fi
   set +e
   if [ "$app" = ui ]; then

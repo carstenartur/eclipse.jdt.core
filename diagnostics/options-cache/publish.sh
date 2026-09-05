@@ -19,6 +19,7 @@ assert sorted(actual)==sorted(expected), actual
 source=candidate/expected[2]
 assert hashlib.sha256(source.read_bytes()).hexdigest()==(evidence/'candidate-source-sha256.txt').read_text().strip()
 history=json.loads((evidence/'history-origin.json').read_text())
+sdk=json.loads((evidence/'sdk-provenance.json').read_text())
 run=f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
 message=f'''Prevent stale Java options cache publication after concurrent updates
 
@@ -39,10 +40,9 @@ an intervening update. Invalidation advances the generation even when
 the cache is already null, avoiding null-to-null / ABA invalidations.
 
 Route every existing invalidation site through the same protocol,
-including default-node and workspace-encoding changes. Finish
-setOptions(null) with an explicit invalidation before rebuilding, so
-neither an intermediate reset cache nor an older in-flight computation
-can become the post-reset cache.
+including default-node and workspace-encoding changes. Preserve the
+existing final invalidation in setOptions(null), now advancing the
+generation so an older in-flight computation cannot undo that reset.
 
 Add OptionCacheTests to the model suite. The real preference reads are
 paused using bounded CountDownLatch barriers; delegating proxies retain
@@ -62,6 +62,8 @@ complete JDT regression-suite run.
 Evidence: {run}
 Upstream base: 8c40c7d2ae12c0a32ab3cca1ab31b53956c65d51
 SDK: I20260826-2300; JDK 25; Linux GTK x86_64
+SDK SHA-256: {sdk['sha256']}
+The archive matches Eclipse's official HTTPS SHA-512 checksum manifest.
 
 History audit of the upstream ancestry first finds the options cache in
 {history['sha']} ({history['date']}, "{history['subject']}").
@@ -79,11 +81,9 @@ in this commit. No upstream pull request is opened.
 '''
 (evidence/'commit-message.txt').write_text(message)
 PY
-# Preserve the identity explicitly used for the user's helper-branch commits.
 git -C "$CANDIDATE" config user.name "$(git show -s --format=%an HEAD)"
 git -C "$CANDIDATE" config user.email "$(git show -s --format=%ae HEAD)"
 git -C "$CANDIDATE" commit -F "$ROOT/evidence/commit-message.txt"
-# The workflow token is only exposed to this explicitly authorized write step.
 gh auth setup-git
 git -C "$CANDIDATE" push origin "HEAD:refs/heads/$BRANCH"
 git -C "$CANDIDATE" log -1 --format=fuller | tee "$ROOT/evidence/published-commit.txt"

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from pathlib import Path
+import difflib
 import hashlib
+import json
 import os
 import re
 import subprocess
@@ -17,16 +19,23 @@ def one(pattern):
     return found[0]
 with zipfile.ZipFile(one('org.eclipse.jdt.core.source_*.jar')) as z:
     sdk_source = z.read(source_entry).decode()
-expected = {
- 'public Hashtable<String, String> getOptions()': 'ae1d69fc7e8f91996c2ea9553c8a93861072cad1d768be9e606ed5f16cf94b06',
- 'public void setOptions(Hashtable<String, String> newOptions)': '49636cb5d2d6ff5a848e422b318e826d715e96d99ee286c33c3a2f5d0cb8abc9',
-}
-for signature, known in expected.items():
-    start=sdk_source.index(signature); end=sdk_source.index('\n\t}',start)+3
-    digest=hashlib.sha256(re.sub(r'\s+',' ',sdk_source[start:end]).strip().encode()).hexdigest()
-    if digest != known:
-        raise SystemExit('Unexpected SDK method: '+signature+' '+digest)
-    print('BASELINE_SOURCE_MATCH', signature, digest, flush=True)
+upstream = (evidence/'JavaModelManager.baseline.java').read_text()
+provenance = []
+for signature in ['public Hashtable<String, String> getOptions()', 'public void setOptions(Hashtable<String, String> newOptions)']:
+    def method(source):
+        start=source.index(signature)
+        end=source.index('\n\t}',start)+3
+        return re.sub(r'\s+',' ',source[start:end]).strip()
+    actual, expected = method(sdk_source), method(upstream)
+    record = {'method': signature, 'equal': actual == expected,
+              'sdk_sha256': hashlib.sha256(actual.encode()).hexdigest(),
+              'upstream_sha256': hashlib.sha256(expected.encode()).hexdigest()}
+    provenance.append(record)
+    print('BASELINE_SOURCE_COMPARISON',json.dumps(record),flush=True)
+    if actual != expected:
+        (evidence/'sdk-upstream-method-mismatch.txt').write_text('\n'.join(difflib.unified_diff(expected.split(),actual.split())))
+        raise SystemExit('SDK differs from the pinned upstream method; refusing a misleading baseline comparison')
+(evidence/'method-provenance.json').write_text(json.dumps(provenance,indent=2)+'\n')
 jars=sorted((sdk/'plugins').glob('*.jar'))
 def hashes():
     return {p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in jars}

@@ -21,6 +21,7 @@ assert hashlib.sha256(source.read_bytes()).hexdigest()==(evidence/'candidate-sou
 history=json.loads((evidence/'history-origin.json').read_text())
 sdk=json.loads((evidence/'sdk-provenance.json').read_text())
 run=f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
+origin='introduced' if history['introduction_verified'] else 'already present'
 message=f'''Prevent stale Java options cache publication after concurrent updates
 
 A cold JavaModelManager.getOptions() can read old preference values, then
@@ -39,16 +40,15 @@ An overlapping read may return its snapshot but may not cache it after
 an intervening update. Invalidation advances the generation even when
 the cache is already null, avoiding null-to-null / ABA invalidations.
 
-Route every existing invalidation site through the same protocol,
-including default-node and workspace-encoding changes. Preserve the
-existing final invalidation in setOptions(null), now advancing the
-generation so an older in-flight computation cannot undo that reset.
+Route all cache invalidations through the same protocol. End an options
+reset with a generation-advancing invalidation before rebuilding, so a
+partially computed reset snapshot cannot become the post-reset cache.
 
-Add OptionCacheTests to the model suite. The real preference reads are
-paused using bounded CountDownLatch barriers; delegating proxies retain
-the actual values and release preference locks before pausing. Cover
-completed setter/reset races, direct and repeated invalidations, cache
-reuse, returned-copy isolation, sequential writes and reentrant preference
+Add OptionCacheTests to the model suite. Real preference reads are paused
+using bounded CountDownLatch barriers; delegating proxies retain actual
+values and release preference locks before pausing. Cover completed
+setter/reset races, direct and repeated invalidations, cache reuse,
+returned-copy isolation, sequential writes and reentrant preference
 callbacks. Restore settings, lookup nodes and worker threads after tests.
 
 Validation: all eight new native tests, six established headless Core /
@@ -57,20 +57,23 @@ against the same pinned Eclipse SDK. Baseline fails exactly eight race
 assertions; the fixed version passes all 16, with no ignored tests or
 logged Eclipse errors. Compile the actual patched upstream
 JavaModelManager source into the disposable SDK; verify that other SDK
-bundles are unchanged. This is targeted validation, not a full Tycho or
-complete JDT regression-suite run.
+bundles are unchanged. In both arms the minimal UI harness registers IDE
+workspace adapters and excludes the unrelated optional Tips add-on to
+avoid its startup UI racing test-workbench shutdown. No UI product code
+or test assertions are modified. This is targeted validation, not a full
+Tycho or complete JDT regression-suite run.
 Evidence: {run}
 Upstream base: 8c40c7d2ae12c0a32ab3cca1ab31b53956c65d51
 SDK: I20260826-2300; JDK 25; Linux GTK x86_64
 SDK SHA-256: {sdk['sha256']}
 The archive matches Eclipse's official HTTPS SHA-512 checksum manifest.
 
-History audit of the upstream ancestry first finds the options cache in
+History: the options cache was {origin} in
 {history['sha']} ({history['date']}, "{history['subject']}").
-That revision introduced the cache construction/publication and separate
-invalidation pattern. This is source-history evidence for the original
-vulnerable design, not a claim that the historical runtime was tested or
-that every later formatting failure has this cause.
+The audit follows both JavaCore.java (the former location) and
+JavaModelManager.java (to which the cache moved in 2005), comparing the
+historical commit with its parent. This is source-history evidence, not
+a claim that a historical runtime or every intervening release was tested.
 
 Related: https://github.com/eclipse-jdt/eclipse.jdt.ui/issues/1445
 The tests demonstrate stale formatter options and the missing cast space

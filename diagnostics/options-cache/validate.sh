@@ -13,30 +13,53 @@ git -C "$CANDIDATE" diff --cached --check
 git -C "$CANDIDATE" diff --cached --stat | tee "$EVIDENCE/diff-stat.txt"
 git -C "$CANDIDATE" diff --cached --binary > "$EVIDENCE/fix.patch"
 
-# Audit only ancestors of the actual upstream base, not unrelated helper branches.
 FILE=org.eclipse.jdt.core/model/org/eclipse/jdt/internal/core/JavaModelManager.java
+API_FILE=org.eclipse.jdt.core/model/org/eclipse/jdt/core/JavaCore.java
 git show "$BASE:$FILE" > "$EVIDENCE/JavaModelManager.baseline.java"
-git log "$BASE" --reverse --format='%H %as %s' -G 'optionsCache' -- "$FILE" > "$EVIDENCE/history.txt"
+# The cache moved from JavaCore to JavaModelManager in 2005; trace both locations.
+git log "$BASE" --reverse --format='%H %as %s' -G 'optionsCache' -- "$FILE" "$API_FILE" > "$EVIDENCE/history.txt"
 FIRST=$(head -1 "$EVIDENCE/history.txt" | cut -d ' ' -f 1)
 git merge-base --is-ancestor "$FIRST" "$BASE"
-git show --format=fuller "$FIRST" -- "$FILE" > "$EVIDENCE/cache-introduction.patch"
+git show --format=fuller "$FIRST" -- "$FILE" "$API_FILE" > "$EVIDENCE/cache-introduction.patch"
 head -8 "$EVIDENCE/history.txt"
-python3 - "$ROOT" "$FIRST" <<'PY'
+python3 - "$ROOT" "$FIRST" "$FILE" "$API_FILE" <<'PY'
 import json, pathlib, subprocess, sys
-root=pathlib.Path(sys.argv[1]); sha=sys.argv[2]
+root=pathlib.Path(sys.argv[1]); sha=sys.argv[2]; paths=sys.argv[3:]
 meta=subprocess.check_output(['git','show','-s','--format=%H%n%as%n%s',sha],text=True).splitlines()
+def has_cache(revision):
+    present=[]
+    for path in paths:
+        result=subprocess.run(['git','show',revision+':'+path],capture_output=True,text=True)
+        if result.returncode==0 and 'optionsCache' in result.stdout:
+            present.append(path)
+    return present
+before,after=has_cache(sha+'^'),has_cache(sha)
+diff=subprocess.check_output(['git','show','--format=',sha,'--',*paths],text=True)
+result=dict(sha=meta[0],date=meta[1],subject=meta[2],cache_locations_before=before,
+            cache_locations_after=after,introduction_verified=not before and bool(after),diff_excerpt=diff[:7500])
 p=root/'evidence/history-origin.json'
-p.write_text(json.dumps(dict(sha=meta[0],date=meta[1],subject=meta[2]),indent=2)+'\n')
-print('HISTORY_ORIGIN', p.read_text())
+p.write_text(json.dumps(result,indent=2)+'\n')
+print('HISTORY_ORIGIN',p.read_text(),flush=True)
 PY
 
 BASE_URL=https://download.eclipse.org/eclipse/downloads/drops4/I20260826-2300
 curl --fail --location --retry 2 "$BASE_URL/eclipse-SDK-I20260826-2300-linux-gtk-x86_64.tar.gz" -o "$RUNNER_TEMP/eclipse-sdk.tar.gz"
 python3 "$HERE/verify_sdk.py" "$BASE_URL" "$RUNNER_TEMP/eclipse-sdk.tar.gz" "$EVIDENCE"
 tar xzf "$RUNNER_TEMP/eclipse-sdk.tar.gz" -C "$RUNNER_TEMP"
+# This tiny test workbench does not exercise the optional Tips add-on. Exclude
+# its bundles in BOTH arms, avoiding its startup popup racing workbench shutdown.
+python3 - "$RUNNER_TEMP/eclipse" "$EVIDENCE" <<'PY'
+import json,pathlib,sys
+sdk,evidence=map(pathlib.Path,sys.argv[1:])
+p=sdk/'configuration/org.eclipse.equinox.simpleconfigurator/bundles.info'
+lines=p.read_text().splitlines()
+removed=[line.split(',')[0] for line in lines if line.startswith('org.eclipse.tips.')]
+p.write_text('\n'.join(line for line in lines if not line.startswith('org.eclipse.tips.'))+'\n')
+(evidence/'ui-harness.json').write_text(json.dumps({'excluded_optional_bundles':removed,'applies_to':'both stock and fixed','reason':'do not launch unrelated Tips startup UI during the minimal test workbench'},indent=2)+'\n')
+print('UI_HARNESS_OPTIONAL_TIPS_EXCLUDED',removed,flush=True)
+PY
 cp -a "$RUNNER_TEMP/eclipse" "$RUNNER_TEMP/eclipse-fixed"
 
-# Reuse the established tests, pinned to their executed diagnostic revision.
 DIAG="$RUNNER_TEMP/jdt1445"
 mkdir -p "$DIAG/src/diagnostics" "$DIAG/META-INF"
 URL=https://raw.githubusercontent.com/carstenartur/eclipse.jdt.ui/9cea8a527e4810e8c60d18215f1de122bac17120/diagnostics/jdt1445
@@ -49,24 +72,19 @@ cp "$HERE/NativeApplication.java" "$DIAG/src/diagnostics/"
 python3 - "$DIAG" <<'PY'
 from pathlib import Path
 import sys
-p=Path(sys.argv[1])
-plugin=p/'plugin.xml'
+p=Path(sys.argv[1]); plugin=p/'plugin.xml'
 plugin.write_text(plugin.read_text().replace('</plugin>', '''  <extension point="org.eclipse.core.runtime.applications" id="native">
     <application cardinality="singleton-global" thread="main" visible="true">
       <run class="diagnostics.NativeApplication"/>
     </application>
   </extension>
 </plugin>'''))
-# Match normal IDE startup so the minimal workbench has its workspace undo adapter.
 ui=p/'src/diagnostics/UIApp.java'
-text=ui.read_text()
-needle='super.initialize(configurer);'
+text=ui.read_text(); needle='super.initialize(configurer);'
 assert text.count(needle)==1
 ui.write_text(text.replace(needle,needle+'\n                    org.eclipse.ui.ide.IDE.registerAdapters();'))
 PY
 sha256sum "$CANDIDATE/org.eclipse.jdt.core.tests.model/src/org/eclipse/jdt/core/tests/model/OptionCacheTests.java" "$DIAG/src/org/eclipse/jdt/core/tests/model/OptionCacheTests.java" | tee "$EVIDENCE/native-source-hashes.txt"
-
-# Compile the actual patched upstream source, not a simulation of the cache.
 python3 "$HERE/rebuild_core.py" "$RUNNER_TEMP/eclipse-fixed" "$CANDIDATE/$FILE" "$EVIDENCE"
 
 run_tests() {

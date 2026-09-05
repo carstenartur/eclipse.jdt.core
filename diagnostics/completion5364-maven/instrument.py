@@ -96,8 +96,9 @@ for name,target in [('Completion5364Trace.java','org.eclipse.jdt.core/codeassist
 
 def pom(s):
     s=once(s,'<id>JavaSE-21</id>',f'<id>JavaSE-{java}</id><!-- diagnostic test JVM -->')
-    return once(s,'<include>org/eclipse/jdt/core/tests/RunAllJdtModelTestsTracing.class</include>',
+    s=once(s,'<include>org/eclipse/jdt/core/tests/RunAllJdtModelTestsTracing.class</include>',
         '<include>org/eclipse/jdt/core/tests/model/Completion5364MavenTests.class</include>')
+    return re.sub(r'(?m)^[ \t]*(<include>org/eclipse/jdt/core/tests/model/Completion5364MavenTests.class</include>)', r'            \1', s)
 edit('org.eclipse.jdt.core.tests.model/pom.xml',pom)
 (out/'source-hashes.json').write_text(json.dumps(changes,indent=2)+'\n')
 (out/'original-test-sha256.txt').write_text(hashlib.sha256((root/'org.eclipse.jdt.core.tests.model/src/org/eclipse/jdt/core/tests/model/CompletionTests16_2.java').read_bytes()).hexdigest()+'\n')

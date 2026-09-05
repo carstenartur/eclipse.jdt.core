@@ -39,9 +39,7 @@ import org.osgi.service.event.EventHandler;
 
 /** Runs the unchanged editor assertions only after workbench startup delivery. */
 public class UIApp implements IApplication {
-    private static final String STARTUP = "org/eclipse/e4/ui/LifeCycle/appStartupComplete";
     private static final String READY = "jdt1445/diagnostics/startupDelivered";
-    private final AtomicBoolean requested = new AtomicBoolean();
     private final AtomicBoolean started = new AtomicBoolean();
     private int exitCode = 2;
     private Display display;
@@ -81,17 +79,16 @@ public class UIApp implements IApplication {
                         throw new IllegalStateException("EventAdmin service unavailable");
                     }
                     Hashtable<String, Object> properties = new Hashtable<>();
-                    properties.put(EventConstants.EVENT_TOPIC, new String[] { STARTUP, READY });
+                    properties.put(EventConstants.EVENT_TOPIC, READY);
                     registration = bundleContext.registerService(EventHandler.class, event -> {
-                        if (STARTUP.equals(event.getTopic()) && requested.compareAndSet(false, true)) {
-                            // Equinox's asynchronous EventAdmin delivery is queued. The marker
-                            // cannot run before the remaining startup handlers have returned,
-                            // including their synchronous calls into the SWT event loop.
-                            events.postEvent(new Event(READY, Map.<String, Object>of()));
-                        } else if (READY.equals(event.getTopic()) && started.compareAndSet(false, true)) {
+                        if (started.compareAndSet(false, true)) {
                             display.asyncExec(UIApp.this::runTests);
                         }
                     }, properties);
+                    // PartRenderingEngine has already posted APP_STARTUP_COMPLETE before
+                    // invoking this hook. Equinox queues this marker after that dispatch,
+                    // so startup handlers can finish their synchronous SWT calls first.
+                    events.postEvent(new Event(READY, Map.<String, Object>of()));
                     // This is a failure deadline, not a timing-based startup delay.
                     display.timerExec(60000, () -> {
                         if (!started.get()) {
@@ -131,7 +128,6 @@ public class UIApp implements IApplication {
             this.exitCode = 2;
             failure.printStackTrace();
         } finally {
-            // Finish this callback before closing; preserve normal event-loop ownership.
             this.display.asyncExec(() -> PlatformUI.getWorkbench().close());
         }
     }

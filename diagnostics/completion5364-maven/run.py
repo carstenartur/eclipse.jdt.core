@@ -25,6 +25,20 @@ def invoke(command,label,timeout=1800):
         print('\n'.join((out/(label+'.log')).read_text(errors='replace').splitlines()[-60:]),flush=True)
     return status
 
+def workspace_error_entries(directory):
+    """Workspace errors are not necessarily copied to the Maven console."""
+    entries=[]
+    for path in sorted(directory.glob('work/**/.log')):
+        text=path.read_text(errors='replace')
+        for match in re.finditer(r'^!ENTRY \S+ 4 [^\n]*(?:\n(?!\n?!ENTRY |\n?!SESSION )[^\n]*)*',text,re.M):
+            entry=match.group(0)
+            message=re.search(r'^!MESSAGE (.*)$',entry,re.M)
+            entries.append({'path':str(path.relative_to(directory)),
+                            'header':entry.splitlines()[0],
+                            'message':message.group(1) if message else '',
+                            'test_frames':re.findall(r'^\s*at (org\.eclipse\.jdt\.core\.tests\.model\.CompletionTests2\.testBug281598b?\([^\n]*)$',entry,re.M)})
+    return entries
+
 def record():
     (out/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
 
@@ -64,6 +78,7 @@ for label,scenario,tracing in [('pair-off','pair','false'),('pair-on','pair','tr
                 cases.append({'class':case.get('classname'),'name':case.get('name'),
                     'failed':failure is not None or error is not None,'skipped':skip is not None})
         except ET.ParseError: xml_errors+=1
+    workspace_errors=workspace_error_entries(dest)
     expected={'pair':2,'class':22,'chain':1999}[scenario]
     complete=len(results)==1 and results[0][0]==scenario and int(results[0][1])==expected and results[0][4]=='1'
     right_jvm=len(runtime)==1 and runtime[0].startswith(java+'.')
@@ -72,7 +87,8 @@ for label,scenario,tracing in [('pair-off','pair','false'),('pair-on','pair','tr
            'correct_test_jvm':right_jvm,'trace_valid':trace_valid,'xml_case_elements':len(cases),
            'xml_failed':sum(c['failed'] for c in cases),'xml_skipped':sum(c['skipped'] for c in cases),'xml_parse_errors':xml_errors,
            'settings_sha256': [hashlib.sha256(t.encode()).hexdigest() for t in traces if t.startswith('ENGINE_SETTINGS ')],
-           'eclipse_error_entries':len(re.findall(r'^!ENTRY \S+ 4 ',text,re.M))}
+           'console_eclipse_error_entries':len(re.findall(r'^!ENTRY \S+ 4 ',text,re.M)),
+           'workspace_eclipse_error_entries':workspace_errors}
     entry['success']=bool(status==0 and complete and right_jvm and trace_valid and cases and not xml_errors
                           and not entry['xml_failed'] and not entry['xml_skipped'] and results[0][2:4]==('0','0'))
     summary['scenarios'].append(entry);record();print(json.dumps(entry),flush=True)
@@ -83,7 +99,9 @@ report=['# Maven comparison: '+arm+' / Java '+java,'',f"Source: `{summary['revis
 for e in summary['scenarios']:
     r=e['result_markers'][0] if len(e['result_markers'])==1 else ('?','?','?','?','?')
     report.append(f"| {e['label']} | {r[1]} | {r[2]} | {r[3]} | {e['correct_test_jvm']} | {e['success']} |")
-report+=['','This is a targeted source-built Maven/Tycho comparison, not a Jenkins replay or proof of absence of a sporadic defect.',
+report+=['','Workspace ERROR entries: '+str(sum(len(e['workspace_eclipse_error_entries']) for e in summary['scenarios'])),
+         'Successful JUnit assertions do not imply an error-free workspace log. See the retained log entries in summary.json.',
+         '', 'This is a targeted source-built Maven/Tycho comparison, not a Jenkins replay or proof of absence of a sporadic defect.',
          'Trace-off still contains the dormant diagnostic hooks; it is not an original-binary control.']
 (out/'SUMMARY.md').write_text('\n'.join(report)+'\n')
 if os.environ.get('GITHUB_STEP_SUMMARY'):

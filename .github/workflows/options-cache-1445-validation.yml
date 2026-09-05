@@ -4,9 +4,10 @@ on:
     branches: [diagnostic/options-cache-1445-validation]
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   validate:
+    if: github.repository == 'carstenartur/eclipse.jdt.core'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -18,36 +19,22 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
-      - name: Inspect current cache lifecycle and history
-        run: |
-          mkdir -p evidence
-          python3 - <<'PY' | tee evidence/source-audit.txt
-          from pathlib import Path
-          p=Path('org.eclipse.jdt.core/model/org/eclipse/jdt/internal/core/JavaModelManager.java')
-          lines=p.read_text().splitlines()
-          printed=set()
-          for i,line in enumerate(lines):
-              if 'optionsCache' in line:
-                  for j in range(max(0,i-6), min(len(lines),i+7)):
-                      if j not in printed:
-                          print(f'{j+1}: {lines[j]}')
-                          printed.add(j)
-                  print('---')
-          print('OPTION TEST FILES')
-          for p in Path('org.eclipse.jdt.core.tests.model/src').rglob('*Tests.java'):
-              if any(k in p.name for k in ['Pref','Option','AllJava','RunJava']):
-                  print(p)
-          PY
-          git log --all --reverse --format='%H %as %s' -G 'optionsCache' -- org.eclipse.jdt.core/model/org/eclipse/jdt/internal/core/JavaModelManager.java | tee evidence/history.txt
-          git log --all --reverse --format='%H %as %s' -G 'optionsCache' -- org.eclipse.jdt.core/model/org/eclipse/jdt/internal/core/JavaModelManager.java | head -5 | while read sha rest; do
-            git show --format=fuller "$sha" -- org.eclipse.jdt.core/model/org/eclipse/jdt/internal/core/JavaModelManager.java
-          done | tee evidence/history-first-changes.txt
-      - name: Validate prepared candidate when present
-        if: hashFiles('diagnostics/options-cache/validate.sh') != ''
+      - name: Compile candidate and run exact baseline/fixed regression assertions
         run: bash diagnostics/options-cache/validate.sh
+      - name: Commit tested production files on the clean upstream-based branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash diagnostics/options-cache/publish.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: options-cache-evidence
-          path: evidence/
+          name: options-cache-fix-evidence
+          path: |
+            evidence/*.txt
+            evidence/*.exit
+            evidence/*.md
+            evidence/*.json
+            evidence/*.patch
+            evidence/workspace-*/workspace-*/.metadata/.log
           include-hidden-files: true
+          if-no-files-found: warn

@@ -1,0 +1,61 @@
+name: Completion 5364 evidence
+on:
+  push:
+    branches: [diagnostic/completion-5364]
+    paths: ['.github/workflows/completion-5364-evidence.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Read failed build and baseline metadata
+        run: |
+          mkdir -p evidence
+          python3 - <<'PY'
+          import urllib.request, pathlib, json, re
+          out=pathlib.Path('evidence')
+          base='https://ci.eclipse.org/jdt/job/eclipse.jdt.core-Github/job/'
+          for label, path in [('pr2','PR-5364/2'),('master','master/1173')]:
+              for name, suffix in [('build','api/json?tree=result,building,artifacts[relativePath],actions[lastBuiltRevision[SHA1]]'),('console','consoleText')]:
+                  url=base+path+'/'+suffix
+                  try:
+                      data=urllib.request.urlopen(url,timeout=90).read()
+                      (out/(label+'-'+name+('.json' if name=='build' else '.txt'))).write_bytes(data)
+                      print(label,name,len(data),flush=True)
+                      if name=='build': print(data.decode()[:12000],flush=True)
+                      else:
+                          lines=data.decode(errors='replace').splitlines()
+                          for i,line in enumerate(lines):
+                              if any(s in line for s in ['CompletionTests16_2.test002','Enum[TYPE_REF]','Failed to execute goal','Tests run:','BUILD FAILURE']):
+                                  if 'Tests run:' in line and 'Failures: 0' in line and 'Errors: 0' in line: continue
+                                  print('\n'.join(lines[max(0,i-5):i+15]),flush=True)
+                  except Exception as e: print('FETCH_FAILED',url,repr(e),flush=True)
+          url='https://download.eclipse.org/eclipse/downloads/drops4/I20260826-2300/eclipse-Automated-Tests-I20260826-2300.zip'
+          try:
+              import zipfile
+              file=out/'automated-tests.zip'
+              urllib.request.urlretrieve(url,file)
+              with zipfile.ZipFile(file) as z:
+                  names=z.namelist()
+                  (out/'automated-tests-entries.txt').write_text('\n'.join(names))
+                  print('TEST_ARCHIVE_ENTRIES','\n'.join(n for n in names if any(s in n for s in ['jdt.core.tests.model','jdt.core.tests.compiler','eclipse.test_','test.xml']))[:16000],flush=True)
+          except Exception as e: print('TEST_ARCHIVE_FAILED',repr(e),flush=True)
+          PY
+      - name: Preserve relevant exact source files
+        run: |
+          mkdir -p evidence/source
+          for file in org.eclipse.jdt.core/model/org/eclipse/jdt/internal/core/{SearchableEnvironment,NameLookup,CompilationUnit,JavaProject,JavaModelManager}.java org.eclipse.jdt.core/codeassist/org/eclipse/jdt/internal/codeassist/{CompletionEngine,CompletionEngineProvider}.java org.eclipse.jdt.core.tests.model/src/org/eclipse/jdt/core/tests/model/{AbstractJavaModelTests,AbstractJavaModelCompletionTests,CompletionTests16_2,CompletionTests16_1,CompletionTestsRequestor2,RunCompletionModelTests,AllJavaModelTests}.java; do
+            test ! -f "$file" || cp "$file" evidence/source/
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: completion-5364-context
+          path: evidence/
+          retention-days: 14

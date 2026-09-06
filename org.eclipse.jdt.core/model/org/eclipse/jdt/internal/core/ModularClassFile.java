@@ -254,11 +254,28 @@ public class ModularClassFile extends AbstractClassFile implements IModularClass
 	 */
 	@Override
 	protected IBuffer openBuffer(IProgressMonitor pm, IElementInfo info) throws JavaModelException {
-		SourceMapper mapper = getSourceMapper();
-		if (mapper != null) {
-			return mapSource(mapper);
+		// First check if there's an existing buffer in the cache
+		IBuffer buffer = getBufferManager().getBuffer(this);
+		
+		// Validate the cached buffer is still valid
+		if (buffer != null) {
+			if (buffer instanceof NullBuffer) {
+				return null;
+			}
+			if (buffer.getCharacters() == null) {
+				// Stale buffer - remove from cache and recreate
+				getBufferManager().removeBuffer(buffer);
+				buffer = null;
+			}
 		}
-		return null;
+		
+		if (buffer == null) {
+			SourceMapper mapper = getSourceMapper();
+			if (mapper != null) {
+				buffer = mapSource(mapper);
+			}
+		}
+		return buffer;
 	}
 
 	/** Loads the buffer via SourceMapper, and maps it in SourceMapper */

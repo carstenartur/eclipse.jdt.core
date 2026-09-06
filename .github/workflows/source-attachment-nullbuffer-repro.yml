@@ -41,7 +41,20 @@ jobs:
           bash "$RUNNER_TEMP/ci-support/prepare-tools.sh" "$RUNNER_TEMP/tools" "$RUNNER_TEMP/tool-evidence"
           bash "$RUNNER_TEMP/ci-support/activate-tools.sh" "$RUNNER_TEMP/tools" "$GITHUB_WORKSPACE/.."
           cp -r "$RUNNER_TEMP/tool-evidence" evidence/tool-evidence
-      - name: Run only the deterministic regression test
+      - name: Select only the diagnostic class in Tycho, preserving standalone Surefire selection
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('org.eclipse.jdt.core.tests.model/pom.xml')
+          text = path.read_text()
+          old = '<include>org/eclipse/jdt/core/tests/RunAllJdtModelTestsTracing.class</include>'
+          new = '<include>org/eclipse/jdt/core/tests/model/SourceAttachmentBufferTests.class</include>'
+          assert text.count(old) == 1
+          path.write_text(text.replace(old, new))
+          PY
+          git diff --check
+          git diff -- org.eclipse.jdt.core.tests.model/pom.xml > evidence/diagnostic-pom.diff
+      - name: Run the deterministic regression tests
         shell: bash
         run: |
           set -uo pipefail
@@ -50,8 +63,6 @@ jobs:
           mvn -B -ntp -e clean verify -Pbuild-individual-bundles \
             -pl org.eclipse.jdt.core.tests.model -am \
             -DskipTests=false -Dmaven.test.skip=false \
-            -Dtest=SourceAttachmentBufferTests \
-            -DfailIfNoTests=false -Dsurefire.failIfNoSpecifiedTests=false \
             '-Dtycho.surefire.argLine=--add-modules ALL-SYSTEM -Dcompliance=1.8,11,17,21,25,26 -Djdt.performance.asserts=disabled' \
             -DDetectVMInstallationsJob.disabled=true \
             2>&1 | tee evidence/test/maven.log
@@ -80,10 +91,9 @@ jobs:
           }
           (root/'summary.json').write_text(json.dumps(result, indent=2))
           print(json.dumps(result, indent=2))
-          assert len(cases) == 1, 'The intended test must execute exactly once'
-          assert cases[0].find('skipped') is None, 'The intended test must not be skipped'
-          # A red test is useful evidence here: the diagnostic branch intentionally
-          # asks whether current master violates this source-attachment invariant.
+          assert len(cases) == 2, 'Both intended PDE tests must execute exactly once'
+          assert all(c.find('skipped') is None for c in cases), 'The intended tests must not be skipped'
+          # A failing transient-read test is useful evidence on this diagnostic branch.
           PY
           exit "$result"
       - uses: actions/upload-artifact@v4

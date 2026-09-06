@@ -45,15 +45,29 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import xml.etree.ElementTree as ET
           path = Path('org.eclipse.jdt.core.tests.model/pom.xml')
-          text = path.read_text()
-          old = '<include>org/eclipse/jdt/core/tests/RunAllJdtModelTestsTracing.class</include>'
-          new = '<include>org/eclipse/jdt/core/tests/model/SourceAttachmentBufferTests.class</include>'
-          assert text.count(old) == 1
-          path.write_text(text.replace(old, new))
+          tree = ET.parse(path)
+          root = tree.getroot()
+          ns = {'m': 'http://maven.apache.org/POM/4.0.0'}
+          matches = []
+          for plugin in root.findall('.//m:plugin', ns):
+              artifact = plugin.find('m:artifactId', ns)
+              if artifact is None or artifact.text != 'tycho-surefire-plugin':
+                  continue
+              for include in plugin.findall('.//m:includes/m:include', ns):
+                  if (include.text or '').strip() == 'org/eclipse/jdt/core/tests/RunAllJdtModelTestsTracing.class':
+                      matches.append(include)
+          assert len(matches) == 1, f'Expected one Tycho suite include, found {len(matches)}'
+          matches[0].text = 'org/eclipse/jdt/core/tests/model/SourceAttachmentBufferTests.class'
+          ET.register_namespace('', 'http://maven.apache.org/POM/4.0.0')
+          ET.register_namespace('xsi', 'http://www.w3.org/2001/XMLSchema-instance')
+          tree.write(path, encoding='UTF-8', xml_declaration=True)
           PY
           git diff --check
           git diff -- org.eclipse.jdt.core.tests.model/pom.xml > evidence/diagnostic-pom.diff
+          grep -F 'SourceAttachmentBufferTests.class' org.eclipse.jdt.core.tests.model/pom.xml
+          grep -F 'JavaCoreStandaloneTest.*' org.eclipse.jdt.core.tests.model/pom.xml
       - name: Run the deterministic regression tests
         shell: bash
         run: |

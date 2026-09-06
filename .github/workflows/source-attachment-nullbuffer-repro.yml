@@ -1,0 +1,93 @@
+name: Source attachment NullBuffer reproducer
+on:
+  push:
+    branches: [diagnostic/source-attachment-nullbuffer-repro]
+    paths:
+      - org.eclipse.jdt.core.tests.model/src/org/eclipse/jdt/core/tests/model/SourceAttachmentBufferTests.java
+      - .github/workflows/source-attachment-nullbuffer-repro.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  reproduce:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify immutable upstream base plus diagnostic-only additions
+        run: |
+          set -euo pipefail
+          test "$(git merge-base HEAD 8c40c7d2ae12c0a32ab3cca1ab31b53956c65d51)" = 8c40c7d2ae12c0a32ab3cca1ab31b53956c65d51
+          git diff --check 8c40c7d2ae12c0a32ab3cca1ab31b53956c65d51..HEAD
+          git diff --name-only 8c40c7d2ae12c0a32ab3cca1ab31b53956c65d51..HEAD | sort
+      - name: Install pinned legacy JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '8.0.482+8'
+      - name: Prepare the same pinned tool family as the fork Maven CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ci-support" evidence
+          for script in prepare-tools.sh activate-tools.sh; do
+            curl --fail --location --retry 3 --max-time 60 \
+              "https://raw.githubusercontent.com/carstenartur/eclipse.jdt.debug/e1d2134f5cca5e88bfa8cd8b0ee6c947ee10fd1b/.github/ci/$script" \
+              -o "$RUNNER_TEMP/ci-support/$script"
+          done
+          bash "$RUNNER_TEMP/ci-support/prepare-tools.sh" "$RUNNER_TEMP/tools" "$RUNNER_TEMP/tool-evidence"
+          bash "$RUNNER_TEMP/ci-support/activate-tools.sh" "$RUNNER_TEMP/tools" "$GITHUB_WORKSPACE/.."
+          cp -r "$RUNNER_TEMP/tool-evidence" evidence/tool-evidence
+      - name: Run only the deterministic regression test
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p evidence/test
+          set +e
+          mvn -B -ntp -e clean verify -Pbuild-individual-bundles \
+            -pl org.eclipse.jdt.core.tests.model -am \
+            -DskipTests=false -Dmaven.test.skip=false \
+            -Dtest=SourceAttachmentBufferTests \
+            -DfailIfNoTests=false -Dsurefire.failIfNoSpecifiedTests=false \
+            2>&1 | tee evidence/test/maven.log
+          codes=("${PIPESTATUS[@]}")
+          set -e
+          result=${codes[0]}
+          if [[ "$result" == 0 && "${codes[1]}" != 0 ]]; then result=${codes[1]}; fi
+          printf '%s\n' "$result" > evidence/test/maven-exit.txt
+          find . -path '*/target/surefire-reports/*' -type f -name 'TEST-*.xml' -exec cp -t evidence/test {} + || true
+          python3 - <<'PY'
+          import json
+          import pathlib
+          import xml.etree.ElementTree as ET
+          root = pathlib.Path('evidence/test')
+          cases = []
+          for report in root.glob('TEST-*.xml'):
+              for case in ET.parse(report).getroot().iter('testcase'):
+                  if case.get('classname','').endswith('SourceAttachmentBufferTests'):
+                      cases.append(case)
+          result = {
+              'maven_exit': int((root/'maven-exit.txt').read_text()),
+              'cases': len(cases),
+              'failures': sum(c.find('failure') is not None or c.find('error') is not None for c in cases),
+              'skipped': sum(c.find('skipped') is not None for c in cases),
+              'names': [c.get('name') for c in cases],
+          }
+          (root/'summary.json').write_text(json.dumps(result, indent=2))
+          print(json.dumps(result, indent=2))
+          assert len(cases) == 1, 'The intended test must execute exactly once'
+          assert cases[0].find('skipped') is None, 'The intended test must not be skipped'
+          # A red test is useful evidence here: the diagnostic branch intentionally
+          # asks whether current master violates this source-attachment invariant.
+          PY
+          exit "$result"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: source-attachment-nullbuffer-repro
+          if-no-files-found: error
+          include-hidden-files: true
+          path: evidence/

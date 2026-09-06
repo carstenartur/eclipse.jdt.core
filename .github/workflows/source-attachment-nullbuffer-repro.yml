@@ -52,6 +52,8 @@ jobs:
             -DskipTests=false -Dmaven.test.skip=false \
             -Dtest=SourceAttachmentBufferTests \
             -DfailIfNoTests=false -Dsurefire.failIfNoSpecifiedTests=false \
+            '-Dtycho.surefire.argLine=--add-modules ALL-SYSTEM -Dcompliance=1.8,11,17,21,25,26 -Djdt.performance.asserts=disabled' \
+            -DDetectVMInstallationsJob.disabled=true \
             2>&1 | tee evidence/test/maven.log
           codes=("${PIPESTATUS[@]}")
           set -e

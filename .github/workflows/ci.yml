@@ -1,21 +1,12 @@
-name: Continuous Integration
-concurrency: 
-    group: ${{ github.workflow }}-${{ github.ref }}
-    cancel-in-progress: true
+name: PR 5380 formatter clamp QA
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 on:
   push:
 
 jobs:
-  event_file:
-    name: "Upload Event File"
-    runs-on: ubuntu-latest
-    steps:
-    - name: Upload
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-      with:
-        name: event-file
-        path: ${{ github.event_path }}
   build:
     runs-on: ubuntu-latest
     steps:
@@ -36,16 +27,54 @@ jobs:
           JavaSE-17
           JavaSE-21
           JavaSE-25
-        distribution: 'temurin'
-    - name: Build with Maven
+        distribution: temurin
+    - name: Instrument clamp and isolate formatter suite
       run: |
-        mvn clean install --batch-mode -f org.eclipse.jdt.core.compiler.batch -DlocalEcjVersion=99.99
-        mvn -U clean verify --batch-mode --fail-at-end -Ptest-on-javase-21 -Pbree-libs -Papi-check -Djava.io.tmpdir=$WORKSPACE/tmp -Dproject.build.sourceEncoding=UTF-8 -Dtycho.surefire.argLine="--add-modules ALL-SYSTEM -Dcompliance=1.8,11,17,20 -Djdt.performance.asserts=disabled" -Dcbi-ecj-version=99.99
-    - name: Upload Test Results for Linux
+        python - <<'PY'
+        from pathlib import Path
+
+        wrap = Path('org.eclipse.jdt.core/formatter/org/eclipse/jdt/internal/formatter/linewrap/WrapPreparator.java')
+        text = wrap.read_text()
+        old = '\t\t\tpreviousRegionEnd = Math.max(0, region.getOffset() + region.getLength() - 1);'
+        new = '''\t\t\tint rawRegionEnd = region.getOffset() + region.getLength() - 1;
+        \t\t\tif (rawRegionEnd < 0)
+        \t\t\t\tSystem.err.println("PR5380_CLAMP_HIT offset=" + region.getOffset() + " length=" + region.getLength());
+        \t\t\tpreviousRegionEnd = Math.max(0, rawRegionEnd);'''
+        if text.count(old) != 1:
+            raise SystemExit(f'expected one clamp expression, got {text.count(old)}')
+        wrap.write_text(text.replace(old, new))
+
+        pom = Path('org.eclipse.jdt.core.tests.model/pom.xml')
+        text = pom.read_text()
+        old = '<include>org/eclipse/jdt/core/tests/RunAllJdtModelTestsTracing.class</include>'
+        new = '<include>org/eclipse/jdt/core/tests/RunFormatterTests.class</include>'
+        if text.count(old) != 1:
+            raise SystemExit(f'expected one model test suite include, got {text.count(old)}')
+        pom.write_text(text.replace(old, new))
+        PY
+    - name: Bootstrap ECJ
+      run: mvn clean install --batch-mode -f org.eclipse.jdt.core.compiler.batch -DlocalEcjVersion=99.99
+    - name: Run formatter suite only
+      run: |
+        mkdir -p "$GITHUB_WORKSPACE/tmp"
+        mvn -U clean verify --batch-mode --fail-at-end \
+          -pl org.eclipse.jdt.core.tests.model -am \
+          -Ptest-on-javase-21 -Pbree-libs \
+          -Djava.io.tmpdir="$GITHUB_WORKSPACE/tmp" \
+          -Dproject.build.sourceEncoding=UTF-8 \
+          -Dtycho.surefire.argLine="--add-modules ALL-SYSTEM -Dcompliance=1.8,11,17,20 -Djdt.performance.asserts=disabled" \
+          -Dcbi-ecj-version=99.99
+    - name: Report clamp hits
+      if: always()
+      run: |
+        echo 'Clamp hits captured in formatter test reports:'
+        grep -Rho 'PR5380_CLAMP_HIT[^<]*' . --include='*.xml' --include='*.txt' 2>/dev/null | tee /tmp/pr5380-clamp-hits.txt || true
+        echo "PR5380_CLAMP_HIT_COUNT=$(wc -l < /tmp/pr5380-clamp-hits.txt)"
+    - name: Upload formatter test results
       if: always()
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
-        name: test-results-linux
+        name: formatter-test-results
         if-no-files-found: warn
         path: |
-          ${{ github.workspace }}/**/target/surefire-reports/*.xml
+          ${{ github.workspace }}/org.eclipse.jdt.core.tests.model/target/surefire-reports/*.xml

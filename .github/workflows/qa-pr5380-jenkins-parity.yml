@@ -1,0 +1,84 @@
+name: PR 5380 Jenkins parity performance QA
+
+on:
+  push:
+    branches:
+      - qa/pr5380-perf-with-fix
+      - qa/pr5380-perf-without-fix
+
+concurrency:
+  group: pr5380-jenkins-parity-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  jenkins-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      WORKSPACE: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - name: Set up JDKs including Java 26
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        with:
+          java-version: |
+            8
+            17
+            21
+            25
+            26
+          mvn-toolchain-id: |
+            JavaSE-1.8
+            JavaSE-17
+            JavaSE-21
+            JavaSE-25
+            JavaSE-26
+          distribution: temurin
+      - name: Run Jenkins-equivalent build
+        shell: bash
+        run: |
+          set -o pipefail
+          java -version
+          mkdir -p "$WORKSPACE/tmp" "$WORKSPACE/.m2/repository"
+          unset JAVA_TOOL_OPTIONS
+          unset _JAVA_OPTIONS
+
+          mvn clean install -f org.eclipse.jdt.core.compiler.batch \
+            -DlocalEcjVersion=99.99 \
+            -Dmaven.repo.local="$WORKSPACE/.m2/repository" \
+            -DcompilerBaselineMode=disable \
+            -DcompilerBaselineReplace=none
+
+          start=$(date +%s)
+          set +e
+          mvn -U clean verify --batch-mode --fail-at-end \
+            -Dmaven.repo.local="$WORKSPACE/.m2/repository" \
+            -Ptest-on-javase-26 -Pbree-libs -Papi-check -Pjavadoc -Pp2-repo \
+            -Dmaven.test.failure.ignore=true \
+            -Dcompare-version-with-baselines.skip=false \
+            -Djava.io.tmpdir="$WORKSPACE/tmp" -Dproject.build.sourceEncoding=UTF-8 \
+            -Dtycho.surefire.argLine="--add-modules ALL-SYSTEM -Dcompliance=1.8,11,17,21,25,26 -Djdt.performance.asserts=disabled" \
+            -DDetectVMInstallationsJob.disabled=true \
+            -Dtycho.apitools.debug \
+            -Dtycho.debug.artifactcomparator \
+            -e \
+            -Dcbi-ecj-version=99.99 \
+            2>&1 | tee jenkins-parity-maven.log
+          status=${PIPESTATUS[0]}
+          set -e
+          end=$(date +%s)
+          echo "QA_WALL_SECONDS=$((end-start))"
+          echo "QA_MAVEN_EXIT=$status"
+          exit "$status"
+      - name: Upload parity diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pr5380-jenkins-parity-${{ github.sha }}
+          if-no-files-found: warn
+          path: |
+            jenkins-parity-maven.log
+            **/target/surefire-reports/*.xml

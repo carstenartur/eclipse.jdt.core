@@ -37,10 +37,31 @@ jobs:
           JavaSE-21
           JavaSE-25
         distribution: 'temurin'
+    - name: Instrument formatter clamp
+      run: |
+        python - <<'PY'
+        from pathlib import Path
+        path = Path('org.eclipse.jdt.core/formatter/org/eclipse/jdt/internal/formatter/linewrap/WrapPreparator.java')
+        text = path.read_text()
+        old = '\t\t\tpreviousRegionEnd = Math.max(0, region.getOffset() + region.getLength() - 1);'
+        new = '''\t\t\tint rawRegionEnd = region.getOffset() + region.getLength() - 1;
+        \t\t\tif (rawRegionEnd < 0)
+        \t\t\t\tSystem.err.println("PR5380_CLAMP_HIT offset=" + region.getOffset() + " length=" + region.getLength());
+        \t\t\tpreviousRegionEnd = Math.max(0, rawRegionEnd);'''
+        if text.count(old) != 1:
+            raise SystemExit(f'expected exactly one clamp expression, found {text.count(old)}')
+        path.write_text(text.replace(old, new))
+        PY
     - name: Build with Maven
       run: |
         mvn clean install --batch-mode -f org.eclipse.jdt.core.compiler.batch -DlocalEcjVersion=99.99
         mvn -U clean verify --batch-mode --fail-at-end -Ptest-on-javase-21 -Pbree-libs -Papi-check -Djava.io.tmpdir=$WORKSPACE/tmp -Dproject.build.sourceEncoding=UTF-8 -Dtycho.surefire.argLine="--add-modules ALL-SYSTEM -Dcompliance=1.8,11,17,20 -Djdt.performance.asserts=disabled" -Dcbi-ecj-version=99.99
+    - name: Count formatter clamp hits
+      if: always()
+      run: |
+        echo 'Clamp hits captured in test reports:'
+        grep -Rho 'PR5380_CLAMP_HIT[^<]*' . --include='*.xml' --include='*.txt' 2>/dev/null | tee /tmp/pr5380-clamp-hits.txt || true
+        echo "PR5380_CLAMP_HIT_COUNT=$(wc -l < /tmp/pr5380-clamp-hits.txt)"
     - name: Upload Test Results for Linux
       if: always()
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

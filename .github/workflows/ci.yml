@@ -63,7 +63,7 @@ jobs:
               }
               TestSuite result=new TestSuite("PR5398 controlled refresh probe");
               if (Boolean.getBoolean("qa.runJobTests")) result.addTest(JobFamilyWaitTests.suite());
-              for (int i=0;i<3;i++) result.addTest(JavaProjectTests.suite());
+              result.addTest(JavaProjectTests.suite());
               System.out.println("QA_EXPECTED_TESTS="+result.countTestCases());
               return result;
             }
@@ -77,21 +77,23 @@ jobs:
           mvn -version
           mkdir -p "$GITHUB_WORKSPACE/tmp"
           mvn -B -ntp clean install -f org.eclipse.jdt.core.compiler.batch -DlocalEcjVersion=99.99 -DcompilerBaselineMode=disable -DcompilerBaselineReplace=none -Dcompare-version-with-baselines.skip=true -Dtycho.baseline.replace=none 2>&1 | tee qa-evidence/bootstrap.log
-      - name: Compare original and retry waits with and without preceding helper tests
+      - name: Compare four variants with three fresh-JVM repetitions each
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
-          import subprocess, os, shutil, json, re, xml.etree.ElementTree as E
+          import subprocess, os, shutil, json, re, collections, xml.etree.ElementTree as E
           root=Path('qa-evidence'); module=Path('org.eclipse.jdt.core.tests.model')
           source=module/'src/org/eclipse/jdt/core/tests/model/AbstractJavaModelTests.java'
           original=(root/'AbstractJavaModelTests.original').read_text()
           fixed='JobFamilyWait.join(Job.getJobManager(), ResourcesPlugin.FAMILY_SNAPSHOT);'
           previous='Job.getJobManager().wakeUp(ResourcesPlugin.FAMILY_SNAPSHOT);\n\t\t\t\tJob.getJobManager().join(ResourcesPlugin.FAMILY_SNAPSHOT, null);'
           assert original.count(fixed)==1
+          arms=[('A-original',False,False),('B-retry',True,False),('C-original-after-helper-tests',False,True),('D-retry-after-helper-tests',True,True)]
+          samples=[(label+'-'+str(rep),retry,helpers) for rep in range(1,4) for label,retry,helpers in arms]
           summary=[]
-          for label,retry,helpers in [('A-original',False,False),('B-retry',True,False),('C-original-after-helper-tests',False,True),('D-retry-after-helper-tests',True,True)]:
+          for label,retry,helpers in samples:
               out=root/label; out.mkdir()
               source.write_text(original if retry else original.replace(fixed,previous))
               for name in ['work','surefire-reports']:
@@ -101,7 +103,7 @@ jobs:
               (out/'command.json').write_text(json.dumps(cmd,indent=2))
               (out/'source.patch').write_bytes(subprocess.check_output(['git','diff','c416377d6a02c6f59f583819c5e7f0652e1e0e6c','--','org.eclipse.jdt.core.tests.model']))
               with (out/'maven.log').open('w') as log:
-                  result=subprocess.run(['timeout','--kill-after=30s','12m',*cmd],stdout=log,stderr=subprocess.STDOUT)
+                  result=subprocess.run(['timeout','--kill-after=30s','4m',*cmd],stdout=log,stderr=subprocess.STDOUT)
               logtext=(out/'maven.log').read_text(errors='replace')
               print(label,'exit',result.returncode,flush=True)
               print('\n'.join(line for line in logtext.splitlines() if any(k in line for k in ('QA_','Tests run:','[ERROR]','BUILD SUCCESS','BUILD FAILURE'))),flush=True)
@@ -114,11 +116,11 @@ jobs:
               for p in (out/'reports').glob('TEST-*.xml'):
                   cases.extend(E.parse(p).getroot().iter('testcase'))
               names=[c.get('name','') for c in cases]
-              targetcounts={n:sum(x==n for x in names) for n in ('testChangeExternalLibFolder1','testChangeExternalLibFolder2')}
+              targetcounts={n:names.count(n) for n in ('testChangeExternalLibFolder1','testChangeExternalLibFolder2')}
               expected=re.findall(r'QA_EXPECTED_TESTS=(\d+)',logtext)
-              problems=[{'name':c.get('name'),'details':[(ch.tag,ch.get('message')) for ch in c if ch.tag in ('failure','error','skipped')]} for c in cases if any(ch.tag in ('failure','error','skipped') for ch in c)]
-              valid=bool(expected) and len(cases)==int(expected[-1]) and all(v==3 for v in targetcounts.values())
-              summary.append({'arm':label,'retry':retry,'helper_tests_first':helpers,'maven_exit':result.returncode,'test_records':len(cases),'target_counts':targetcounts,'expected_counts':expected,'inventory_valid':valid,'problems':problems})
+              problems=[{'name':c.get('name'),'details':[(ch.tag,ch.get('message'),ch.get('type'),ch.text) for ch in c if ch.tag in ('failure','error','skipped')]} for c in cases if any(ch.tag in ('failure','error','skipped') for ch in c)]
+              valid=bool(expected) and len(cases)==int(expected[-1]) and all(v==1 for v in targetcounts.values()) and len(names)==len(set(names))
+              summary.append({'arm':label,'retry':retry,'helper_tests_first':helpers,'maven_exit':result.returncode,'test_records':len(cases),'target_counts':targetcounts,'expected_counts':expected,'inventory_valid':valid,'test_names':names,'problems':problems})
               (root/'refresh-summary.json').write_text(json.dumps(summary,indent=2))
               if not valid:
                   raise SystemExit('Incomplete/incorrect test inventory; do not interpret this run as an A/B result.')

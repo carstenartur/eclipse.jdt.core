@@ -12,17 +12,31 @@ jobs:
   cleanup-tests:
     if: github.repository == 'carstenartur/eclipse.jdt.core'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
         with:
           distribution: temurin
           java-version: '21'
       - name: Prepare before and after cleanup implementations
-        run: python .github/qa/cleanup.py prepare
+        run: |
+          python .github/qa/cleanup.py prepare
+          python - <<'PY'
+          from pathlib import Path
+          root=Path('qa-cleanup')
+          for path in [root/'JobFamilyWaitTests.java',root/'after/src/test/java/org/eclipse/jdt/core/tests/model/JobFamilyWaitTests.java']:
+              text=path.read_text()
+              for qualified in ['junit.framework.AssertionFailedError','org.junit.runners.model.MultipleFailureException']:
+                  assert qualified in text
+                  text=text.replace(qualified,qualified.rsplit('.',1)[1])
+              text=text.replace('import junit.framework.Test;','import junit.framework.AssertionFailedError;\nimport junit.framework.Test;')
+              text=text.replace('import org.eclipse.core.runtime.jobs.Job;','import org.eclipse.core.runtime.jobs.Job;\nimport org.junit.runners.model.MultipleFailureException;')
+              path.write_text(text)
+          PY
       - name: Verify three failures before and eleven passes after on Java 21
         run: |
           python .github/qa/cleanup.py before java21-before
@@ -30,12 +44,46 @@ jobs:
       - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
         with:
           distribution: temurin
-          java-version: '26'
+          java-version: |
+            21
+            25
+            26
+          mvn-toolchain-id: |
+            JavaSE-21
+            JavaSE-25
+            JavaSE-26
       - name: Repeat corrected cleanup tests on Java 26
         run: |
           for i in 1 2 3; do
             python .github/qa/cleanup.py after java26-after-$i || exit $?
           done
+      - name: Compile and execute the actual model-bundle regression class
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp qa-cleanup/JobFamilyWaitTests.java org.eclipse.jdt.core.tests.model/src/org/eclipse/jdt/core/tests/model/JobFamilyWaitTests.java
+          mkdir -p tmp
+          git diff --check
+          git diff -- org.eclipse.jdt.core.tests.model > qa-cleanup/candidate.patch
+          mvn -B -ntp clean install -f org.eclipse.jdt.core.compiler.batch -DlocalEcjVersion=99.99 -DcompilerBaselineMode=disable -DcompilerBaselineReplace=none -Dcompare-version-with-baselines.skip=true -Dtycho.baseline.replace=none > qa-cleanup/bootstrap.log 2>&1
+          set +e
+          mvn -B -ntp -pl org.eclipse.jdt.core.tests.model -am verify -Ptest-on-javase-26 -Dcbi-ecj-version=99.99 -Dtest=JobFamilyWaitTests -DfailIfNoTests=false -Dsurefire.failIfNoSpecifiedTests=false -Dmaven.test.failure.ignore=false -Dtycho.baseline.replace=none -Dcompare-version-with-baselines.skip=true -Djava.io.tmpdir="$GITHUB_WORKSPACE/tmp" '-Dtycho.surefire.argLine=--add-modules ALL-SYSTEM -Dcompliance=17 -Djdt.performance.asserts=disabled' > qa-cleanup/tycho.log 2>&1
+          result=$?
+          set -e
+          cp -r org.eclipse.jdt.core.tests.model/target/surefire-reports qa-cleanup/tycho-reports
+          tail -45 qa-cleanup/tycho.log
+          test "$result" -eq 0
+          python - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as E
+          cases=[]
+          for p in Path('qa-cleanup/tycho-reports').glob('TEST-*.xml'):
+              cases.extend(E.parse(p).getroot().iter('testcase'))
+          assert len(cases)==11,len(cases)
+          assert all(c.get('classname')=='org.eclipse.jdt.core.tests.model.JobFamilyWaitTests' for c in cases)
+          assert not any(any(x.tag in ('error','failure','skipped') for x in c) for c in cases)
+          print('Verified eleven real Tycho test cases, no failures, errors or skips.')
+          PY
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:

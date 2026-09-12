@@ -48,6 +48,13 @@ jobs:
               assert text.count(unused)==1
               text=text.replace(unused,'')
           entry.write_text(text)
+          # This is a PDE-only experiment. A global -Dtest must not launch the
+          # OSGi-dependent probe a second time through plain Maven Surefire.
+          pom=Path('org.eclipse.jdt.core.tests.model/pom.xml')
+          text=read(str(pom))
+          assert text.count('<phase>integration-test</phase>')==1
+          assert '<id>test-standalone</id>' in text
+          pom.write_text(text.replace('<phase>integration-test</phase>','<phase>none</phase>'))
           (model/'Pr5398RefreshProbe.java').write_text('''package org.eclipse.jdt.core.tests.model;
           import junit.framework.Test;
           import junit.framework.TestSuite;
@@ -83,7 +90,7 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
-          import subprocess, os, shutil, json, re, collections, xml.etree.ElementTree as E
+          import subprocess, os, shutil, json, re, xml.etree.ElementTree as E
           root=Path('qa-evidence'); module=Path('org.eclipse.jdt.core.tests.model')
           source=module/'src/org/eclipse/jdt/core/tests/model/AbstractJavaModelTests.java'
           original=(root/'AbstractJavaModelTests.original').read_text()

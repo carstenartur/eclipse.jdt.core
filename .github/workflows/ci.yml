@@ -1,68 +1,91 @@
-name: JDT build-hardening regression QA
+name: JDT build-hardening candidate QA
 on:
   push:
     branches: [qa/jdt-build-hardening]
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
+concurrency:
+  group: build-hardening-candidates
+  cancel-in-progress: false
 jobs:
-  focused-tests:
+  prepare-test-publish:
     if: github.repository == 'carstenartur/eclipse.jdt.core'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
         with:
           distribution: temurin
           java-version: '21'
-      - name: Prepare original implementation without changing upstream sources
+      - name: Prepare clean candidates and fault-injection harnesses
+        run: python .github/qa/build-hardening/prepare.py prepare
+      - name: Verify the screenshot regression fails before mitigation
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-          root = Path('.github/qa/build-hardening')
-          source = Path('org.eclipse.jdt.core.tests.model/src/org/eclipse/jdt/core/tests/model/AbstractJavaModelTests.java').read_text()
-          original = 'Job.getJobManager().wakeUp(ResourcesPlugin.FAMILY_SNAPSHOT);\n\t\t\t\tJob.getJobManager().join(ResourcesPlugin.FAMILY_SNAPSHOT, null);'
-          assert source.count(original) == 1
-          helper = root / 'src/test/java/org/eclipse/jdt/core/tests/model/JobFamilyWait.java'
-          if not helper.exists():
-              body = original.replace('Job.getJobManager()', 'manager').replace('ResourcesPlugin.FAMILY_SNAPSHOT', 'family')
-              helper.write_text('package org.eclipse.jdt.core.tests.model;\nimport org.eclipse.core.runtime.jobs.IJobManager;\nfinal class JobFamilyWait {\nstatic void join(IJobManager manager, Object family) throws InterruptedException {\n' + body + '\n}\n}\n')
-          (root / 'pom.xml').write_text('''<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion>
-          <groupId>org.eclipse.jdt.qa</groupId><artifactId>build-hardening</artifactId><version>1</version>
-          <properties><maven.compiler.release>21</maven.compiler.release><project.build.sourceEncoding>UTF-8</project.build.sourceEncoding></properties>
-          <dependencies>
-          <dependency><groupId>org.eclipse.platform</groupId><artifactId>org.eclipse.core.jobs</artifactId><version>3.15.900</version></dependency>
-          <dependency><groupId>junit</groupId><artifactId>junit</artifactId><version>4.13.2</version><scope>test</scope></dependency>
-          </dependencies>
-          <build><plugins>
-          <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId><version>3.14.0</version></plugin>
-          <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-surefire-plugin</artifactId><version>3.5.3</version><configuration><failIfNoTests>true</failIfNoTests></configuration></plugin>
-          </plugins></build></project>''')
-          PY
-          java -version
-          mvn -version
-      - name: Execute regression tests
-        run: mvn -B --no-transfer-progress -f .github/qa/build-hardening/pom.xml clean test
-      - name: Print individual test results
-        if: always()
-        run: |
+          cd "$RUNNER_TEMP/jdt-build-hardening/tracing-before"
+          set +e
+          mvn -B --no-transfer-progress clean test > baseline.log 2>&1
+          result=$?
+          set -e
+          cat baseline.log
+          test "$result" -ne 0
           python - <<'PY'
           from pathlib import Path
           import xml.etree.ElementTree as E
-          for p in Path('.github/qa/build-hardening/target/surefire-reports').glob('TEST-*.xml'):
-              root=E.parse(p).getroot()
-              print(p.name, root.attrib)
-              for t in root.iter('testcase'):
-                  print(t.get('name'), t.get('time'), [(e.tag, e.get('message')) for e in t if e.tag in ('failure','error')])
+          tests=[]
+          for p in Path('target/surefire-reports').glob('TEST-*.xml'):
+              tests.extend(E.parse(p).getroot().iter('testcase'))
+          assert len(tests)==4, len(tests)
+          assert all(t.find('failure') is not None and t.find('error') is None for t in tests)
+          assert any('Injected unavailable display' in (t.find('failure').text or '') for t in tests)
+          print('Verified four expected regression failures; no compilation or infrastructure failure.')
           PY
+      - name: Verify corrected job waits and tracing on Java 21
+        shell: bash
+        run: |
+          set -euo pipefail
+          for harness in snapshot-tests tracing-after; do
+            (cd "$RUNNER_TEMP/jdt-build-hardening/$harness" && mvn -B --no-transfer-progress clean test)
+            cp -r "$RUNNER_TEMP/jdt-build-hardening/$harness/target/surefire-reports" "$RUNNER_TEMP/jdt-build-hardening/$harness/java21-reports"
+          done
+      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
+        with:
+          distribution: temurin
+          java-version: '26'
+      - name: Repeat job-wait regressions and verify tracing on Java 26
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -version
+          for i in 1 2 3 4 5; do
+            (cd "$RUNNER_TEMP/jdt-build-hardening/snapshot-tests" && mvn -B --no-transfer-progress test)
+            cp -r "$RUNNER_TEMP/jdt-build-hardening/snapshot-tests/target/surefire-reports" "$RUNNER_TEMP/jdt-build-hardening/snapshot-tests/java26-$i-reports"
+          done
+          (cd "$RUNNER_TEMP/jdt-build-hardening/tracing-after" && mvn -B --no-transfer-progress clean test)
+      - name: Summarize individual test reports
+        if: always()
+        run: python .github/qa/build-hardening/prepare.py reports
+      - name: Commit and push only the two verified candidate branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh auth setup-git
+          python .github/qa/build-hardening/prepare.py publish
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: build-hardening-${{ github.run_id }}
-          path: .github/qa/build-hardening/target/surefire-reports/
+          name: jdt-build-hardening-candidates-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/jdt-build-hardening/*.json
+            ${{ runner.temp }}/jdt-build-hardening/*.patch
+            ${{ runner.temp }}/jdt-build-hardening/tracing-before/baseline.log
+            ${{ runner.temp }}/jdt-build-hardening/*/target/surefire-reports/
+            ${{ runner.temp }}/jdt-build-hardening/*/*-reports/
           if-no-files-found: warn

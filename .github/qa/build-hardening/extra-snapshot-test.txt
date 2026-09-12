@@ -1,0 +1,30 @@
+	public void testRunningJobRemainsJoinedAcrossWakeUpRetry() throws Exception {
+		Object family = new Object();
+		CountDownLatch running = new CountDownLatch(1);
+		CountDownLatch release = new CountDownLatch(1);
+		CountDownLatch retry = new CountDownLatch(1);
+		java.util.concurrent.atomic.AtomicInteger joins = new java.util.concurrent.atomic.AtomicInteger();
+		Job job = job(family, monitor -> {
+			running.countDown();
+			assertTrue("Test did not release the running job",
+					release.await(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+		});
+		try {
+			job.schedule();
+			assertTrue(running.await(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+			Future<?> wait = waitFor(beforeJoin(() -> {
+				if (joins.incrementAndGet() == 2) {
+					retry.countDown();
+				}
+			}), family);
+			assertTrue("Expected another wait after the wake-up interval",
+					retry.await(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+			assertFalse("A retry must not be treated as successful completion", wait.isDone());
+			release.countDown();
+			await(wait);
+			assertEquals(Status.OK_STATUS, job.getResult());
+		} finally {
+			release.countDown();
+		}
+	}
+

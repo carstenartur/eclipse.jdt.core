@@ -1,4 +1,4 @@
-name: Scoped refresh and formatter contract QA
+name: Scoped external refresh QA
 on:
   push:
     branches: [qa/pr5398-refresh-and-pr5380-test-contract]
@@ -9,67 +9,6 @@ concurrency:
   group: scoped-refresh-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  formatter-contract:
-    if: github.repository == 'carstenartur/eclipse.jdt.core'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: 6b777ed704d1a0e00eb87f63ec9042b01b0acd6f
-          persist-credentials: false
-      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
-        with:
-          distribution: temurin
-          java-version: '21'
-      - name: Test existing and strengthened assertions against an intentional no-op
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-          import subprocess, json, hashlib, xml.etree.ElementTree as E
-          root=Path('qa-evidence/formatter-contract'); root.mkdir(parents=True)
-          original=Path('org.eclipse.jdt.core.tests.model/src/org/eclipse/jdt/core/tests/formatter/FormatterRegionTests.java').read_text()
-          (root/'original.java').write_text(original)
-          old='new DefaultCodeFormatter().format(CodeFormatter.K_COMPILATION_UNIT, source, regions, 0, lineSeparator)'
-          assert original.count(old)==1
-          mutant=original.replace(old,'new org.eclipse.text.edits.MultiTextEdit()')
-          mutant=mutant.replace('import org.eclipse.jdt.core.formatter.CodeFormatter;\n','').replace('import org.eclipse.jdt.internal.formatter.DefaultCodeFormatter;\n','')
-          check='\t\tassertFalse("The nonempty region must actually change the input", source.equals(expected));\n'
-          strengthened=mutant.replace('\t\tString actual = formatAndApply(',check+'\t\tString actual = formatAndApply(')
-          assert strengthened.count(check)==1
-          summary=[]
-          for name, source in [('existing',mutant),('strengthened',strengthened)]:
-              work=root/name; src=work/'src/test/java/org/eclipse/jdt/core/tests/formatter/FormatterRegionTests.java'
-              src.parent.mkdir(parents=True); src.write_text(source)
-              (work/'pom.xml').write_text('''<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion>
-          <groupId>org.eclipse.jdt.qa</groupId><artifactId>formatter-contract</artifactId><version>1</version>
-          <properties><maven.compiler.release>21</maven.compiler.release><project.build.sourceEncoding>UTF-8</project.build.sourceEncoding></properties>
-          <dependencies><dependency><groupId>junit</groupId><artifactId>junit</artifactId><version>4.13.2</version><scope>test</scope></dependency>
-          <dependency><groupId>org.eclipse.platform</groupId><artifactId>org.eclipse.text</artifactId><version>3.14.400</version></dependency></dependencies>
-          <build><plugins><plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId><version>3.14.0</version></plugin>
-          <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-surefire-plugin</artifactId><version>3.5.3</version></plugin></plugins></build></project>''')
-              with (work/'maven.log').open('w') as log:
-                  result=subprocess.run(['mvn','-B','-ntp','-f',str(work/'pom.xml'),'test'],stdout=log,stderr=subprocess.STDOUT)
-              print((work/'maven.log').read_text())
-              cases=[]
-              for report in (work/'target/surefire-reports').glob('TEST-*.xml'):
-                  cases.extend(E.parse(report).getroot().iter('testcase'))
-              assert len(cases)==4, (name,len(cases))
-              assert not any(c.find('error') is not None or c.find('skipped') is not None for c in cases)
-              failures=[c.get('name') for c in cases if c.find('failure') is not None]
-              expected=[] if name=='existing' else ['testEmptyFirstRegionAtDocumentStart','testEmptyFirstRegionAtDocumentStartWithCrLf']
-              assert sorted(failures)==sorted(expected),(name,failures)
-              assert result.returncode == 0 if name=='existing' else result.returncode != 0
-              summary.append({'variant':name,'tests':len(cases),'failures':failures,'maven_exit':result.returncode})
-          (root/'summary.json').write_text(json.dumps({'source_commit':'6b777ed704d1a0e00eb87f63ec9042b01b0acd6f','source_sha256':hashlib.sha256(original.encode()).hexdigest(),'scope':'Intentional no-op mutation; NOT a run of the production formatter or the Jenkins performance probe.','results':summary},indent=2))
-          PY
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        if: always()
-        with:
-          name: formatter-contract-${{ github.run_id }}
-          path: qa-evidence/formatter-contract/
   external-refresh:
     if: github.repository == 'carstenartur/eclipse.jdt.core'
     runs-on: ubuntu-24.04
@@ -90,7 +29,7 @@ jobs:
             JavaSE-21
             JavaSE-25
             JavaSE-26
-      - name: Prepare a real model-suite probe without changing either PR
+      - name: Prepare the real model-suite probe
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -101,10 +40,14 @@ jobs:
           Path('qa-evidence').mkdir()
           (Path('qa-evidence')/'AbstractJavaModelTests.original').write_text(read(str(model/'AbstractJavaModelTests.java')))
           entry=Path('org.eclipse.jdt.core.tests.model/src/org/eclipse/jdt/core/tests/RunAllJdtModelTestsTracing.java')
-          text=entry.read_text()
+          text=read(str(entry))
           old='@SuiteClasses({ RunFormatterTests.class, RunAllTests.class, AllJavaModelTests.class })'
           assert text.count(old)==1
-          entry.write_text(text.replace(old,'@SuiteClasses(org.eclipse.jdt.core.tests.model.Pr5398RefreshProbe.class)'))
+          text=text.replace(old,'@SuiteClasses(org.eclipse.jdt.core.tests.model.Pr5398RefreshProbe.class)')
+          for unused in ['import org.eclipse.jdt.core.tests.dom.RunAllTests;\n','import org.eclipse.jdt.core.tests.model.AllJavaModelTests;\n']:
+              assert text.count(unused)==1
+              text=text.replace(unused,'')
+          entry.write_text(text)
           (model/'Pr5398RefreshProbe.java').write_text('''package org.eclipse.jdt.core.tests.model;
           import junit.framework.Test;
           import junit.framework.TestSuite;
@@ -151,12 +94,12 @@ jobs:
           for label,retry,helpers in [('A-original',False,False),('B-retry',True,False),('C-original-after-helper-tests',False,True),('D-retry-after-helper-tests',True,True)]:
               out=root/label; out.mkdir()
               source.write_text(original if retry else original.replace(fixed,previous))
-              for name in ['work/data','surefire-reports']:
+              for name in ['work','surefire-reports']:
                   shutil.rmtree(module/'target'/name,ignore_errors=True)
               flags='--add-modules ALL-SYSTEM -Dcompliance=1.8,11,17,21,25,26 -Djdt.performance.asserts=disabled -Dqa.runJobTests='+str(helpers).lower()
               cmd=['mvn','-B','-ntp','-pl','org.eclipse.jdt.core.tests.model','-am','verify','-Ptest-on-javase-26','-Dcbi-ecj-version=99.99','-Dtest=RunAllJdtModelTestsTracing','-DfailIfNoTests=false','-Dsurefire.failIfNoSpecifiedTests=false','-Dmaven.test.failure.ignore=false','-Dtycho.baseline.replace=none','-Dcompare-version-with-baselines.skip=true','-Djava.io.tmpdir='+os.environ['GITHUB_WORKSPACE']+'/tmp','-Dtycho.surefire.argLine='+flags]
               (out/'command.json').write_text(json.dumps(cmd,indent=2))
-              (out/'source.patch').write_bytes(subprocess.check_output(['git','diff','--',str(source)]))
+              (out/'source.patch').write_bytes(subprocess.check_output(['git','diff','c416377d6a02c6f59f583819c5e7f0652e1e0e6c','--','org.eclipse.jdt.core.tests.model']))
               with (out/'maven.log').open('w') as log:
                   result=subprocess.run(['timeout','--kill-after=30s','12m',*cmd],stdout=log,stderr=subprocess.STDOUT)
               logtext=(out/'maven.log').read_text(errors='replace')

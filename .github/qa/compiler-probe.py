@@ -114,6 +114,7 @@ assert execute([*common,'-pl','org.eclipse.jdt.core.tests.compiler','-am','insta
 maven=subprocess.check_output(['mvn','-version'],text=True,stderr=subprocess.STDOUT)
 (OUT/'maven.txt').write_text(maven)
 original_toolchains=Path.home()/'.m2/toolchains.xml'
+shutil.copy2(original_toolchains,OUT/'original-toolchains.xml')
 results=[]
 fingerprint=None
 sequence='ABBA' if A else 'BBB'
@@ -128,7 +129,16 @@ for index,arm in enumerate(sequence):
     for tool in toolchains.getroot().findall('toolchain'):
         if tool.findtext('provides/id')=='JavaSE-26':
             tool.find('configuration/jdkHome').text=str(home);matched+=1
-    assert matched==1,matched
+    assert matched<=1,('Ambiguous test JDK toolchain',matched)
+    if matched==0:
+        tool=E.SubElement(toolchains.getroot(),'toolchain')
+        E.SubElement(tool,'type').text='jdk'
+        provides=E.SubElement(tool,'provides')
+        E.SubElement(provides,'id').text='JavaSE-26'
+        E.SubElement(provides,'version').text='26'
+        configuration=E.SubElement(tool,'configuration')
+        E.SubElement(configuration,'jdkHome').text=str(home)
+    assert sum(t.findtext('provides/id')=='JavaSE-26' for t in toolchains.getroot().findall('toolchain'))==1
     chain=dest/'toolchains.xml';toolchains.write(chain,encoding='utf-8',xml_declaration=True)
     for path in ['surefire-reports','work']:
         shutil.rmtree(MODULE/'target'/path,ignore_errors=True)

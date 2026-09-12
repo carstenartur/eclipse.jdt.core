@@ -27,7 +27,7 @@ jobs:
             17
             21
             25
-            26.0.2.1
+            26
           mvn-toolchain-id: |
             JavaSE-1.8
             JavaSE-17

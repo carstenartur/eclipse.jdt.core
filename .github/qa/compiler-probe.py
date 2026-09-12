@@ -90,7 +90,7 @@ compile_call='batchCompiler.compile(getCompilationUnits(testFiles)); // compile 
 metric='org.eclipse.jdt.core.tests.util.Pr5380Metrics'
 assert text.count(compile_call)==1
 start=text.index(compile_call)
-end=text.index('// javac part',start)
+end=text.index('\n\tclass DummyAnnotationProcessingManager',start)
 worker=text[start:end]
 arguments=['sourceFile','className','expectedOutputString','expectedErrorString','this.classpaths','null','vmArguments']
 pattern=r'boolean\s+passed\s*=\s*this\.verifier\.verifyClassFiles\(\s*'+r'\s*,\s*'.join(re.escape(a) for a in arguments)+r'\s*\);'

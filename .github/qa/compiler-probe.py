@@ -87,20 +87,22 @@ assert not subprocess.check_output(['git','diff',BASE,'--',str(MODULE)],text=Tru
 source=MODULE/'src/org/eclipse/jdt/core/tests/compiler/regression/AbstractRegressionTest.java'
 text=source.read_text()
 compile_call='batchCompiler.compile(getCompilationUnits(testFiles)); // compile all files together'
-verify_call='''boolean passed =
-					this.verifier.verifyClassFiles(
-						sourceFile,
-						className,
-						expectedOutputString,
-						expectedErrorString,
-						this.classpaths,
-						null,
-						vmArguments);'''
 metric='org.eclipse.jdt.core.tests.util.Pr5380Metrics'
 assert text.count(compile_call)==1
-text=text.replace(compile_call,f'var compileTiming = {metric}.start("compile", getName());\ntry {{\n{compile_call}\n}} finally {{ {metric}.finish(compileTiming); }}')
-assert text.count(verify_call)==1
-text=text.replace(verify_call,f'var executeTiming = {metric}.start("execute", getName());\nboolean passed;\ntry {{\n'+verify_call.replace('boolean passed =','passed =')+f'\n}} finally {{ {metric}.finish(executeTiming); }}')
+start=text.index(compile_call)
+end=text.index('// javac part',start)
+worker=text[start:end]
+arguments=['sourceFile','className','expectedOutputString','expectedErrorString','this.classpaths','null','vmArguments']
+pattern=r'boolean\s+passed\s*=\s*this\.verifier\.verifyClassFiles\(\s*'+r'\s*,\s*'.join(re.escape(a) for a in arguments)+r'\s*\);'
+matches=list(re.finditer(pattern,worker))
+assert len(matches)==1,('Expected exactly one execution call in the worker',len(matches))
+match=matches[0]
+verify_call=match.group(0)
+assignment=re.sub(r'^boolean\s+passed\s*=', 'passed =',verify_call,count=1)
+replacement=f'var executeTiming = {metric}.start("execute", getName());\nboolean passed;\ntry {{\n'+assignment+f'\n}} finally {{ {metric}.finish(executeTiming); }}'
+worker=worker[:match.start()]+replacement+worker[match.end():]
+worker=worker.replace(compile_call,f'var compileTiming = {metric}.start("compile", getName());\ntry {{\n{compile_call}\n}} finally {{ {metric}.finish(compileTiming); }}')
+text=text[:start]+worker+text[end:]
 source.write_text(text)
 for name,package in [('Pr5380CompilerProbe','compiler/regression'),('Pr5380Metrics','util')]:
     shutil.copy2(ROOT/f'.github/qa/{name}.java',MODULE/f'src/org/eclipse/jdt/core/tests/{package}/{name}.java')

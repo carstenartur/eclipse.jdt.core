@@ -1,24 +1,54 @@
 package org.eclipse.jdt.core.tests.compiler.regression;
 
+import java.util.IdentityHashMap;
+import java.util.Map;
+import junit.framework.AssertionFailedError;
 import junit.framework.Test;
 import junit.framework.TestCase;
+import junit.framework.TestListener;
 import junit.framework.TestResult;
 import org.eclipse.jdt.core.tests.util.Pr5380Metrics;
 import org.eclipse.jdt.core.tests.util.Util;
 import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 
-/** Disposable timing probe; calls the four original methods with their original assertions. */
+/** Disposable timing probe; preserves the original methods, instances and assertions. */
 public class Pr5380CompilerProbe extends TestCase {
 	public static Test suite() {
 		Pr5380Metrics.runtime(Util.getJREDirectory());
 		RegressionTestSetup setup = new RegressionTestSetup(ClassFileConstants.JDK17) {
 			@Override
-			public void runTest(Test test, TestResult result) {
-				Pr5380Metrics.Stamp start = Pr5380Metrics.start("total", ((TestCase) test).getName());
+			public void run(TestResult result) {
+				Map<Test, Pr5380Metrics.Stamp> starts = new IdentityHashMap<>();
+				TestListener listener = new TestListener() {
+					@Override
+					public void startTest(Test test) {
+						starts.put(test, Pr5380Metrics.start("total", ((TestCase) test).getName()));
+					}
+
+					@Override
+					public void endTest(Test test) {
+						Pr5380Metrics.Stamp start = starts.remove(test);
+						if (start == null) {
+							throw new IllegalStateException("Missing test-start event: " + test);
+						}
+						Pr5380Metrics.finish(start);
+					}
+
+					@Override
+					public void addError(Test test, Throwable error) {
+						// The existing TestResult retains and reports the original error.
+					}
+
+					@Override
+					public void addFailure(Test test, AssertionFailedError failure) {
+						// The existing TestResult retains and reports the original assertion.
+					}
+				};
+				result.addListener(listener);
 				try {
-					super.runTest(test, result);
+					super.run(result);
 				} finally {
-					Pr5380Metrics.finish(start);
+					result.removeListener(listener);
 				}
 			}
 		};

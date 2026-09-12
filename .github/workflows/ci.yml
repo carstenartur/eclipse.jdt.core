@@ -1,51 +1,189 @@
-name: Continuous Integration
-concurrency: 
-    group: ${{ github.workflow }}-${{ github.ref }}
-    cancel-in-progress: true
-
+name: Scoped refresh and formatter contract QA
 on:
   push:
-
+    branches: [qa/pr5398-refresh-and-pr5380-test-contract]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: scoped-refresh-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
-  event_file:
-    name: "Upload Event File"
-    runs-on: ubuntu-latest
+  formatter-contract:
+    if: github.repository == 'carstenartur/eclipse.jdt.core'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
-    - name: Upload
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-      with:
-        name: event-file
-        path: ${{ github.event_path }}
-  build:
-    runs-on: ubuntu-latest
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 6b777ed704d1a0e00eb87f63ec9042b01b0acd6f
+          persist-credentials: false
+      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Test existing and strengthened assertions against an intentional no-op
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess, json, hashlib, xml.etree.ElementTree as E
+          root=Path('qa-evidence/formatter-contract'); root.mkdir(parents=True)
+          original=Path('org.eclipse.jdt.core.tests.model/src/org/eclipse/jdt/core/tests/formatter/FormatterRegionTests.java').read_text()
+          (root/'original.java').write_text(original)
+          old='new DefaultCodeFormatter().format(CodeFormatter.K_COMPILATION_UNIT, source, regions, 0, lineSeparator)'
+          assert original.count(old)==1
+          mutant=original.replace(old,'new org.eclipse.text.edits.MultiTextEdit()')
+          mutant=mutant.replace('import org.eclipse.jdt.core.formatter.CodeFormatter;\n','').replace('import org.eclipse.jdt.internal.formatter.DefaultCodeFormatter;\n','')
+          check='\t\tassertFalse("The nonempty region must actually change the input", source.equals(expected));\n'
+          strengthened=mutant.replace('\t\tString actual = formatAndApply(',check+'\t\tString actual = formatAndApply(')
+          assert strengthened.count(check)==1
+          summary=[]
+          for name, source in [('existing',mutant),('strengthened',strengthened)]:
+              work=root/name; src=work/'src/test/java/org/eclipse/jdt/core/tests/formatter/FormatterRegionTests.java'
+              src.parent.mkdir(parents=True); src.write_text(source)
+              (work/'pom.xml').write_text('''<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion>
+          <groupId>org.eclipse.jdt.qa</groupId><artifactId>formatter-contract</artifactId><version>1</version>
+          <properties><maven.compiler.release>21</maven.compiler.release><project.build.sourceEncoding>UTF-8</project.build.sourceEncoding></properties>
+          <dependencies><dependency><groupId>junit</groupId><artifactId>junit</artifactId><version>4.13.2</version><scope>test</scope></dependency>
+          <dependency><groupId>org.eclipse.platform</groupId><artifactId>org.eclipse.text</artifactId><version>3.14.400</version></dependency></dependencies>
+          <build><plugins><plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId><version>3.14.0</version></plugin>
+          <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-surefire-plugin</artifactId><version>3.5.3</version></plugin></plugins></build></project>''')
+              with (work/'maven.log').open('w') as log:
+                  result=subprocess.run(['mvn','-B','-ntp','-f',str(work/'pom.xml'),'test'],stdout=log,stderr=subprocess.STDOUT)
+              print((work/'maven.log').read_text())
+              cases=[]
+              for report in (work/'target/surefire-reports').glob('TEST-*.xml'):
+                  cases.extend(E.parse(report).getroot().iter('testcase'))
+              assert len(cases)==4, (name,len(cases))
+              assert not any(c.find('error') is not None or c.find('skipped') is not None for c in cases)
+              failures=[c.get('name') for c in cases if c.find('failure') is not None]
+              expected=[] if name=='existing' else ['testEmptyFirstRegionAtDocumentStart','testEmptyFirstRegionAtDocumentStartWithCrLf']
+              assert sorted(failures)==sorted(expected),(name,failures)
+              assert result.returncode == 0 if name=='existing' else result.returncode != 0
+              summary.append({'variant':name,'tests':len(cases),'failures':failures,'maven_exit':result.returncode})
+          (root/'summary.json').write_text(json.dumps({'source_commit':'6b777ed704d1a0e00eb87f63ec9042b01b0acd6f','source_sha256':hashlib.sha256(original.encode()).hexdigest(),'scope':'Intentional no-op mutation; NOT a run of the production formatter or the Jenkins performance probe.','results':summary},indent=2))
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: formatter-contract-${{ github.run_id }}
+          path: qa-evidence/formatter-contract/
+  external-refresh:
+    if: github.repository == 'carstenartur/eclipse.jdt.core'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        submodules: recursive
-        fetch-depth: 0
-    - name: Set up JDKs
-      uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
-      with:
-        java-version: |
-          8
-          17
-          21
-          25
-        mvn-toolchain-id: |
-          JavaSE-1.8
-          JavaSE-17
-          JavaSE-21
-          JavaSE-25
-        distribution: 'temurin'
-    - name: Build with Maven
-      run: |
-        mvn clean install --batch-mode -f org.eclipse.jdt.core.compiler.batch -DlocalEcjVersion=99.99
-        mvn -U clean verify --batch-mode --fail-at-end -Ptest-on-javase-21 -Pbree-libs -Papi-check -Djava.io.tmpdir=$WORKSPACE/tmp -Dproject.build.sourceEncoding=UTF-8 -Dtycho.surefire.argLine="--add-modules ALL-SYSTEM -Dcompliance=1.8,11,17,20 -Djdt.performance.asserts=disabled" -Dcbi-ecj-version=99.99
-    - name: Upload Test Results for Linux
-      if: always()
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-      with:
-        name: test-results-linux
-        if-no-files-found: warn
-        path: |
-          ${{ github.workspace }}/**/target/surefire-reports/*.xml
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
+        with:
+          distribution: temurin
+          java-version: |
+            21
+            25
+            26
+          mvn-toolchain-id: |
+            JavaSE-21
+            JavaSE-25
+            JavaSE-26
+      - name: Prepare a real model-suite probe without changing either PR
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+          base='c416377d6a02c6f59f583819c5e7f0652e1e0e6c'
+          def read(path): return subprocess.check_output(['git','show',base+':'+path],text=True)
+          model=Path('org.eclipse.jdt.core.tests.model/src/org/eclipse/jdt/core/tests/model')
+          Path('qa-evidence').mkdir()
+          (Path('qa-evidence')/'AbstractJavaModelTests.original').write_text(read(str(model/'AbstractJavaModelTests.java')))
+          entry=Path('org.eclipse.jdt.core.tests.model/src/org/eclipse/jdt/core/tests/RunAllJdtModelTestsTracing.java')
+          text=entry.read_text()
+          old='@SuiteClasses({ RunFormatterTests.class, RunAllTests.class, AllJavaModelTests.class })'
+          assert text.count(old)==1
+          entry.write_text(text.replace(old,'@SuiteClasses(org.eclipse.jdt.core.tests.model.Pr5398RefreshProbe.class)'))
+          (model/'Pr5398RefreshProbe.java').write_text('''package org.eclipse.jdt.core.tests.model;
+          import junit.framework.Test;
+          import junit.framework.TestSuite;
+          import org.eclipse.core.runtime.Platform;
+          import org.osgi.framework.Bundle;
+          public class Pr5398RefreshProbe {
+            public static Test suite() {
+              System.out.println("QA_RUNTIME="+System.getProperty("java.runtime.version")+" JAVA_HOME="+System.getProperty("java.home"));
+              for (String id : new String[] {"org.eclipse.jdt.core", "org.eclipse.jdt.core.tests.model", "org.eclipse.core.resources", "org.eclipse.core.jobs"}) {
+                Bundle b=Platform.getBundle(id);
+                if (b==null) throw new AssertionError("Missing bundle: "+id);
+                System.out.println("QA_BUNDLE="+id+" VERSION="+b.getVersion()+" LOCATION="+b.getLocation());
+              }
+              TestSuite result=new TestSuite("PR5398 controlled refresh probe");
+              if (Boolean.getBoolean("qa.runJobTests")) result.addTest(JobFamilyWaitTests.suite());
+              for (int i=0;i<3;i++) result.addTest(JavaProjectTests.suite());
+              System.out.println("QA_EXPECTED_TESTS="+result.countTestCases());
+              return result;
+            }
+          }''')
+          print('Pinned source',base)
+          PY
+      - name: Bootstrap the compiler without running the full tests
+        run: |
+          set -euo pipefail
+          java -version
+          mvn -version
+          mkdir -p "$GITHUB_WORKSPACE/tmp"
+          mvn -B -ntp clean install -f org.eclipse.jdt.core.compiler.batch -DlocalEcjVersion=99.99 -DcompilerBaselineMode=disable -DcompilerBaselineReplace=none -Dcompare-version-with-baselines.skip=true -Dtycho.baseline.replace=none 2>&1 | tee qa-evidence/bootstrap.log
+      - name: Compare original and retry waits with and without preceding helper tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess, os, shutil, json, re, xml.etree.ElementTree as E
+          root=Path('qa-evidence'); module=Path('org.eclipse.jdt.core.tests.model')
+          source=module/'src/org/eclipse/jdt/core/tests/model/AbstractJavaModelTests.java'
+          original=(root/'AbstractJavaModelTests.original').read_text()
+          fixed='JobFamilyWait.join(Job.getJobManager(), ResourcesPlugin.FAMILY_SNAPSHOT);'
+          previous='Job.getJobManager().wakeUp(ResourcesPlugin.FAMILY_SNAPSHOT);\n\t\t\t\tJob.getJobManager().join(ResourcesPlugin.FAMILY_SNAPSHOT, null);'
+          assert original.count(fixed)==1
+          summary=[]
+          for label,retry,helpers in [('A-original',False,False),('B-retry',True,False),('C-original-after-helper-tests',False,True),('D-retry-after-helper-tests',True,True)]:
+              out=root/label; out.mkdir()
+              source.write_text(original if retry else original.replace(fixed,previous))
+              for name in ['work/data','surefire-reports']:
+                  shutil.rmtree(module/'target'/name,ignore_errors=True)
+              flags='--add-modules ALL-SYSTEM -Dcompliance=1.8,11,17,21,25,26 -Djdt.performance.asserts=disabled -Dqa.runJobTests='+str(helpers).lower()
+              cmd=['mvn','-B','-ntp','-pl','org.eclipse.jdt.core.tests.model','-am','verify','-Ptest-on-javase-26','-Dcbi-ecj-version=99.99','-Dtest=RunAllJdtModelTestsTracing','-DfailIfNoTests=false','-Dsurefire.failIfNoSpecifiedTests=false','-Dmaven.test.failure.ignore=false','-Dtycho.baseline.replace=none','-Dcompare-version-with-baselines.skip=true','-Djava.io.tmpdir='+os.environ['GITHUB_WORKSPACE']+'/tmp','-Dtycho.surefire.argLine='+flags]
+              (out/'command.json').write_text(json.dumps(cmd,indent=2))
+              (out/'source.patch').write_bytes(subprocess.check_output(['git','diff','--',str(source)]))
+              with (out/'maven.log').open('w') as log:
+                  result=subprocess.run(['timeout','--kill-after=30s','12m',*cmd],stdout=log,stderr=subprocess.STDOUT)
+              logtext=(out/'maven.log').read_text(errors='replace')
+              print(label,'exit',result.returncode,flush=True)
+              print('\n'.join(line for line in logtext.splitlines() if any(k in line for k in ('QA_','Tests run:','[ERROR]','BUILD SUCCESS','BUILD FAILURE'))),flush=True)
+              reports=module/'target/surefire-reports'
+              if reports.exists(): shutil.copytree(reports,out/'reports')
+              for extra in ['work/data/.metadata/.log','surefire.properties','work/configuration/config.ini','work/configuration/org.eclipse.equinox.simpleconfigurator/bundles.info']:
+                  p=module/'target'/extra
+                  if p.is_file(): shutil.copy2(p,out/(p.name+'.saved'))
+              cases=[]
+              for p in (out/'reports').glob('TEST-*.xml'):
+                  cases.extend(E.parse(p).getroot().iter('testcase'))
+              names=[c.get('name','') for c in cases]
+              targetcounts={n:sum(x==n for x in names) for n in ('testChangeExternalLibFolder1','testChangeExternalLibFolder2')}
+              expected=re.findall(r'QA_EXPECTED_TESTS=(\d+)',logtext)
+              problems=[{'name':c.get('name'),'details':[(ch.tag,ch.get('message')) for ch in c if ch.tag in ('failure','error','skipped')]} for c in cases if any(ch.tag in ('failure','error','skipped') for ch in c)]
+              valid=bool(expected) and len(cases)==int(expected[-1]) and all(v==3 for v in targetcounts.values())
+              summary.append({'arm':label,'retry':retry,'helper_tests_first':helpers,'maven_exit':result.returncode,'test_records':len(cases),'target_counts':targetcounts,'expected_counts':expected,'inventory_valid':valid,'problems':problems})
+              (root/'refresh-summary.json').write_text(json.dumps(summary,indent=2))
+              if not valid:
+                  raise SystemExit('Incomplete/incorrect test inventory; do not interpret this run as an A/B result.')
+          if any(x['maven_exit'] or x['problems'] for x in summary):
+              raise SystemExit('One or more valid comparison arms failed; inspect refresh-summary.json and original reports.')
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: refresh-comparison-${{ github.run_id }}
+          path: qa-evidence/

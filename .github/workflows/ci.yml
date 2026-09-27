@@ -48,21 +48,51 @@ jobs:
           PY
       - name: Build current compiler
         run: mvn --batch-mode -f org.eclipse.jdt.core.compiler.batch clean install -DlocalEcjVersion=99.99
-      - name: Execute real PDE model tests
+      - name: Execute real PDE model tests with startup diagnostics
         shell: bash
         run: |
-          set +e
-          mvn --batch-mode -U verify -pl org.eclipse.jdt.core.tests.model -am \
-            -Ptest-on-javase-21 -Pbree-libs \
-            -Dtest=BufferPublicationInvestigationTests -DfailIfNoTests=false \
-            -Dsurefire.failIfNoSpecifiedTests=false \
-            -Dtycho.surefire.failIfNoTests=false -Dcbi-ecj-version=99.99 \
-            -Dproject.build.sourceEncoding=UTF-8 \
-            -Dtycho.surefire.argLine='--add-modules ALL-SYSTEM -Dcompliance=1.8 -Djdt.performance.asserts=disabled' \
-            2>&1 | tee investigation-maven.log
-          code=${PIPESTATUS[0]}
-          echo "$code" > investigation-maven-exit.txt
-          exit 0
+          run_probe() {
+            label="$1"
+            set +e
+            mvn --batch-mode -U verify -pl org.eclipse.jdt.core.tests.model -am \
+              -Ptest-on-javase-21 -Pbree-libs \
+              -Dtest=BufferPublicationInvestigationTests -DfailIfNoTests=false \
+              -Dsurefire.failIfNoSpecifiedTests=false \
+              -Dtycho.surefire.failIfNoTests=false -Dcbi-ecj-version=99.99 \
+              -Dtycho.showEclipseLog=true \
+              -Dproject.build.sourceEncoding=UTF-8 \
+              -Dtycho.surefire.argLine='--add-modules ALL-SYSTEM -Dcompliance=1.8 -Djdt.performance.asserts=disabled' \
+              2>&1 | tee "investigation-${label}-maven.log"
+            code=${PIPESTATUS[0]}
+            echo "$code" > "investigation-${label}-maven-exit.txt"
+            mkdir -p "investigation-${label}-startup-logs"
+            find org.eclipse.jdt.core.tests.model/target/work -name '*.log' -type f -exec cp --parents '{}' "investigation-${label}-startup-logs/" ';' || true
+            set -e
+          }
+          run_probe java21
+          count=$(python3 -c 'from pathlib import Path; print(len(list(Path("org.eclipse.jdt.core.tests.model/target/surefire-reports").glob("TEST-*.xml"))))')
+          if [ "$count" -eq 0 ]; then
+            echo 'No JUnit execution on Java 21. Run the identical probe on Java 25 as a startup diagnostic.'
+            python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          p = Path('org.eclipse.jdt.core.tests.model/pom.xml')
+          ns = {'m': 'http://maven.apache.org/POM/4.0.0'}
+          ET.register_namespace('', ns['m'])
+          tree = ET.parse(p)
+          changed = 0
+          for profile in tree.findall('m:profiles/m:profile', ns):
+              if profile.findtext('m:id', namespaces=ns) == 'test-on-javase-21':
+                  for toolchain_id in profile.findall('.//m:toolchains/m:jdk/m:id', ns):
+                      assert toolchain_id.text == 'JavaSE-21'
+                      toolchain_id.text = 'JavaSE-25'
+                      changed += 1
+          assert changed == 1, f'Expected one model-test runtime selection, changed {changed}'
+          tree.write(p, encoding='UTF-8', xml_declaration=True)
+          PY
+            run_probe java25
+          fi
+          git diff --exit-code a9ba670e61dc6b35c345a34ee97f61d1267bc132 -- org.eclipse.jdt.core/model
       - name: Classify actual JUnit results, not Maven exit status
         if: always()
         run: |
@@ -95,9 +125,12 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: buffer-publication-baseline-evidence
+          include-hidden-files: true
           path: |
             investigation-*.log
             investigation-*.txt
             investigation-*.json
             **/target/surefire-reports/
             **/target/work/data/.metadata/.log
+            **/target/work/configuration/*.log
+            investigation-*-startup-logs/

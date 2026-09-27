@@ -18,6 +18,7 @@ jobs:
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6
         with:
           distribution: temurin
+          cache: maven
           java-version: |
             8
             17
@@ -54,6 +55,7 @@ jobs:
           mvn --batch-mode -U verify -pl org.eclipse.jdt.core.tests.model -am \
             -Ptest-on-javase-21 -Pbree-libs \
             -Dtest=BufferPublicationInvestigationTests -DfailIfNoTests=false \
+            -Dsurefire.failIfNoSpecifiedTests=false \
             -Dtycho.surefire.failIfNoTests=false -Dcbi-ecj-version=99.99 \
             -Dproject.build.sourceEncoding=UTF-8 \
             -Dtycho.surefire.argLine='--add-modules ALL-SYSTEM -Dcompliance=1.8 -Djdt.performance.asserts=disabled' \

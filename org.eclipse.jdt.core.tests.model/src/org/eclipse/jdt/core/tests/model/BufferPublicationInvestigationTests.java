@@ -13,6 +13,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import junit.framework.Test;
+import org.eclipse.core.resources.IResource;
 import org.eclipse.core.resources.ResourcesPlugin;
 import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.jdt.core.IBuffer;
@@ -212,9 +213,17 @@ public class BufferPublicationInvestigationTests extends ModifyingResourceTests 
     public void testMissingSourceControl() throws Exception {
         IJavaProject project = null;
         try {
-            project = createFixture("BufferPublicationMissingSource");
+            project = createJavaProject("BufferPublicationMissingSource", new String[0],
+                    new String[] { "JCL18_LIB" }, "", JavaCore.VERSION_1_8);
+            String jarPath = project.getProject().getLocation().append("publication.jar").toOSString();
+            org.eclipse.jdt.core.tests.util.Util.createJar(
+                    new String[] { "publication/X.java", SOURCE }, null, jarPath,
+                    getJCLLibrary(JavaCore.VERSION_1_8), JavaCore.VERSION_1_8);
+            project.getProject().refreshLocal(IResource.DEPTH_INFINITE, null);
+            addLibraryEntry(project, project.getPath().append("publication.jar"), true);
+            Job.getJobManager().join(ResourcesPlugin.FAMILY_AUTO_BUILD, null);
             IPackageFragmentRoot root = root(project);
-            root.attachSource(null, null, null);
+            assertNull("Fixture must have no source attachment", root.getSourceAttachmentPath());
             IOrdinaryClassFile file = root.getPackageFragment("publication").getOrdinaryClassFile("X.class");
             assertNull("No attachment must still mean no source", file.getSource());
             assertNull("Repeated access without attachment must remain valid", file.getSource());

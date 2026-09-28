@@ -2,13 +2,18 @@ name: Buffer publication investigation
 on:
   push:
     branches: [investigate/buffer-publication-20260928]
+    paths:
+      - '.github/workflows/ci.yml'
+      - '.github/scripts/check-buffer-publication.py'
+      - 'org.eclipse.jdt.core.tests.model/**'
+      - 'org.eclipse.jdt.core/model/**'
 permissions:
   contents: read
 concurrency:
   group: buffer-publication-investigation-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  baseline:
+  causal-comparison:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -29,10 +34,12 @@ jobs:
             JavaSE-17
             JavaSE-21
             JavaSE-25
-      - name: Record immutable baseline and constrain test execution
+      - name: Record baseline and select the Java 25 test runtime required by this target
         run: |
-          git rev-parse HEAD
+          mkdir -p investigation-evidence
+          git rev-parse HEAD | tee investigation-evidence/tested-commit.txt
           git diff --exit-code a9ba670e61dc6b35c345a34ee97f61d1267bc132 -- org.eclipse.jdt.core/model
+          sha256sum org.eclipse.jdt.core.tests.model/src/org/eclipse/jdt/core/tests/model/BufferPublicationInvestigationTests.java > investigation-evidence/test-source.sha256
           python3 - <<'PY'
           from pathlib import Path
           import xml.etree.ElementTree as ET
@@ -44,42 +51,6 @@ jobs:
           for plugin in list(plugins):
               if plugin.findtext('m:artifactId', namespaces=ns) == 'maven-surefire-plugin':
                   plugins.remove(plugin)
-          tree.write(p, encoding='UTF-8', xml_declaration=True)
-          PY
-      - name: Build current compiler
-        run: mvn --batch-mode -f org.eclipse.jdt.core.compiler.batch clean install -DlocalEcjVersion=99.99
-      - name: Execute real PDE model tests with startup diagnostics
-        shell: bash
-        run: |
-          run_probe() {
-            label="$1"
-            set +e
-            mvn --batch-mode -U verify -pl org.eclipse.jdt.core.tests.model -am \
-              -Ptest-on-javase-21 -Pbree-libs \
-              -Dtest=BufferPublicationInvestigationTests -DfailIfNoTests=false \
-              -Dsurefire.failIfNoSpecifiedTests=false \
-              -Dtycho.surefire.failIfNoTests=false -Dcbi-ecj-version=99.99 \
-              -Dtycho.showEclipseLog=true \
-              -Dproject.build.sourceEncoding=UTF-8 \
-              -Dtycho.surefire.argLine='--add-modules ALL-SYSTEM -Dcompliance=1.8 -Djdt.performance.asserts=disabled' \
-              2>&1 | tee "investigation-${label}-maven.log"
-            code=${PIPESTATUS[0]}
-            echo "$code" > "investigation-${label}-maven-exit.txt"
-            mkdir -p "investigation-${label}-startup-logs"
-            find org.eclipse.jdt.core.tests.model/target/work -name '*.log' -type f -exec cp --parents '{}' "investigation-${label}-startup-logs/" ';' || true
-            set -e
-          }
-          run_probe java21
-          count=$(python3 -c 'from pathlib import Path; print(len(list(Path("org.eclipse.jdt.core.tests.model/target/surefire-reports").glob("TEST-*.xml"))))')
-          if [ "$count" -eq 0 ]; then
-            echo 'No JUnit execution on Java 21. Run the identical probe on Java 25 as a startup diagnostic.'
-            python3 - <<'PY'
-          from pathlib import Path
-          import xml.etree.ElementTree as ET
-          p = Path('org.eclipse.jdt.core.tests.model/pom.xml')
-          ns = {'m': 'http://maven.apache.org/POM/4.0.0'}
-          ET.register_namespace('', ns['m'])
-          tree = ET.parse(p)
           changed = 0
           for profile in tree.findall('m:profiles/m:profile', ns):
               if profile.findtext('m:id', namespaces=ns) == 'test-on-javase-21':
@@ -87,50 +58,62 @@ jobs:
                       assert toolchain_id.text == 'JavaSE-21'
                       toolchain_id.text = 'JavaSE-25'
                       changed += 1
-          assert changed == 1, f'Expected one model-test runtime selection, changed {changed}'
+          assert changed == 1, changed
           tree.write(p, encoding='UTF-8', xml_declaration=True)
           PY
-            run_probe java25
-          fi
-          git diff --exit-code a9ba670e61dc6b35c345a34ee97f61d1267bc132 -- org.eclipse.jdt.core/model
-      - name: Classify actual JUnit results, not Maven exit status
-        if: always()
+          git diff -- org.eclipse.jdt.core.tests.model/pom.xml > investigation-evidence/test-runtime-configuration.diff
+      - name: Build current compiler
+        run: mvn --batch-mode -f org.eclipse.jdt.core.compiler.batch clean install -DlocalEcjVersion=99.99
+      - name: Run baseline and initialization-order counterfactual with identical tests
+        shell: bash
         run: |
+          run_probe() {
+            label="$1"
+            mkdir -p "investigation-evidence/$label"
+            rm -rf org.eclipse.jdt.core.tests.model/target/surefire-reports
+            sha256sum -c investigation-evidence/test-source.sha256
+            set +e
+            mvn --batch-mode -U verify -pl org.eclipse.jdt.core.tests.model -am \
+              -Ptest-on-javase-21 -Pbree-libs \
+              -Dtest=BufferPublicationInvestigationTests -DfailIfNoTests=false \
+              -Dsurefire.failIfNoSpecifiedTests=false -Dtycho.surefire.failIfNoTests=false \
+              -Dcbi-ecj-version=99.99 -Dtycho.showEclipseLog=true \
+              -Dproject.build.sourceEncoding=UTF-8 \
+              -Dtycho.surefire.argLine='--add-modules ALL-SYSTEM -Dcompliance=1.8 -Djdt.performance.asserts=disabled' \
+              2>&1 | tee "investigation-evidence/$label/maven.log"
+            code=${PIPESTATUS[0]}
+            echo "$code" > "investigation-evidence/$label/maven-exit.txt"
+            cp -a org.eclipse.jdt.core.tests.model/target/surefire-reports "investigation-evidence/$label/" || true
+            find org.eclipse.jdt.core.tests.model/target/work -name '*.log' -type f -exec cp --parents '{}' "investigation-evidence/$label/" ';' || true
+            set -e
+            python3 .github/scripts/check-buffer-publication.py "investigation-evidence/$label" --variant "$label" | tee "investigation-evidence/$label/classification.txt"
+          }
+          run_probe baseline
+          test "$(cat investigation-evidence/baseline/maven-exit.txt)" -eq 1
           python3 - <<'PY'
           from pathlib import Path
-          import json
-          import xml.etree.ElementTree as ET
-          cases = []
-          for path in Path('org.eclipse.jdt.core.tests.model/target/surefire-reports').glob('TEST-*.xml'):
-              for case in ET.parse(path).iter('testcase'):
-                  if case.get('classname', '').endswith('BufferPublicationInvestigationTests'):
-                      failures = case.findall('failure')
-                      cases.append({'name': case.get('name'), 'failures': [f.get('message', '') for f in failures],
-                                    'errors': len(case.findall('error')), 'skipped': len(case.findall('skipped'))})
-          report = {'upstream': 'a9ba670e61dc6b35c345a34ee97f61d1267bc132', 'variant': 'unmodified-production', 'cases': cases}
-          print(json.dumps(report, indent=2))
-          Path('investigation-results.json').write_text(json.dumps(report, indent=2) + '\n')
-          assert len(cases) == 5, f'Expected exactly five real test executions, found {len(cases)}'
-          assert all(c['errors'] == 0 and c['skipped'] == 0 for c in cases), 'Infrastructure error or skipped test'
-          assert len({c['name'] for c in cases}) == 5, 'Duplicate test execution'
-          for c in cases:
-              if c['name'].startswith('testConcurrent'):
-                  assert len(c['failures']) == 1 and 'BUFFER_PUBLICATION:' in c['failures'][0], c
-              else:
-                  assert not c['failures'], c
-          print('CONFIRMED: three intended regression failures; two controls passed. The baseline is NOT fixed.')
+          p = Path('org.eclipse.jdt.core/model/org/eclipse/jdt/internal/core/ClassFile.java')
+          text = p.read_text()
+          before = '\t\tbufManager.addBuffer(buffer);\n\n\t\t// set the buffer source'
+          after = '\n\t\t// set the buffer source'
+          assert text.count(before) == 1, 'Expected exactly one real-source publication site'
+          text = text.replace(before, after, 1)
+          before = '\t\tbuffer.addBufferChangedListener(this);\n\n\t\t// do the source mapping'
+          after = '\t\tbuffer.addBufferChangedListener(this);\n\t\tbufManager.addBuffer(buffer);\n\n\t\t// do the source mapping'
+          assert text.count(before) == 1, 'Expected exactly one real-source listener site'
+          text = text.replace(before, after, 1)
+          p.write_text(text)
           PY
-      - name: Retain test evidence
+          git diff -- org.eclipse.jdt.core/model/org/eclipse/jdt/internal/core/ClassFile.java > investigation-evidence/experimental-publication-order.diff
+          cat investigation-evidence/experimental-publication-order.diff
+          run_probe initialized-before-publication
+          test "$(cat investigation-evidence/initialized-before-publication/maven-exit.txt)" -eq 0
+          sha256sum -c investigation-evidence/test-source.sha256
+          echo 'CAUSAL_COMPARISON_CONFIRMED: baseline 3 intended failures and 2 controls passed; reordered publication 5 passed.'
+      - name: Retain actual JUnit evidence and experimental diff
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: buffer-publication-baseline-evidence
+          name: buffer-publication-causal-comparison
           include-hidden-files: true
-          path: |
-            investigation-*.log
-            investigation-*.txt
-            investigation-*.json
-            **/target/surefire-reports/
-            **/target/work/data/.metadata/.log
-            **/target/work/configuration/*.log
-            investigation-*-startup-logs/
+          path: investigation-evidence/

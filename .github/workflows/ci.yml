@@ -1,51 +1,107 @@
-name: Continuous Integration
-concurrency: 
-    group: ${{ github.workflow }}-${{ github.ref }}
-    cancel-in-progress: true
-
+name: Class-file buffer publication investigation
 on:
   push:
-
+    branches: [investigate/classfile-buffer-publication-20260928]
+permissions:
+  contents: read
+concurrency:
+  group: buffer-publication-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
-  event_file:
-    name: "Upload Event File"
+  baseline:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
-    - name: Upload
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-      with:
-        name: event-file
-        path: ${{ github.event_path }}
-  build:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        submodules: recursive
-        fetch-depth: 0
-    - name: Set up JDKs
-      uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
-      with:
-        java-version: |
-          8
-          17
-          21
-          25
-        mvn-toolchain-id: |
-          JavaSE-1.8
-          JavaSE-17
-          JavaSE-21
-          JavaSE-25
-        distribution: 'temurin'
-    - name: Build with Maven
-      run: |
-        mvn clean install --batch-mode -f org.eclipse.jdt.core.compiler.batch -DlocalEcjVersion=99.99
-        mvn -U clean verify --batch-mode --fail-at-end -Ptest-on-javase-21 -Pbree-libs -Papi-check -Djava.io.tmpdir=$WORKSPACE/tmp -Dproject.build.sourceEncoding=UTF-8 -Dtycho.surefire.argLine="--add-modules ALL-SYSTEM -Dcompliance=1.8,11,17,20 -Djdt.performance.asserts=disabled" -Dcbi-ecj-version=99.99
-    - name: Upload Test Results for Linux
-      if: always()
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-      with:
-        name: test-results-linux
-        if-no-files-found: warn
-        path: |
-          ${{ github.workspace }}/**/target/surefire-reports/*.xml
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6
+        with:
+          distribution: temurin
+          java-version: |
+            8
+            17
+            21
+            25
+          mvn-toolchain-id: |
+            JavaSE-1.8
+            JavaSE-17
+            JavaSE-21
+            JavaSE-25
+          cache: maven
+      - name: Verify production sources and isolate the PDE test execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code bb43114e42b4b4d8222d86fbcac45ca6b19a0972 -- org.eclipse.jdt.core/
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          p = 'org.eclipse.jdt.core.tests.model/pom.xml'
+          ns = {'m': 'http://maven.apache.org/POM/4.0.0'}
+          ET.register_namespace('', ns['m'])
+          tree = ET.parse(p)
+          plugins = tree.getroot().find('m:build/m:plugins', ns)
+          standalone = [x for x in plugins if x.findtext('m:artifactId', namespaces=ns) == 'maven-surefire-plugin']
+          assert len(standalone) == 1
+          # These tests require OSGi/workspace, not the unrelated standalone execution.
+          plugins.remove(standalone[0])
+          tree.write(p, encoding='UTF-8', xml_declaration=True)
+          PY
+      - name: Build compiler used by the upstream build
+        run: mvn -B -ntp clean install -f org.eclipse.jdt.core.compiler.batch -DlocalEcjVersion=99.99
+      - name: Run unchanged upstream production code with both diagnostic tests
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p investigation-results
+          mvn -B -ntp -U verify -pl org.eclipse.jdt.core.tests.model -am \
+            -Ptest-on-javase-21 -Pbree-libs \
+            -Dtest=BufferPublicationTests -DfailIfNoTests=false \
+            -Dsurefire.failIfNoSpecifiedTests=false \
+            -Dcbi-ecj-version=99.99 \
+            -Dtycho.surefire.argLine='--add-modules ALL-SYSTEM -Djdt.performance.asserts=disabled' \
+            2>&1 | tee investigation-results/baseline.log
+          status=${PIPESTATUS[0]}
+          echo "$status" > investigation-results/maven-exit-code.txt
+          exit 0
+      - name: Verify actual Surefire results, not just Maven exit status
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import pathlib, json, xml.etree.ElementTree as ET
+          report_dir = pathlib.Path('org.eclipse.jdt.core.tests.model/target/surefire-reports')
+          cases = []
+          for p in report_dir.glob('TEST-*.xml'):
+              for c in ET.parse(p).getroot().iter('testcase'):
+                  if c.get('classname', '').endswith('BufferPublicationTests'):
+                      cases.append(c)
+          assert len(cases) == 2, f'Expected exactly two PDE test cases, got {len(cases)}'
+          summary = []
+          for c in cases:
+              assert c.find('error') is None, ET.tostring(c, encoding='unicode')
+              assert c.find('skipped') is None, ET.tostring(c, encoding='unicode')
+              failure = c.find('failure')
+              summary.append({'name': c.get('name'), 'failed': failure is not None,
+                              'message': failure.get('message') if failure is not None else None})
+          names = {c.get('name'): c for c in cases}
+          assert set(names) == {'testConcurrentSourceDuringBufferPublication', 'testSequentialJarRecreation'}, summary
+          assert names['testSequentialJarRecreation'].find('failure') is None, summary
+          failure = names['testConcurrentSourceDuringBufferPublication'].find('failure')
+          assert failure is not None, 'Hypothesis not reproduced: concurrent-source test passed'
+          assert 'Concurrent getSource must not expose an uninitialized source buffer' in failure.get('message', ''), summary
+          result = {'upstream': 'bb43114e42b4b4d8222d86fbcac45ca6b19a0972', 'tests': summary,
+                    'interpretation': 'One expected regression-test failure on unchanged upstream; sequential control passed.'}
+          pathlib.Path('investigation-results').mkdir(exist_ok=True)
+          pathlib.Path('investigation-results/baseline.json').write_text(json.dumps(result, indent=2))
+          print(json.dumps(result, indent=2))
+          PY
+      - name: Preserve all evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: buffer-publication-evidence
+          if-no-files-found: error
+          path: |
+            investigation-results/
+            **/target/surefire-reports/

@@ -63,7 +63,7 @@ jobs:
           PY
           git diff -- org.eclipse.jdt.core.tests.model/pom.xml > investigation-evidence/test-runtime-configuration.diff
       - name: Build current compiler
-        run: mvn --batch-mode -f org.eclipse.jdt.core.compiler.batch clean install -DlocalEcjVersion=99.99
+        run: mvn --batch-mode -f org.eclipse.jdt.core.compiler.batch clean install -DlocalEcjVersion=99.99 -Dtycho.baseline.replace=none
       - name: Run baseline and initialization-order counterfactual with identical tests
         shell: bash
         run: |
@@ -77,7 +77,7 @@ jobs:
               -Ptest-on-javase-21 -Pbree-libs \
               -Dtest=BufferPublicationInvestigationTests -DfailIfNoTests=false \
               -Dsurefire.failIfNoSpecifiedTests=false -Dtycho.surefire.failIfNoTests=false \
-              -Dcbi-ecj-version=99.99 -Dtycho.showEclipseLog=true \
+              -Dcbi-ecj-version=99.99 -Dtycho.showEclipseLog=true -Dtycho.baseline.replace=none \
               -Dproject.build.sourceEncoding=UTF-8 \
               -Dtycho.surefire.argLine='--add-modules ALL-SYSTEM -Dcompliance=1.8 -Djdt.performance.asserts=disabled' \
               2>&1 | tee "investigation-evidence/$label/maven.log"
@@ -86,6 +86,34 @@ jobs:
             cp -a org.eclipse.jdt.core.tests.model/target/surefire-reports "investigation-evidence/$label/" || true
             find org.eclipse.jdt.core.tests.model/target/work -name '*.log' -type f -exec cp --parents '{}' "investigation-evidence/$label/" ';' || true
             set -e
+            python3 - "$label" <<'PYCODE'
+          from pathlib import Path
+          import hashlib, json, sys, zipfile
+          label = sys.argv[1]
+          target = Path('org.eclipse.jdt.core/target')
+          entry = 'org/eclipse/jdt/internal/core/ClassFile.class'
+          compiled = (target / 'classes' / entry).read_bytes()
+          jar = target / 'org.eclipse.jdt.core-3.48.0-SNAPSHOT.jar'
+          with zipfile.ZipFile(jar) as archive:
+              packaged = archive.read(entry)
+          result = {
+              'compiled_ClassFile_sha256': hashlib.sha256(compiled).hexdigest(),
+              'packaged_ClassFile_sha256': hashlib.sha256(packaged).hexdigest(),
+              'core_jar_sha256': hashlib.sha256(jar.read_bytes()).hexdigest(),
+              'compiled_equals_packaged': compiled == packaged,
+          }
+          out = Path('investigation-evidence') / label
+          (out / 'bytecode-provenance.json').write_text(json.dumps(result, indent=2) + '\n')
+          (out / 'ClassFile.class').write_bytes(packaged)
+          print(json.dumps(result, indent=2))
+          assert compiled == packaged, 'Tycho replaced the artifact: packaged ClassFile differs from compiled ClassFile'
+          with zipfile.ZipFile(target / 'org.eclipse.jdt.core-3.48.0-SNAPSHOT-sources.jar') as archive:
+              packaged_source = archive.read('org/eclipse/jdt/internal/core/ClassFile.java')
+          source = Path('org.eclipse.jdt.core/model/org/eclipse/jdt/internal/core/ClassFile.java').read_bytes()
+          assert packaged_source == source, 'Source artifact was replaced by a baseline version'
+          (out / 'ClassFile.java').write_bytes(source)
+          PYCODE
+            javap -p -c "investigation-evidence/$label/ClassFile.class" > "investigation-evidence/$label/ClassFile.javap.txt"
             python3 .github/scripts/check-buffer-publication.py "investigation-evidence/$label" --variant "$label" | tee "investigation-evidence/$label/classification.txt"
           }
           run_probe baseline
@@ -109,6 +137,14 @@ jobs:
           run_probe initialized-before-publication
           test "$(cat investigation-evidence/initialized-before-publication/maven-exit.txt)" -eq 0
           sha256sum -c investigation-evidence/test-source.sha256
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          root = Path('investigation-evidence')
+          a = json.loads((root / 'baseline/bytecode-provenance.json').read_text())
+          b = json.loads((root / 'initialized-before-publication/bytecode-provenance.json').read_text())
+          assert a['packaged_ClassFile_sha256'] != b['packaged_ClassFile_sha256'], 'A/B used identical ClassFile bytecode'
+          PY
           echo 'CAUSAL_COMPARISON_CONFIRMED: baseline 3 intended failures and 2 controls passed; reordered publication 5 passed.'
       - name: Retain actual JUnit evidence and experimental diff
         if: always()

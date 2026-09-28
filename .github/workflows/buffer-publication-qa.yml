@@ -10,22 +10,6 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6
-        with:
-          distribution: temurin
-          cache: maven
-          java-version: |
-            8
-            17
-            21
-            25
-          mvn-toolchain-id: |
-            JavaSE-1.8
-            JavaSE-17
-            JavaSE-21
-            JavaSE-25
-      - name: Build compiler
-        run: mvn -B -f org.eclipse.jdt.core.compiler.batch install -DlocalEcjVersion=99.99 -DskipTests
       - name: Configure isolated model tests and Java 25 runtime
         run: |
           python3 - <<'PY'
@@ -44,12 +28,30 @@ jobs:
               if profile.findtext('m:id', namespaces=ns) == 'test-on-javase-21':
                   profile.find('m:id', ns).text = 'test-on-javase-25'
                   for plugin in profile.findall('m:build/m:plugins/m:plugin', ns):
-                      if plugin.findtext('m:artifactId', namespaces=ns) == 'tycho-surefire-plugin':
-                          plugin.find('m:configuration/m:jdk', ns).text = 'JavaSE-25'
+                      if plugin.findtext('m:artifactId', namespaces=ns) == 'maven-toolchains-plugin':
+                          jdk = plugin.find('m:configuration/m:toolchains/m:jdk/m:id', ns)
+                          assert jdk.text == 'JavaSE-21'
+                          jdk.text = 'JavaSE-25'
                           changed += 1
           assert changed == 1, f'Expected exactly one test JVM profile, found {changed}'
           t.write(p, encoding='UTF-8', xml_declaration=True)
           PY
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6
+        with:
+          distribution: temurin
+          cache: maven
+          java-version: |
+            8
+            17
+            21
+            25
+          mvn-toolchain-id: |
+            JavaSE-1.8
+            JavaSE-17
+            JavaSE-21
+            JavaSE-25
+      - name: Build compiler
+        run: mvn -B -f org.eclipse.jdt.core.compiler.batch install -DlocalEcjVersion=99.99 -DskipTests
       - name: Run unmodified production code with regression tests
         continue-on-error: true
         shell: bash

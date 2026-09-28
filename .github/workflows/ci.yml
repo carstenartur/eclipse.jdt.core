@@ -60,8 +60,15 @@ jobs:
                       changed += 1
           assert changed == 1, changed
           tree.write(p, encoding='UTF-8', xml_declaration=True)
+          p = Path('org.eclipse.jdt.core/pom.xml')
+          text = p.read_text()
+          assert text.count('<baselineMode>warn</baselineMode>') == 1
+          assert text.count('<baselineReplace>common</baselineReplace>') == 1
+          text = text.replace('<baselineMode>warn</baselineMode>', '<baselineMode>disable</baselineMode>')
+          text = text.replace('<baselineReplace>common</baselineReplace>', '<baselineReplace>none</baselineReplace>')
+          p.write_text(text)
           PY
-          git diff -- org.eclipse.jdt.core.tests.model/pom.xml > investigation-evidence/test-runtime-configuration.diff
+          git diff -- org.eclipse.jdt.core.tests.model/pom.xml org.eclipse.jdt.core/pom.xml > investigation-evidence/test-runtime-configuration.diff
       - name: Build current compiler
         run: mvn --batch-mode -f org.eclipse.jdt.core.compiler.batch clean install -DlocalEcjVersion=99.99 -Dtycho.baseline.replace=none
       - name: Run baseline and initialization-order counterfactual with identical tests

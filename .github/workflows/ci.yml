@@ -29,7 +29,7 @@ jobs:
             JavaSE-21
             JavaSE-25
           cache: maven
-      - name: Verify production sources and isolate the PDE test execution
+      - name: Verify unchanged production sources and configure the PDE test execution
         shell: bash
         run: |
           set -euo pipefail
@@ -44,6 +44,16 @@ jobs:
           standalone = [x for x in plugins if x.findtext('m:artifactId', namespaces=ns) == 'maven-surefire-plugin']
           assert len(standalone) == 1
           plugins.remove(standalone[0])
+          # Current org.eclipse.core.filesystem requires JavaSE-25. The earlier
+          # launch on Java 21 failed during OSGi resolution, before any tests.
+          profiles = [x for x in tree.getroot().findall('m:profiles/m:profile', ns)
+                      if x.findtext('m:id', namespaces=ns) == 'test-on-javase-21']
+          assert len(profiles) == 1
+          profile = profiles[0]
+          profile.find('m:id', ns).text = 'test-on-javase-25'
+          jdk = profile.find('m:build/m:plugins/m:plugin/m:configuration/m:toolchains/m:jdk/m:id', ns)
+          assert jdk.text == 'JavaSE-21'
+          jdk.text = 'JavaSE-25'
           tree.write(p, encoding='UTF-8', xml_declaration=True)
           PY
       - name: Build compiler used by the upstream build
@@ -55,7 +65,7 @@ jobs:
           set +e
           mkdir -p investigation-results
           mvn -B -ntp -U verify -pl org.eclipse.jdt.core.tests.model -am \
-            -Ptest-on-javase-21 -Pbree-libs \
+            -Ptest-on-javase-25 -Pbree-libs \
             -Dtest=BufferPublicationTests -DfailIfNoTests=false \
             -Dsurefire.failIfNoSpecifiedTests=false \
             -Dcbi-ecj-version=99.99 \
@@ -105,7 +115,7 @@ jobs:
           failure = names['testConcurrentSourceDuringBufferPublication'].find('failure')
           assert failure is not None, 'Hypothesis not reproduced: concurrent-source test passed'
           assert 'Concurrent getSource must not expose an uninitialized source buffer' in failure.get('message', ''), summary
-          result = {'upstream': 'bb43114e42b4b4d8222d86fbcac45ca6b19a0972', 'tests': summary,
+          result = {'upstream': 'bb43114e42b4b4d8222d86fbcac45ca6b19a0972', 'runtime': 'Java 25', 'tests': summary,
                     'interpretation': 'One expected regression-test failure on unchanged upstream; sequential control passed.'}
           pathlib.Path('investigation-results').mkdir(exist_ok=True)
           pathlib.Path('investigation-results/baseline.json').write_text(json.dumps(result, indent=2))

@@ -10,18 +10,10 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - name: Preserve original sources
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: publication-sources
-          path: |
-            org.eclipse.jdt.core/model/org/eclipse/jdt/internal/core/ClassFile.java
-            org.eclipse.jdt.core/model/org/eclipse/jdt/internal/core/ModularClassFile.java
-            org.eclipse.jdt.core.tests.model/src/org/eclipse/jdt/core/tests/model/AllJavaModelTests.java
-            org.eclipse.jdt.core.tests.model/src/org/eclipse/jdt/core/tests/model/ClassFileBufferPublicationTests.java
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6
         with:
           distribution: temurin
+          cache: maven
           java-version: |
             8
             17
@@ -55,7 +47,11 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          mvn -B -U verify -pl org.eclipse.jdt.core.tests.model -am -Ptest-on-javase-21 -Pbree-libs -Dcbi-ecj-version=99.99 -Dtest=ClassFileBufferPublicationTests -DfailIfNoTests=false '-Dtycho.surefire.argLine=--add-modules ALL-SYSTEM -Dcompliance=1.8,11,17,20 -Djdt.performance.asserts=disabled' 2>&1 | tee publication-test.log
+          mvn -B -U verify -pl org.eclipse.jdt.core.tests.model -am -Ptest-on-javase-21 -Pbree-libs -Dcbi-ecj-version=99.99 -Dtest=ClassFileBufferPublicationTests -DfailIfNoTests=false -Dtycho.showEclipseLog=true '-Dtycho.surefire.argLine=--add-modules ALL-SYSTEM -Dcompliance=1.8,11,17,21 -Djdt.performance.asserts=disabled' 2>&1 | tee publication-test.log
+      - name: Print Eclipse startup diagnostics
+        if: always()
+        run: |
+          find org.eclipse.jdt.core.tests.model/target/work -name '*.log' -type f -print -exec cat {} \; || true
       - name: Verify six specific negative-control failures
         if: always()
         run: |
@@ -92,8 +88,12 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: publication-test-results
+          include-hidden-files: true
           path: |
             publication-test.log
             publication-results.json
             org.eclipse.jdt.core.tests.model/target/surefire-reports/
-            org.eclipse.jdt.core.tests.model/target/work/data/.metadata/.log
+            org.eclipse.jdt.core.tests.model/target/work/**/*.log
+            org.eclipse.jdt.core.tests.model/target/surefire.properties
+            org.eclipse.jdt.core.tests.model/target/work/configuration/config.ini
+            org.eclipse.jdt.core.tests.model/target/work/configuration/org.eclipse.equinox.simpleconfigurator/bundles.info

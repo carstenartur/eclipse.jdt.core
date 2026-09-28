@@ -43,7 +43,6 @@ jobs:
           plugins = tree.getroot().find('m:build/m:plugins', ns)
           standalone = [x for x in plugins if x.findtext('m:artifactId', namespaces=ns) == 'maven-surefire-plugin']
           assert len(standalone) == 1
-          # These tests require OSGi/workspace, not the unrelated standalone execution.
           plugins.remove(standalone[0])
           tree.write(p, encoding='UTF-8', xml_declaration=True)
           PY
@@ -53,6 +52,7 @@ jobs:
         shell: bash
         run: |
           set -uo pipefail
+          set +e
           mkdir -p investigation-results
           mvn -B -ntp -U verify -pl org.eclipse.jdt.core.tests.model -am \
             -Ptest-on-javase-21 -Pbree-libs \
@@ -64,6 +64,21 @@ jobs:
           status=${PIPESTATUS[0]}
           echo "$status" > investigation-results/maven-exit-code.txt
           exit 0
+      - name: Collect Eclipse runtime launch diagnostics
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p investigation-results
+          python3 - <<'PY'
+          import pathlib
+          out = pathlib.Path('investigation-results/runtime-diagnostics.log')
+          root = pathlib.Path('org.eclipse.jdt.core.tests.model/target/work')
+          entries = []
+          for p in root.rglob('*.log'):
+              entries.append('\n===== ' + str(p) + ' =====\n' + p.read_text(errors='replace'))
+          out.write_text('\n'.join(entries))
+          print(out.read_text()[-30000:])
+          PY
       - name: Verify actual Surefire results, not just Maven exit status
         if: always()
         shell: bash

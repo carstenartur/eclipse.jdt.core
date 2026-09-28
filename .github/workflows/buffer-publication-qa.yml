@@ -3,39 +3,19 @@ on:
   push:
     branches: [test/classfile-buffer-publication]
 permissions:
-  contents: read
+  contents: write
 jobs:
   regression:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - name: Configure isolated model tests and Java 25 runtime
+        with:
+          persist-credentials: false
+      - name: Prepare isolated model tests with Java 25
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import xml.etree.ElementTree as ET
-          p = Path('org.eclipse.jdt.core.tests.model/pom.xml')
-          ns = {'m': 'http://maven.apache.org/POM/4.0.0'}
-          ET.register_namespace('', ns['m'])
-          t = ET.parse(p)
-          plugins = t.find('m:build/m:plugins', ns)
-          for plugin in list(plugins):
-              if plugin.findtext('m:artifactId', namespaces=ns) == 'maven-surefire-plugin':
-                  plugins.remove(plugin)
-          changed = 0
-          for profile in t.findall('m:profiles/m:profile', ns):
-              if profile.findtext('m:id', namespaces=ns) == 'test-on-javase-21':
-                  profile.find('m:id', ns).text = 'test-on-javase-25'
-                  for plugin in profile.findall('m:build/m:plugins/m:plugin', ns):
-                      if plugin.findtext('m:artifactId', namespaces=ns) == 'maven-toolchains-plugin':
-                          jdk = plugin.find('m:configuration/m:toolchains/m:jdk/m:id', ns)
-                          assert jdk.text == 'JavaSE-21'
-                          jdk.text = 'JavaSE-25'
-                          changed += 1
-          assert changed == 1, f'Expected exactly one test JVM profile, found {changed}'
-          t.write(p, encoding='UTF-8', xml_declaration=True)
-          PY
+          git fetch --no-tags --depth=1 origin bb43114e42b4b4d8222d86fbcac45ca6b19a0972
+          python3 .github/scripts/buffer-publication-qa.py prepare
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6
         with:
           distribution: temurin
@@ -51,59 +31,39 @@ jobs:
             JavaSE-21
             JavaSE-25
       - name: Build compiler
-        run: mvn -B -f org.eclipse.jdt.core.compiler.batch install -DlocalEcjVersion=99.99 -DskipTests
-      - name: Run unmodified production code with regression tests
-        continue-on-error: true
+        run: |
+          java -version 2>&1 | tee publication-evidence/java-version.txt
+          mvn -version | tee publication-evidence/maven-version.txt
+          mvn -B -f org.eclipse.jdt.core.compiler.batch install -DlocalEcjVersion=99.99 -DskipTests
+      - name: Baseline, fix, repeated regression and adjacent tests
         shell: bash
         run: |
-          set -o pipefail
-          mvn -B -U verify -pl org.eclipse.jdt.core.tests.model -am -Ptest-on-javase-25 -Pbree-libs -Dcbi-ecj-version=99.99 -Dtest=ClassFileBufferPublicationTests -DfailIfNoTests=false -Dtycho.showEclipseLog=true '-Dtycho.surefire.argLine=--add-modules ALL-SYSTEM -Dcompliance=1.8,11,17,21 -Djdt.performance.asserts=disabled' 2>&1 | tee publication-test.log
-      - name: Print Eclipse startup diagnostics
-        if: always()
-        run: |
-          find org.eclipse.jdt.core.tests.model/target/work -name '*.log' -type f -print -exec cat {} \; || true
-      - name: Verify six specific negative-control failures
-        if: always()
-        run: |
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-          import xml.etree.ElementTree as ET
-          expected = {
-              'testClassSourceIsInitializedBeforePublication': 'Published source must already be initialized',
-              'testModuleSourceIsInitializedBeforePublication': 'Published source must already be initialized',
-              'testClassBufferListenerIsInstalledBeforePublication': 'Closing a published buffer must remove it from the cache',
-              'testModuleBufferListenerIsInstalledBeforePublication': 'Closing a published buffer must remove it from the cache',
-              'testClassNullBufferListenerIsInstalledBeforePublication': 'Closing a published buffer must remove it from the cache',
-              'testModuleNullBufferListenerIsInstalledBeforePublication': 'Closing a published buffer must remove it from the cache',
+          set -uo pipefail
+          run_tests() {
+            local phase="$1"
+            local selection="$2"
+            python3 .github/scripts/buffer-publication-qa.py clean || return 1
+            mvn -B verify -pl org.eclipse.jdt.core.tests.model -am -Ptest-on-javase-25 -Pbree-libs -Dcbi-ecj-version=99.99 "-Dtest=$selection" -DfailIfNoTests=false -Dtycho.showEclipseLog=true '-Dtycho.surefire.argLine=--add-modules ALL-SYSTEM -Dcompliance=1.8,11,17,21 -Djdt.performance.asserts=disabled' 2>&1 | tee "publication-evidence/$phase.log"
+            local status=${PIPESTATUS[0]}
+            python3 .github/scripts/buffer-publication-qa.py verify "$phase" || return 1
+            if [[ "$phase" != baseline && "$status" != 0 ]]; then
+              echo "Maven failed despite test reports: phase=$phase exit=$status"
+              return 1
+            fi
           }
-          cases = []
-          for p in Path('org.eclipse.jdt.core.tests.model/target/surefire-reports').glob('*.xml'):
-              cases.extend(c for c in ET.parse(p).iter('testcase') if c.get('classname', '').endswith('.ClassFileBufferPublicationTests'))
-          assert len(cases) == 6, f'Expected six executed regression tests, found {len(cases)}'
-          assert {c.get('name') for c in cases} == set(expected), 'Wrong test selection'
-          results = []
-          for c in cases:
-              assert c.find('skipped') is None and c.find('error') is None, ET.tostring(c, encoding='unicode')
-              failures = c.findall('failure')
-              assert len(failures) == 1, ET.tostring(c, encoding='unicode')
-              assert expected[c.get('name')] in failures[0].get('message', ''), ET.tostring(c, encoding='unicode')
-              results.append({'test': c.get('name'), 'expected_failure': failures[0].get('message')})
-          Path('publication-results.json').write_text(json.dumps(results, indent=2))
-          print(json.dumps(results, indent=2))
-          print('PASS: all six regression tests expose the intended baseline defects; no setup errors or skips.')
-          PY
-      - name: Preserve reports
+          run_tests baseline ClassFileBufferPublicationTests || exit 1
+          python3 .github/scripts/buffer-publication-qa.py apply || exit 1
+          run_tests patched ClassFileBufferPublicationTests || exit 1
+          run_tests repeat ClassFileBufferPublicationTests || exit 1
+          run_tests adjacent ClassFileTests,BufferTests,AttachSourceTests || exit 1
+      - name: Export only verified source tree, without moving branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/buffer-publication-qa.py export
+      - name: Preserve evidence and source patch
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: publication-test-results
+          name: publication-ab-evidence
           include-hidden-files: true
-          path: |
-            publication-test.log
-            publication-results.json
-            org.eclipse.jdt.core.tests.model/target/surefire-reports/
-            org.eclipse.jdt.core.tests.model/target/work/**/*.log
-            org.eclipse.jdt.core.tests.model/target/surefire.properties
-            org.eclipse.jdt.core.tests.model/target/work/configuration/config.ini
-            org.eclipse.jdt.core.tests.model/target/work/configuration/org.eclipse.equinox.simpleconfigurator/bundles.info
+          path: publication-evidence/

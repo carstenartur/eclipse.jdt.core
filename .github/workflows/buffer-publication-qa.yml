@@ -26,7 +26,7 @@ jobs:
             JavaSE-25
       - name: Build compiler
         run: mvn -B -f org.eclipse.jdt.core.compiler.batch install -DlocalEcjVersion=99.99 -DskipTests
-      - name: Select only OSGi model tests
+      - name: Configure isolated model tests and Java 25 runtime
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -39,15 +39,23 @@ jobs:
           for plugin in list(plugins):
               if plugin.findtext('m:artifactId', namespaces=ns) == 'maven-surefire-plugin':
                   plugins.remove(plugin)
+          changed = 0
+          for profile in t.findall('m:profiles/m:profile', ns):
+              if profile.findtext('m:id', namespaces=ns) == 'test-on-javase-21':
+                  profile.find('m:id', ns).text = 'test-on-javase-25'
+                  for plugin in profile.findall('m:build/m:plugins/m:plugin', ns):
+                      if plugin.findtext('m:artifactId', namespaces=ns) == 'tycho-surefire-plugin':
+                          plugin.find('m:configuration/m:jdk', ns).text = 'JavaSE-25'
+                          changed += 1
+          assert changed == 1, f'Expected exactly one test JVM profile, found {changed}'
           t.write(p, encoding='UTF-8', xml_declaration=True)
           PY
       - name: Run unmodified production code with regression tests
-        id: tests
         continue-on-error: true
         shell: bash
         run: |
           set -o pipefail
-          mvn -B -U verify -pl org.eclipse.jdt.core.tests.model -am -Ptest-on-javase-21 -Pbree-libs -Dcbi-ecj-version=99.99 -Dtest=ClassFileBufferPublicationTests -DfailIfNoTests=false -Dtycho.showEclipseLog=true '-Dtycho.surefire.argLine=--add-modules ALL-SYSTEM -Dcompliance=1.8,11,17,21 -Djdt.performance.asserts=disabled' 2>&1 | tee publication-test.log
+          mvn -B -U verify -pl org.eclipse.jdt.core.tests.model -am -Ptest-on-javase-25 -Pbree-libs -Dcbi-ecj-version=99.99 -Dtest=ClassFileBufferPublicationTests -DfailIfNoTests=false -Dtycho.showEclipseLog=true '-Dtycho.surefire.argLine=--add-modules ALL-SYSTEM -Dcompliance=1.8,11,17,21 -Djdt.performance.asserts=disabled' 2>&1 | tee publication-test.log
       - name: Print Eclipse startup diagnostics
         if: always()
         run: |

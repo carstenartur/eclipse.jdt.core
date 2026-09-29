@@ -1,0 +1,41 @@
+name: Buffer review regression QA
+on:
+  push:
+    branches: [test/classfile-buffer-review]
+permissions:
+  contents: write
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6
+        with:
+          distribution: temurin
+          cache: maven
+          java-version: |
+            8
+            17
+            21
+            25
+          mvn-toolchain-id: |
+            JavaSE-1.8
+            JavaSE-17
+            JavaSE-21
+            JavaSE-25
+      - name: Build local compiler
+        run: mvn -B -f org.eclipse.jdt.core.compiler.batch install -DlocalEcjVersion=99.99 -DskipTests
+      - name: Verify upstream, previous PR and candidate with identical tests
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/review-buffer-qa.py
+      - name: Preserve test reports, logs and exact sources
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: buffer-review-evidence
+          include-hidden-files: true
+          path: review-buffer-evidence/

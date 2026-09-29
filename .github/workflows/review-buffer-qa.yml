@@ -13,10 +13,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
-      - name: Cancel superseded initial QA run
+      - name: Remove superseded unsanitized diagnostic artifact
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh api -X POST repos/carstenartur/eclipse.jdt.core/actions/runs/36515311309/cancel || true
+        run: |
+          if gh api repos/carstenartur/eclipse.jdt.core/actions/artifacts/11010961463 >/dev/null 2>&1; then
+            gh api -X DELETE repos/carstenartur/eclipse.jdt.core/actions/artifacts/11010961463
+          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
@@ -47,9 +50,30 @@ jobs:
           old = 'process=subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)'
           new = "process=subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,env={k:v for k,v in os.environ.items() if k not in {'GH_TOKEN','GITHUB_TOKEN','ACTIONS_RUNTIME_TOKEN','ACTIONS_ID_TOKEN_REQUEST_TOKEN'}})"
           assert s.count(old) == 1
-          p.write_text(s.replace(old, new))
+          s = s.replace(old, new)
+          old = '    test_hash=hashlib.sha256(TEST.read_bytes()).hexdigest()'
+          assert s.count(old) == 1
+          s = s.replace(old, "    subprocess.run([sys.executable,'.github/scripts/review-buffer-tests-refine.py'],check=True)\n" + old)
+          p.write_text(s)
           PY
           python3 .github/scripts/review-buffer-qa.py
+      - name: Sanitize diagnostics before upload
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          secrets = [os.environ[k].encode() for k in ('GH_TOKEN','GITHUB_TOKEN','ACTIONS_RUNTIME_TOKEN','ACTIONS_ID_TOKEN_REQUEST_TOKEN') if os.environ.get(k)]
+          for p in Path('review-buffer-evidence').rglob('*'):
+            if p.is_file():
+              original = data = p.read_bytes()
+              for secret in secrets:
+                data = data.replace(secret, b'[REDACTED]')
+              if data != original:
+                p.write_bytes(data)
+          PY
       - name: Preserve test reports, logs and exact sources
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

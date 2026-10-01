@@ -1,0 +1,104 @@
+name: JUnit 5 reporting investigation
+on:
+  push:
+    branches: [investigate/junit5-reporting-continuation]
+    paths: ['qa/reporting/**', '.github/workflows/junit5-reporting-investigation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: jdt-core-reporting-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    steps:
+      - name: Checkout continuation
+        uses: actions/checkout@v4
+        with:
+          path: core
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Checkout the independently tested investigation tools
+        uses: actions/checkout@v4
+        with:
+          repository: carstenartur/sandbox
+          ref: 1527bd535afac09ac61aa850cd41f876e872d32b
+          path: sandbox-qa
+          persist-credentials: false
+          sparse-checkout: qa/upstream-jdt
+      - name: Pin the build parent source
+        uses: actions/checkout@v4
+        with:
+          repository: eclipse-platform/eclipse.platform.releng.aggregator
+          ref: 96fc148c72af941d7ae8aadf261ad5dca9c4e9ef
+          path: releng-source
+          persist-credentials: false
+          sparse-checkout: eclipse-platform-parent
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Prepare isolated experiment with run-bound provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          ln -s "$GITHUB_WORKSPACE/releng-source/eclipse-platform-parent" "$GITHUB_WORKSPACE/eclipse-platform-parent"
+          [[ ! -e "$RUNNER_TEMP/jdt-reporting-m2" && ! -e "$RUNNER_TEMP/jdt-reporting-evidence" ]]
+          mkdir "$RUNNER_TEMP/jdt-reporting-m2" "$RUNNER_TEMP/jdt-reporting-evidence"
+          EVIDENCE="$RUNNER_TEMP/jdt-reporting-evidence"
+          printf '%s\n' bb86061a7a8d0c3ee4d02f358cf30be6e3e6ae4e > "$RUNNER_TEMP/jdt-reporting-m2/.sandbox-reporting-investigation"
+          cat > "$RUNNER_TEMP/jdt-toolchains.xml" <<EOF_TOOLCHAIN
+          <toolchains><toolchain><type>jdk</type><provides><id>JavaSE-25</id><version>25</version></provides><configuration><jdkHome>$JAVA_HOME</jdkHome></configuration></toolchain></toolchains>
+          EOF_TOOLCHAIN
+          git -C core merge-base --is-ancestor bb86061a7a8d0c3ee4d02f358cf30be6e3e6ae4e HEAD
+          git -C core diff --exit-code bb86061a7a8d0c3ee4d02f358cf30be6e3e6ae4e -- . ':!qa/reporting/**' ':!.github/workflows/junit5-reporting-investigation.yml'
+          [[ $(git -C sandbox-qa rev-parse HEAD) == 1527bd535afac09ac61aa850cd41f876e872d32b ]]
+          [[ $(git -C releng-source rev-parse HEAD) == 96fc148c72af941d7ae8aadf261ad5dca9c4e9ef ]]
+          cp core/qa/reporting/maven-settings.xml "$EVIDENCE/maven-settings.xml"
+          cp core/qa/reporting/run-tycho-ab.sh "$EVIDENCE/executed-script.sh"
+          cp core/.github/workflows/junit5-reporting-investigation.yml "$EVIDENCE/workflow.yml"
+          {
+            printf 'repository=%s\nrunId=%s\nattempt=%s\n' "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+            printf 'nonce=%s\n' "$(cat /proc/sys/kernel/random/uuid)"
+            printf 'continuation=%s\n' "$(git -C core rev-parse HEAD)"
+            printf 'tools=%s\n' "$(git -C sandbox-qa rev-parse HEAD)"
+            printf 'parent=%s\n' "$(git -C releng-source rev-parse HEAD)"
+          } > "$EVIDENCE/run-provenance.properties"
+          cat "$EVIDENCE/run-provenance.properties"
+          sha256sum "$EVIDENCE/run-provenance.properties"
+          java -version 2> "$EVIDENCE/java-version.txt"
+          mvn -version > "$EVIDENCE/maven-version.txt"
+      - name: Compile and verify the isolated correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          POM="$GITHUB_WORKSPACE/sandbox-qa/qa/upstream-jdt/compiler-reporting/pom.xml"
+          REPO="$RUNNER_TEMP/jdt-reporting-m2"
+          mvn -B -ntp -f "$POM" -Dmaven.repo.local="$REPO" clean verify -Ppatched-reporter -Dprobe.output="$RUNNER_TEMP/jdt-reporting-evidence/probe"
+          mvn -B -ntp -f "$POM" -Dmaven.repo.local="$REPO" org.apache.maven.plugins:maven-dependency-plugin:3.8.1:copy-dependencies -DincludeScope=test -DoutputDirectory=target/probe-libs
+          for ART in org.eclipse.tycho.surefire.junit5 org.eclipse.tycho.surefire.osgibooter; do
+            mvn -B -ntp -f "$POM" -Dmaven.repo.local="$REPO" org.apache.maven.plugins:maven-dependency-plugin:3.8.1:get -Dartifact="org.eclipse.tycho:$ART:5.0.4" -Dtransitive=false
+          done
+      - name: Build once, then compare stock and corrected Tycho
+        shell: bash
+        run: bash core/qa/reporting/run-tycho-ab.sh "$GITHUB_WORKSPACE/core" "$GITHUB_WORKSPACE/sandbox-qa" "$RUNNER_TEMP/jdt-reporting-m2" "$RUNNER_TEMP/jdt-reporting-evidence" "$RUNNER_TEMP/jdt-toolchains.xml"
+      - name: Seal available evidence and print manifest digest
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/jdt-reporting-evidence"
+          test -s run-provenance.properties
+          grep -qx "runId=$GITHUB_RUN_ID" run-provenance.properties
+          grep -qx "attempt=$GITHUB_RUN_ATTEMPT" run-provenance.properties
+          find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+          sha256sum SHA256SUMS run-provenance.properties
+      - name: Retain results on any outcome
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jdt-core-tycho-reporting-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/jdt-reporting-evidence/
+          if-no-files-found: error

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Diagnostic-only route for the repository that timed out resolving Jakarta
+     Annotation 3.0.0. Do not redirect Eclipse snapshots or P2 repositories. -->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0 https://maven.apache.org/xsd/settings-1.2.0.xsd">
+  <mirrors>
+    <mirror>
+      <id>jdt-qa-annotation-central</id>
+      <name>Explicit diagnostic route for released annotation dependencies</name>
+      <url>https://repo.maven.apache.org/maven2/</url>
+      <mirrorOf>repo.eclipse.org.eclipse-jdt-annotation-api</mirrorOf>
+    </mirror>
+  </mirrors>
+</settings>

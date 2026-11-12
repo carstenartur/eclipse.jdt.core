@@ -1,0 +1,81 @@
+diff --git a/org.eclipse.jdt.core.compiler.batch/src/org/eclipse/jdt/internal/compiler/lookup/BoundSet.java b/org.eclipse.jdt.core.compiler.batch/src/org/eclipse/jdt/internal/compiler/lookup/BoundSet.java
+--- a/org.eclipse.jdt.core.compiler.batch/src/org/eclipse/jdt/internal/compiler/lookup/BoundSet.java
++++ b/org.eclipse.jdt.core.compiler.batch/src/org/eclipse/jdt/internal/compiler/lookup/BoundSet.java
+@@ -531,6 +531,7 @@
+ 		// check each pair, in each way.
+ 		Map<InferenceVariable,TypeBound> properTypesByInferenceVariable = properTypesByInferenceVariable(first, next);
+ 		for (TypeBound bound1 : first) {
++			SolverProbe.record(context, next.length, 0);
+ 			for (TypeBound bound2 : next) {
+ 				if (bound1 == bound2)
+ 					continue;
+@@ -1021,6 +1022,7 @@
+ 	 * @throws InferenceFailureException a compile error has been detected during inference
+ 	 */
+ 	public boolean reduceOneConstraint(InferenceContext18 context, ConstraintFormula currentConstraint) throws InferenceFailureException {
++		SolverProbe.record(context, 0, 1);
+ 		Object result = currentConstraint.reduce(context);
+ 		if (InferenceContext18.DEBUG_FINE) {
+ 			if (result instanceof ReductionResult[] array) {
+diff --git a/org.eclipse.jdt.core.compiler.batch/src/org/eclipse/jdt/internal/compiler/lookup/SolverProbe.java b/org.eclipse.jdt.core.compiler.batch/src/org/eclipse/jdt/internal/compiler/lookup/SolverProbe.java
+new file mode 100644
+--- /dev/null
++++ b/org.eclipse.jdt.core.compiler.batch/src/org/eclipse/jdt/internal/compiler/lookup/SolverProbe.java
+@@ -0,0 +1,57 @@
++/*******************************************************************************
++ * Copyright (c) 2026 Contributors to the Eclipse Foundation.
++ *
++ * This program and the accompanying materials
++ * are made available under the terms of the Eclipse Public License 2.0
++ * which accompanies this distribution and is available at
++ * https://www.eclipse.org/legal/epl-2.0/
++ *
++ * SPDX-License-Identifier: EPL-2.0
++ *******************************************************************************/
++package org.eclipse.jdt.internal.compiler.lookup;
++
++import java.util.Comparator;
++import java.util.IdentityHashMap;
++import java.util.Map;
++import org.eclipse.jdt.internal.compiler.ast.MessageSend;
++
++/** Single-compilation experiment for small standalone batch fixtures. */
++final class SolverProbe {
++    private static final int MAX_SITES = 2048;
++    private static final long LIMIT = 1_000_000_000L;
++    private static final Map<InvocationSite, Counts> sites = new IdentityHashMap<>();
++
++    private static final class Counts {
++        long pairs;
++        long reductions;
++    }
++    static {
++        Runtime.getRuntime().addShutdownHook(new Thread(SolverProbe::report));
++    }
++    static void record(InferenceContext18 context, long pairs, int reductions) {
++        InvocationSite site = context.currentInvocation;
++        if (site == null) return;
++        Counts c = sites.get(site);
++        if (c == null) {
++            if (sites.size() >= MAX_SITES) return;
++            c = new Counts();
++            sites.put(site, c);
++        }
++        c.pairs = Math.min(LIMIT, c.pairs + pairs);
++        c.reductions = Math.min(LIMIT, c.reductions + reductions);
++    }
++    private static void report() {
++        System.err.println("probe sites=" + sites.size() + " pairTotal=" + sites.values().stream().mapToLong(c -> c.pairs).sum()
++            + " reductionTotal=" + sites.values().stream().mapToLong(c -> c.reductions).sum());
++        sites.entrySet().stream()
++            .sorted(Comparator.comparingLong((Map.Entry<InvocationSite, Counts> e) -> e.getValue().pairs).reversed()
++                .thenComparingInt(e -> e.getKey().sourceStart()))
++            .limit(6)
++            .forEach(e -> {
++                InvocationSite site = e.getKey();
++                String name = site instanceof MessageSend m ? new String(m.selector) : site.getClass().getSimpleName();
++                System.err.printf("probe site=%d..%d name=%s pairs=%d reductions=%d%n",
++                    site.sourceStart(), site.sourceEnd(), name, e.getValue().pairs, e.getValue().reductions);
++            });
++    }
++}

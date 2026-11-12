@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import resource
 import shutil
 import subprocess
@@ -13,6 +14,7 @@ import sys
 import tempfile
 import time
 import urllib.request
+import xml.etree.ElementTree as ET
 import zipfile
 
 CAMEL_URL = ("https://raw.githubusercontent.com/apache/camel/"
@@ -79,7 +81,49 @@ def cpu_seconds():
     return usage.ru_utime + usage.ru_stime
 
 
-def compile_once(java, jar, filename, source, warning, timeout):
+def class_hashes(out, filename):
+    expected = ({"Ordinary.class", "Ordinary$Item.class"} if filename == "Ordinary"
+                else {"org/apache/camel/util/ArtifactUtils.class"})
+    files = {p.relative_to(out).as_posix(): p for p in out.rglob("*.class")}
+    if files.keys() != expected:
+        raise ValueError(f"{filename}: expected {sorted(expected)}, got {sorted(files)}")
+    hashes = {}
+    for name, path in sorted(files.items()):
+        data = path.read_bytes()
+        if not data.startswith(b"\xca\xfe\xba\xbe"):
+            raise ValueError(f"Missing classfile header in {name}")
+        hashes[name] = hashlib.sha256(data).hexdigest()
+    return hashes
+
+
+def check_warnings(log, source, variant):
+    expected = []
+    if variant == "implicit":
+        for field in ("COMPONENTS", "DATAFORMATS", "BEANS"):
+            start = source.index("ofEntries", source.index(f" {field} = Map."))
+            expected.append(("PotentiallyExpensiveTypeInference", start, start + len("ofEntries") - 1))
+    problems = ET.parse(log).findall(".//problem")
+    actual = [(p.get("id"), int(p.get("charStart")), int(p.get("charEnd")))
+              for p in problems if p.get("severity") == "WARNING"]
+    if sorted(actual) != sorted(expected):
+        raise ValueError(f"{variant}: expected warnings {expected}, got {actual}")
+
+
+def check_probe(messages, variant):
+    summaries = re.findall(r"^probe sites=(\d+) pairTotal=(\d+) reductionTotal=(\d+)$", messages, re.M)
+    if len(summaries) != 1:
+        raise ValueError(f"{variant}: expected one solver probe summary, got {len(summaries)}")
+    sites, pairs, reductions = map(int, summaries[0])
+    rows = re.findall(r"^probe site=\d+\.\.\d+ name=\S+ pairs=(\d+) reductions=(\d+)$", messages, re.M)
+    if sites == 0 or pairs == 0 or reductions == 0:
+        raise ValueError(f"{variant}: solver probe recorded no sites or an empty counter")
+    row_pairs = sum(int(p) for p, _ in rows)
+    row_reductions = sum(int(r) for _, r in rows)
+    if len(rows) != min(sites, 6) or row_pairs > pairs or row_reductions > reductions:
+        raise ValueError(f"{variant}: inconsistent solver probe summary and site rows")
+
+
+def compile_once(java, jar, filename, source, variant, warning, probe, timeout):
     with tempfile.TemporaryDirectory() as directory:
         temp = Path(directory)
         f = temp / (filename + ".java")
@@ -88,7 +132,7 @@ def compile_once(java, jar, filename, source, warning, timeout):
         out.mkdir()
         flags = ["-17", "-proc:none", "-g:none", "-warn:none"]
         if warning:
-            flags.append("-warn:+" + WARNING)
+            flags.extend(["-warn:+" + WARNING, "-log", temp / "problems.xml"])
         before = cpu_seconds()
         start = time.monotonic()
         r = subprocess.run([java, "-XX:ActiveProcessorCount=2", "-XX:+UseSerialGC",
@@ -98,12 +142,14 @@ def compile_once(java, jar, filename, source, warning, timeout):
         cpu = cpu_seconds() - before
         if r.returncode:
             raise RuntimeError(r.stdout + r.stderr)
-        hashes = {str(p.relative_to(out)): hashlib.sha256(p.read_bytes()).hexdigest()
-                  for p in sorted(out.rglob("*.class"))}
-        if not hashes:
-            raise RuntimeError("Compiler returned without generating classes")
+        hashes = class_hashes(out, filename)
+        messages = r.stdout + r.stderr
+        if warning:
+            check_warnings(temp / "problems.xml", source, variant)
+        if probe:
+            check_probe(messages, variant)
         return {"cpu_seconds": round(cpu, 3), "wall_seconds": round(wall, 3),
-                "class_sha256": hashes, "messages": r.stdout + r.stderr}
+                "class_sha256": hashes, "messages": messages}
 
 
 def main():
@@ -116,6 +162,7 @@ def main():
     parser.add_argument("--camel-source", type=Path, help="Cached, byte-exact Apache source file")
     parser.add_argument("--ant-jar", type=Path, help="Cached ant-1.10.15.jar")
     parser.add_argument("--warning", action="store_true", help="Enable and assert the proposed warning")
+    parser.add_argument("--probe", action="store_true", help="Require output from the solver-probe patch")
     parser.add_argument("--repetitions", type=int, default=1)
     parser.add_argument("--timeout", type=int, default=90, help="Per-compiler-process seconds")
     args = parser.parse_args()
@@ -146,16 +193,12 @@ def main():
         expected = None
         for index in range(args.repetitions):
             for name, cls, source in cases[::1 if index % 2 == 0 else -1]:
-                result = compile_once(java, jar, cls, source, args.warning, args.timeout)
+                result = compile_once(java, jar, cls, source, name, args.warning, args.probe, args.timeout)
                 print(json.dumps(dict(result, variant=name, repetition=index + 1)), flush=True)
                 if cls == "ArtifactUtils":
                     expected = expected or result["class_sha256"]
                     if expected != result["class_sha256"]:
                         raise ValueError(f"Classfile mismatch for {name}")
-                if args.warning:
-                    count = result["messages"].count(". WARNING in ")
-                    if count != (3 if name == "implicit" else 0):
-                        raise ValueError(f"Unexpected warning count for {name}: {count}")
 
 
 if __name__ == "__main__":

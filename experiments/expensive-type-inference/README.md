@@ -15,15 +15,15 @@ python3 "$experiment/benchmark.py" --repo ../ecj-master
 python3 "$experiment/benchmark.py" --repo ../ecj-5681
 ```
 
-The script builds the batch compiler and downloads digest-checked copies of Ant and the pinned Camel source. Offline runs can supply `--ant-jar` and `--camel-source`. Set `JAVA_HOME` or pass `--jdk`. Use `--ecj-jar` to test an existing batch jar, `--repetitions 5` for alternating case order, and `--warning` on a build that implements the proposed compiler option. The script compares the Camel output class hashes and, with `--warning`, checks the expected count per fixture. Each process has a 90-second timeout by default.
+The script builds the batch compiler and downloads digest-checked copies of Ant and the pinned Camel source. Offline runs can supply `--ant-jar` and `--camel-source`. Set `JAVA_HOME` or pass `--jdk`. Use `--ecj-jar` to test an existing batch jar, `--repetitions 5` for alternating case order, and `--warning` on a build that implements the proposed compiler option. The script checks the expected class files and compares the Camel output hashes across spellings for each ECJ build. With `--warning` it checks ECJ's problem ID and exact selector offsets for all three expected sites and checks the other fixtures for warnings. Each fixture compilation has a 90-second timeout by default. The JDK's javac builds ECJ from source. ECJ compiles every measured fixture.
 
 For deterministic work counts, apply the instrumentation to each temporary worktree and repeat the same source builds.
 
 ```sh
 git -C ../ecj-master apply "$experiment/solver-probe.patch"
 git -C ../ecj-5681 apply "$experiment/solver-probe.patch"
-python3 "$experiment/benchmark.py" --repo ../ecj-master
-python3 "$experiment/benchmark.py" --repo ../ecj-5681
+python3 "$experiment/benchmark.py" --repo ../ecj-master --probe
+python3 "$experiment/benchmark.py" --repo ../ecj-5681 --probe
 ```
 
 ## Measured results
@@ -53,4 +53,4 @@ The probe counts the solver work associated with `InferenceContext18.currentInvo
 
 On master the Camel file dropped from 12,374,122 pair slots and 1,182,461 reductions to 81,943 and 21,488 with three witnesses. On the PR head the corresponding totals were 24,487 and 15,936 before, then 23,434 and 15,807 after. The remaining 29-entry table accounted for 59,730 slots on master. A source-shape diagnostic continues to recognize the three large calls even when a newer ECJ optimizes them. A measured-work diagnostic should respond to the new counts.
 
-This developer-only probe is for one source file in one compiler process. A bounded identity map tracks up to 2,048 invocation objects, and each counter saturates at one billion. It prints the six highest pair-slot sites and the totals at JVM shutdown. The identity follows ECJ's active invocation at each operation, including repeated attempts. It records work at that invocation rather than cumulatively attributing descendants to all ancestors. The scratch JVM exits after compilation. Concurrent compiler instances, long-lived IDE sessions, and choosing a production threshold require separate work.
+This developer-only probe is for one source file in one compiler process. A bounded identity map tracks up to 2,048 invocation objects, and each counter saturates at one billion. It prints the six highest pair-slot sites and the totals at JVM shutdown. Operations with no active invocation contribute to neither total. The published fixtures tracked at most 567 sites, and both totals stayed below the saturation threshold. The identity follows ECJ's active invocation at each operation, including repeated attempts. It records work at that invocation rather than cumulatively attributing descendants to all ancestors. The scratch JVM exits after compilation. Concurrent compiler instances, long-lived IDE sessions, and choosing a production threshold require separate work.
